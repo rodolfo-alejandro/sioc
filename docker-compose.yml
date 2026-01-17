@@ -9,7 +9,7 @@ services:
       MYSQL_USER: sioc_user
       MYSQL_PASSWORD: sioc_password
     ports:
-      - "3306:3306"
+      - "3308:3306"
     volumes:
       - mysql_data:/var/lib/mysql
       - ./docker/mysql/init:/docker-entrypoint-initdb.d
