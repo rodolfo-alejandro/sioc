@@ -17,6 +17,9 @@
 /* Layout principal */
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #212529;
     background-color: #f5f5f5;
 }
 
@@ -103,6 +106,9 @@ body {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    font-size: 0.95rem;
+    font-weight: 400;
+    transition: all 0.2s ease;
 }
 
 .sidebar-nav .nav-link:hover {
@@ -125,6 +131,7 @@ body {
 .sidebar-nav .submenu-item {
     padding-left: 3rem;
     font-size: 0.9rem;
+    font-weight: 400;
 }
 
 .sidebar-nav .collapse.show {
@@ -191,37 +198,59 @@ body {
     box-shadow: 0 10px 25px rgba(0,0,0,0.2);
 }
 
-/* Headers de página */
+/* Headers de página - Uniforme en todas las páginas */
 .page-header {
     margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #dee2e6;
 }
 
 .page-header h1 {
     font-size: 1.75rem;
     font-weight: 600;
     margin-bottom: 0.5rem;
+    color: #212529;
+}
+
+.page-header p.text-muted {
+    font-size: 0.95rem;
+    margin-bottom: 0;
 }
 
 .page-header .header-actions {
     margin-top: 1rem;
 }
 
-/* Cards */
+/* Cards - Uniforme en todas las páginas */
 .card {
     border: none;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     margin-bottom: 1.5rem;
+    border-radius: 0.5rem;
 }
 
 .card-header {
     background-color: #f8f9fa;
     border-bottom: 1px solid #dee2e6;
     font-weight: 500;
+    font-size: 1rem;
+    padding: 1rem 1.25rem;
 }
 
-/* Tablas */
+.card-body {
+    padding: 1.25rem;
+}
+
+.card-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+}
+
+/* Tablas - Uniforme en todas las páginas */
 .table {
     background-color: white;
+    font-size: 0.95rem;
 }
 
 .table thead th {
@@ -230,6 +259,14 @@ body {
     text-transform: uppercase;
     font-size: 0.875rem;
     color: #6c757d;
+    padding: 0.75rem;
+    vertical-align: middle;
+}
+
+.table tbody td {
+    padding: 0.75rem;
+    vertical-align: middle;
+    font-size: 0.95rem;
 }
 
 .table-hover tbody tr:hover {
@@ -274,10 +311,28 @@ body {
     border: 1px solid #dee2e6;
 }
 
-/* Formularios */
+/* Formularios - Uniforme en todas las páginas */
 .form-label {
     font-weight: 500;
     margin-bottom: 0.5rem;
+    font-size: 0.95rem;
+    color: #495057;
+}
+
+.form-control,
+.form-select {
+    font-size: 0.95rem;
+    padding: 0.5rem 0.75rem;
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+.form-text {
+    font-size: 0.875rem;
 }
 
 .form-control:focus,
@@ -297,14 +352,68 @@ body {
     height: 1.5rem;
 }
 
-/* Responsive */
-@media (max-width: 768px) {
+/* Responsive - Uniforme en todos los dispositivos */
+@media (max-width: 991.98px) {
     .main-content {
         padding: 1rem;
+        margin-left: 0;
+    }
+    
+    .page-header {
+        margin-bottom: 1.5rem;
     }
     
     .page-header h1 {
         font-size: 1.5rem;
+    }
+    
+    .card {
+        margin-bottom: 1rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .main-content {
+        padding: 0.75rem;
+    }
+    
+    .page-header h1 {
+        font-size: 1.25rem;
+    }
+    
+    .page-header p.text-muted {
+        font-size: 0.875rem;
+    }
+    
+    .table-responsive {
+        font-size: 0.875rem;
+    }
+    
+    .btn {
+        font-size: 0.875rem;
+        padding: 0.375rem 0.75rem;
+    }
+    
+    .card-body {
+        padding: 1rem;
+    }
+}
+
+@media (max-width: 576px) {
+    .main-content {
+        padding: 0.5rem;
+    }
+    
+    .page-header h1 {
+        font-size: 1.1rem;
+    }
+    
+    .topbar .navbar-brand {
+        font-size: 1rem;
+    }
+    
+    .search-container {
+        max-width: 200px;
     }
 }
 
