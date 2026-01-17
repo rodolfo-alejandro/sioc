@@ -1,0 +1,88 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Datasets - DataLab{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-table"></i> Datasets</h1>
+    <p class="text-muted">Lista de datasets disponibles en su unidad</p>
+    <div class="header-actions">
+        {% if current_user.has_permission('DATALAB_UPLOAD') %}
+        <a href="{{ url_for('datalab.upload') }}" class="btn btn-primary">
+            <i class="bi bi-cloud-upload"></i> Subir Dataset
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <!-- Búsqueda -->
+        <form method="GET" class="mb-3">
+            <div class="input-group">
+                <input type="text" class="form-control" name="search" 
+                       value="{{ search }}" placeholder="Buscar por nombre...">
+                <button class="btn btn-outline-secondary" type="submit">
+                    <i class="bi bi-search"></i> Buscar
+                </button>
+                {% if search %}
+                <a href="{{ url_for('datalab.datasets') }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-x"></i> Limpiar
+                </a>
+                {% endif %}
+            </div>
+        </form>
+        
+        <!-- Tabla de datasets -->
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Nombre</th>
+                        <th>Archivo</th>
+                        <th>Tipo</th>
+                        <th>Filas</th>
+                        <th>Columnas</th>
+                        <th>Subido por</th>
+                        <th>Fecha</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for dataset in datasets %}
+                    <tr>
+                        <td><strong>{{ dataset.name }}</strong></td>
+                        <td>
+                            <small class="text-muted">{{ dataset.original_filename }}</small>
+                        </td>
+                        <td>
+                            <span class="badge bg-secondary">{{ dataset.source_type.upper() }}</span>
+                        </td>
+                        <td>{{ dataset.rows_count | number_format }}</td>
+                        <td>{{ dataset.columns_count }}</td>
+                        <td>{{ dataset.user.username }}</td>
+                        <td>{{ dataset.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+                        <td>
+                            <a href="{{ url_for('datalab.dataset_view', dataset_id=dataset.id) }}" 
+                               class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-eye"></i> Ver
+                            </a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="8" class="text-center text-muted">
+                            No hay datasets disponibles. 
+                            {% if current_user.has_permission('DATALAB_UPLOAD') %}
+                            <a href="{{ url_for('datalab.upload') }}">Subir el primero</a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

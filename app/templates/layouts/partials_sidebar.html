@@ -1,0 +1,94 @@
+<aside class="sidebar" id="sidebar">
+    <div class="sidebar-content">
+        <nav class="sidebar-nav">
+            <ul class="nav flex-column">
+                <!-- Registro -->
+                <li class="nav-item">
+                    <a class="nav-link" href="#" data-bs-toggle="collapse" data-bs-target="#submenuRegistro">
+                        <i class="bi bi-clipboard-data"></i> Registro
+                        <i class="bi bi-chevron-down ms-auto"></i>
+                    </a>
+                    <ul class="nav flex-column collapse" id="submenuRegistro">
+                        <li class="nav-item"><a class="nav-link submenu-item" href="#"><i class="bi bi-person"></i> Personas</a></li>
+                        <li class="nav-item"><a class="nav-link submenu-item" href="#"><i class="bi bi-car-front"></i> Vehículos</a></li>
+                        <li class="nav-item"><a class="nav-link submenu-item" href="#"><i class="bi bi-shop"></i> Comercios</a></li>
+                        <li class="nav-item"><a class="nav-link submenu-item" href="#"><i class="bi bi-building"></i> Establecimientos</a></li>
+                        <li class="nav-item"><a class="nav-link submenu-item" href="#"><i class="bi bi-file-earmark-text"></i> Intervenciones</a></li>
+                    </ul>
+                </li>
+                
+                <!-- Prevención -->
+                <li class="nav-item">
+                    <a class="nav-link" href="#" data-bs-toggle="collapse" data-bs-target="#submenuPrevencion">
+                        <i class="bi bi-shield-exclamation"></i> Prevención
+                        <i class="bi bi-chevron-down ms-auto"></i>
+                    </a>
+                    <ul class="nav flex-column collapse" id="submenuPrevencion">
+                        <li class="nav-item"><a class="nav-link submenu-item" href="#"><i class="bi bi-bar-chart"></i> Estadísticas</a></li>
+                        <li class="nav-item"><a class="nav-link submenu-item" href="#"><i class="bi bi-bell"></i> Alertas</a></li>
+                        <li class="nav-item"><a class="nav-link submenu-item" href="#"><i class="bi bi-file-earmark-pdf"></i> Reportes</a></li>
+                    </ul>
+                </li>
+                
+                <!-- Investigación -->
+                <li class="nav-item">
+                    <a class="nav-link" href="#" data-bs-toggle="collapse" data-bs-target="#submenuInvestigacion">
+                        <i class="bi bi-search"></i> Investigación
+                        <i class="bi bi-chevron-down ms-auto"></i>
+                    </a>
+                    <ul class="nav flex-column collapse" id="submenuInvestigacion">
+                        <li class="nav-item"><a class="nav-link submenu-item" href="#"><i class="bi bi-headphones"></i> Escuchas</a></li>
+                        <li class="nav-item"><a class="nav-link submenu-item" href="#"><i class="bi bi-diagram-3"></i> Relaciones</a></li>
+                        <li class="nav-item"><a class="nav-link submenu-item" href="#"><i class="bi bi-folder"></i> Evidencias</a></li>
+                    </ul>
+                </li>
+                
+                <!-- Operaciones -->
+                <li class="nav-item">
+                    <a class="nav-link" href="#" data-bs-toggle="collapse" data-bs-target="#submenuOperaciones">
+                        <i class="bi bi-gear"></i> Operaciones
+                        <i class="bi bi-chevron-down ms-auto"></i>
+                    </a>
+                    <ul class="nav flex-column collapse" id="submenuOperaciones">
+                        <li class="nav-item"><a class="nav-link submenu-item" href="#"><i class="bi bi-people"></i> Recursos</a></li>
+                        <li class="nav-item"><a class="nav-link submenu-item" href="#"><i class="bi bi-geo-alt"></i> Seguimiento</a></li>
+                    </ul>
+                </li>
+                
+                <!-- DataLab -->
+                <li class="nav-item">
+                    <a class="nav-link" href="#" data-bs-toggle="collapse" data-bs-target="#submenuDataLab">
+                        <i class="bi bi-database"></i> DataLab
+                        <i class="bi bi-chevron-down ms-auto"></i>
+                    </a>
+                    <ul class="nav flex-column collapse show" id="submenuDataLab">
+                        {% if current_user.has_permission('DATALAB_UPLOAD') %}
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('datalab.upload') }}"><i class="bi bi-cloud-upload"></i> Subir archivo</a></li>
+                        {% endif %}
+                        {% if current_user.has_permission('DATALAB_VIEW') %}
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('datalab.datasets') }}"><i class="bi bi-table"></i> Datasets</a></li>
+                        {% endif %}
+                    </ul>
+                </li>
+                
+                <!-- Admin -->
+                {% if current_user.has_permission('ADMIN_USERS') %}
+                <li class="nav-item">
+                    <a class="nav-link" href="#" data-bs-toggle="collapse" data-bs-target="#submenuAdmin">
+                        <i class="bi bi-shield-lock"></i> Admin
+                        <i class="bi bi-chevron-down ms-auto"></i>
+                    </a>
+                    <ul class="nav flex-column collapse" id="submenuAdmin">
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('admin.users') }}"><i class="bi bi-people"></i> Usuarios</a></li>
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('admin.roles') }}"><i class="bi bi-person-badge"></i> Roles</a></li>
+                    </ul>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+</aside>
+
+<!-- Overlay para mobile -->
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+

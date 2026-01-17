@@ -1,0 +1,101 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}{{ action }} Usuario - SIOC{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-person-{{ 'plus' if action == 'Crear' else 'pencil' }}"></i> {{ action }} Usuario</h1>
+    <p class="text-muted">{{ action }} un usuario en el sistema</p>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('admin.user_new' if action == 'Crear' else 'admin.user_edit', user_id=user.id if user else None) }}">
+            {{ form.hidden_tag() }}
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    {{ form.username.label(class="form-label") }}
+                    {{ form.username(class="form-control" + (" is-invalid" if form.username.errors else "")) }}
+                    {% if form.username.errors %}
+                        <div class="invalid-feedback">
+                            {% for error in form.username.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    {{ form.email.label(class="form-label") }}
+                    {{ form.email(class="form-control" + (" is-invalid" if form.email.errors else "")) }}
+                    {% if form.email.errors %}
+                        <div class="invalid-feedback">
+                            {% for error in form.email.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            {% if action == 'Crear' %}
+            <div class="mb-3">
+                {{ form.password.label(class="form-label") }}
+                {{ form.password(class="form-control" + (" is-invalid" if form.password.errors else "")) }}
+                {% if form.password.errors %}
+                    <div class="invalid-feedback">
+                        {% for error in form.password.errors %}{{ error }}{% endfor %}
+                    </div>
+                {% endif %}
+                <small class="form-text text-muted">Si se deja vacío, se asignará una contraseña temporal</small>
+            </div>
+            {% endif %}
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    {{ form.unidad_id.label(class="form-label") }}
+                    {{ form.unidad_id(class="form-select" + (" is-invalid" if form.unidad_id.errors else ""), **form.unidad_id.render_kw or {}) }}
+                    {% if form.unidad_id.errors %}
+                        <div class="invalid-feedback">
+                            {% for error in form.unidad_id.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    {{ form.role_id.label(class="form-label") }}
+                    {{ form.role_id(class="form-select" + (" is-invalid" if form.role_id.errors else "")) }}
+                    {% if form.role_id.errors %}
+                        <div class="invalid-feedback">
+                            {% for error in form.role_id.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <div class="form-check">
+                        {{ form.active(class="form-check-input") }}
+                        {{ form.active.label(class="form-check-label") }}
+                    </div>
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <div class="form-check">
+                        {{ form.must_change_password(class="form-check-input") }}
+                        {{ form.must_change_password.label(class="form-check-label") }}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle"></i> Guardar
+                </button>
+                <a href="{{ url_for('admin.users') }}" class="btn btn-secondary">
+                    <i class="bi bi-x-circle"></i> Cancelar
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+

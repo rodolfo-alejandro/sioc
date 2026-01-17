@@ -1,0 +1,155 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Usuarios - SIOC{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-people"></i> Usuarios</h1>
+    <p class="text-muted">Gestión de usuarios del sistema</p>
+    <div class="header-actions">
+        <a href="{{ url_for('admin.user_new') }}" class="btn btn-primary">
+            <i class="bi bi-person-plus"></i> Nuevo Usuario
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <!-- Búsqueda -->
+        <form method="GET" class="mb-3">
+            <div class="input-group">
+                <input type="text" class="form-control" name="search" 
+                       value="{{ search }}" placeholder="Buscar por usuario o email...">
+                <button class="btn btn-outline-secondary" type="submit">
+                    <i class="bi bi-search"></i> Buscar
+                </button>
+                {% if search %}
+                <a href="{{ url_for('admin.users') }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-x"></i> Limpiar
+                </a>
+                {% endif %}
+            </div>
+        </form>
+        
+        <!-- Tabla de usuarios -->
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Usuario</th>
+                        <th>Email</th>
+                        <th>Unidad</th>
+                        <th>Rol</th>
+                        <th>Estado</th>
+                        <th>Último Login</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                    <tr>
+                        <td>
+                            <strong>{{ user.username }}</strong>
+                            {% if user.must_change_password %}
+                                <span class="badge bg-warning text-dark" title="Debe cambiar contraseña">
+                                    <i class="bi bi-key"></i>
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td>{{ user.email }}</td>
+                        <td>{{ user.unidad.nombre if user.unidad else 'N/A' }}</td>
+                        <td>
+                            {% if user.roles %}
+                                <span class="badge bg-secondary">{{ user.roles[0].name }}</span>
+                            {% else %}
+                                <span class="text-muted">Sin rol</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if user.active %}
+                                <span class="badge bg-success">Activo</span>
+                            {% else %}
+                                <span class="badge bg-danger">Inactivo</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if user.last_login_at %}
+                                {{ user.last_login_at.strftime('%d/%m/%Y %H:%M') }}
+                            {% else %}
+                                <span class="text-muted">Nunca</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <a href="{{ url_for('admin.user_edit', user_id=user.id) }}" 
+                                   class="btn btn-outline-primary" title="Editar">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <button class="btn btn-outline-{{ 'danger' if user.active else 'success' }} toggle-active" 
+                                        data-user-id="{{ user.id }}" 
+                                        title="{{ 'Desactivar' if user.active else 'Activar' }}">
+                                    <i class="bi bi-{{ 'x-circle' if user.active else 'check-circle' }}"></i>
+                                </button>
+                                <button class="btn btn-outline-warning reset-password" 
+                                        data-user-id="{{ user.id }}" 
+                                        title="Resetear contraseña">
+                                    <i class="bi bi-key"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center text-muted">No hay usuarios registrados</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Toggle activo/inactivo
+    document.querySelectorAll('.toggle-active').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const userId = this.dataset.userId;
+            fetch(`/admin/users/${userId}/toggle-active`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'}
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                }
+            });
+        });
+    });
+    
+    // Reset password
+    document.querySelectorAll('.reset-password').forEach(btn => {
+        btn.addEventListener('click', function() {
+            if (!confirm('¿Resetear la contraseña de este usuario?')) return;
+            const userId = this.dataset.userId;
+            fetch(`/admin/users/${userId}/reset-password`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'}
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert(data.message || 'Error al resetear contraseña');
+                }
+            });
+        });
+    });
+});
+</script>
+{% endblock %}
+

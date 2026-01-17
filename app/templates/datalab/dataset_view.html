@@ -1,0 +1,201 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}{{ dataset.name }} - DataLab{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-database"></i> {{ dataset.name }}</h1>
+    <p class="text-muted">{{ dataset.original_filename }} • {{ dataset.rows_count | number_format }} filas • {{ dataset.columns_count }} columnas</p>
+    <div class="header-actions">
+        <a href="{{ url_for('datalab.datasets') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Volver
+        </a>
+    </div>
+</div>
+
+<!-- Métricas -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="bi bi-list-ol display-6 text-primary"></i>
+                <h5 class="mt-2">Filas</h5>
+                <h3 class="text-primary">{{ dataset.rows_count | number_format }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="bi bi-columns display-6 text-info"></i>
+                <h5 class="mt-2">Columnas</h5>
+                <h3 class="text-info">{{ dataset.columns_count }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="bi bi-exclamation-triangle display-6 text-warning"></i>
+                <h5 class="mt-2">Valores Nulos</h5>
+                <h3 class="text-warning">{{ profile.summary.total_nulls | number_format }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="bi bi-calendar display-6 text-success"></i>
+                <h5 class="mt-2">Fecha</h5>
+                <h6 class="text-success">{{ dataset.created_at.strftime('%d/%m/%Y') }}</h6>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Gráficos -->
+{% if charts %}
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-bar-chart"></i> Gráficos Automáticos</h5>
+    </div>
+    <div class="card-body">
+        <div class="row g-3">
+            {% for chart_id, chart in charts.items() %}
+            <div class="col-md-6">
+                <div class="chart-container">
+                    <h6>{{ chart.title }}</h6>
+                    <div id="chart_{{ chart_id }}" style="height: 300px;"></div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Perfil de Columnas -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-info-circle"></i> Perfil de Columnas</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <thead class="table-light">
+                    <tr>
+                        <th>Columna</th>
+                        <th>Tipo</th>
+                        <th>Nulos</th>
+                        <th>% Nulos</th>
+                        <th>Únicos</th>
+                        <th>Estadísticas</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for col_name, col_info in profile.columns.items() %}
+                    <tr>
+                        <td><strong>{{ col_name }}</strong></td>
+                        <td><code>{{ col_info.type }}</code></td>
+                        <td>{{ col_info.nulls }}</td>
+                        <td>{{ "%.1f" | format(col_info.null_percentage) }}%</td>
+                        <td>{{ col_info.unique_count }}</td>
+                        <td>
+                            {% if col_info.min is defined %}
+                                Min: {{ col_info.min }}, Max: {{ col_info.max }}, Media: {{ "%.2f" | format(col_info.mean) }}
+                            {% elif col_info.top_values %}
+                                {% for top_key, top_count in col_info.top_values.items() %}
+                                    {% if loop.first %}Top: {{ top_key }} ({{ top_count }}){% endif %}
+                                {% endfor %}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Preview de Datos -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-table"></i> Vista Previa (Primeras 100 filas)</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover">
+                <thead class="table-light">
+                    <tr>
+                        {% if preview %}
+                            {% for key in preview[0].keys() %}
+                            <th>{{ key }}</th>
+                            {% endfor %}
+                        {% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in preview %}
+                    <tr>
+                        {% for key, value in row.items() %}
+                        <td>{{ value if value is not none else '-' }}</td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Renderizar gráficos con Plotly
+    const charts = {{ charts | tojson }};
+    
+    for (const [chartId, chart] of Object.entries(charts)) {
+        const containerId = 'chart_' + chartId;
+        const container = document.getElementById(containerId);
+        
+        if (!container) continue;
+        
+        let plotlyData = [];
+        let layout = {
+            title: chart.title,
+            margin: { l: 50, r: 50, t: 50, b: 50 }
+        };
+        
+        if (chart.type === 'bar') {
+            plotlyData = [{
+                x: chart.data.x,
+                y: chart.data.y,
+                type: 'bar',
+                marker: { color: 'rgb(13, 110, 253)' }
+            }];
+        } else if (chart.type === 'histogram') {
+            plotlyData = [{
+                x: chart.data.x,
+                type: 'histogram',
+                nbinsx: chart.data.bins,
+                marker: { color: 'rgb(13, 110, 253)' }
+            }];
+        } else if (chart.type === 'line') {
+            plotlyData = [{
+                x: chart.data.x,
+                y: chart.data.y,
+                type: 'scatter',
+                mode: 'lines+markers',
+                marker: { color: 'rgb(13, 110, 253)' }
+            }];
+        }
+        
+        Plotly.newPlot(containerId, plotlyData, layout, {responsive: true});
+    }
+});
+</script>
+{% endblock %}
+
