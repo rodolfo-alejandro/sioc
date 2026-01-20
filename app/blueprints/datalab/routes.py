@@ -183,16 +183,16 @@ def denuncias_dashboard_api():
     if request.args.get('opciones'):
         opcion = request.args.get('opciones')
         query = DenunciaWeb.query.filter_by(unidad_id=current_user.unidad_id)
-        
+
         # Filtrar por departamentos si se proporcionan
-            departamentos = request.args.getlist('departamentos[]')
-            if departamentos and '' not in departamentos:
-                query = query.filter(DenunciaWeb.departamento.in_(departamentos))
-        
+        departamentos = request.args.getlist('departamentos[]')
+        if departamentos and '' not in departamentos:
+            query = query.filter(DenunciaWeb.departamento.in_(departamentos))
+
         # Filtrar por divisiones si se proporcionan
-            divisiones = request.args.getlist('divisiones[]')
-            if divisiones and '' not in divisiones:
-                query = query.filter(DenunciaWeb.division.in_(divisiones))
+        divisiones = request.args.getlist('divisiones[]')
+        if divisiones and '' not in divisiones:
+            query = query.filter(DenunciaWeb.division.in_(divisiones))
         
         if opcion == 'divisiones':
             divisiones = sorted([d[0] for d in query.with_entities(DenunciaWeb.division).distinct().all() if d[0]])
@@ -203,30 +203,29 @@ def denuncias_dashboard_api():
     
     # Procesar filtros normales
     filtros = {}
-    
+
     # Procesar parámetros GET
     # OJO: en el frontend se envían como `tipos[]`, `departamentos[]`, etc.
     # por lo que debemos usar getlist('nombre[]') y comprobar esa lista.
-        tipos = request.args.getlist('tipos[]')
-    if tipos:
-        if tipos and '' not in tipos:
-            filtros['tipos'] = tipos
-        departamentos = request.args.getlist('departamentos[]')
-    if departamentos:
-        if departamentos and '' not in departamentos:
-            filtros['departamentos'] = departamentos
-        divisiones = request.args.getlist('divisiones[]')
-    if divisiones:
-        if divisiones and '' not in divisiones:
-            filtros['divisiones'] = divisiones
-        secciones = request.args.getlist('secciones[]')
-    if secciones:
-        if secciones and '' not in secciones:
-            filtros['secciones'] = secciones
-        estados = request.args.getlist('estados[]')
-    if estados:
-        if estados and '' not in estados:
-            filtros['estados'] = estados
+    tipos = request.args.getlist('tipos[]')
+    if tipos and '' not in tipos:
+        filtros['tipos'] = tipos
+
+    departamentos = request.args.getlist('departamentos[]')
+    if departamentos and '' not in departamentos:
+        filtros['departamentos'] = departamentos
+
+    divisiones = request.args.getlist('divisiones[]')
+    if divisiones and '' not in divisiones:
+        filtros['divisiones'] = divisiones
+
+    secciones = request.args.getlist('secciones[]')
+    if secciones and '' not in secciones:
+        filtros['secciones'] = secciones
+
+    estados = request.args.getlist('estados[]')
+    if estados and '' not in estados:
+        filtros['estados'] = estados
     actuarios = request.args.getlist('actuarios[]')
     if actuarios:
         if actuarios and '' not in actuarios:
