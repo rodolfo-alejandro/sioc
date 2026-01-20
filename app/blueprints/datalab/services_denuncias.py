@@ -268,9 +268,9 @@ def aplicar_filtros(query, filtros):
     # Usamos el campo calculado y almacenado en la BD `dias_investigacion`
     # para que TODOS los componentes (tarjetas, gráficos, etc.) respeten
     # los filtros de días de forma consistente.
-        if filtros.get('dias_desde'):
+    if filtros.get('dias_desde'):
         query = query.filter(DenunciaWeb.dias_investigacion >= filtros['dias_desde'])
-        if filtros.get('dias_hasta'):
+    if filtros.get('dias_hasta'):
         query = query.filter(DenunciaWeb.dias_investigacion <= filtros['dias_hasta'])
 
     if filtros.get('avance_desde'):
