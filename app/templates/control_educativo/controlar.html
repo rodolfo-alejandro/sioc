@@ -1,0 +1,95 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Controlar Establecimiento - SIOC{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-clipboard-check"></i> Controlar Establecimiento</h1>
+    <p class="text-muted">Registre un control para: <strong>{{ establecimiento.nombre }}</strong></p>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('control_educativo.controlar', establecimiento_id=establecimiento.id) }}">
+            {{ csrf_token() }}
+            
+            <h5 class="mb-3">Datos del Control</h5>
+            
+            <div class="mb-3">
+                <label for="resultado" class="form-label">Resultado</label>
+                <select class="form-select" id="resultado" name="resultado">
+                    <option value="">Seleccione...</option>
+                    <option value="Normal">Normal</option>
+                    <option value="Irregularidades">Irregularidades</option>
+                    <option value="Clausura">Clausura</option>
+                    <option value="Advertencia">Advertencia</option>
+                </select>
+            </div>
+            
+            <div class="mb-3">
+                <label for="personal_presente" class="form-label">Personal Presente</label>
+                <textarea class="form-control" id="personal_presente" name="personal_presente" rows="2" maxlength="500"></textarea>
+                <small class="form-text text-muted">Liste el personal presente durante el control</small>
+            </div>
+            
+            {% if personal %}
+            <h5 class="mb-3 mt-4">Personal Entrevistado</h5>
+            
+            <div class="mb-3">
+                {% for p in personal %}
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="personal_{{ p.id }}" 
+                           name="personal_entrevistado[]" value="{{ p.id }}">
+                    <label class="form-check-label" for="personal_{{ p.id }}">
+                        <strong>{{ p.nombre_completo }}</strong> - {{ p.cargo_nombre }}
+                    </label>
+                </div>
+                <div class="mb-3 ms-4" id="declaracion_{{ p.id }}_container" style="display: none;">
+                    <label for="declaracion_{{ p.id }}" class="form-label">Declaración</label>
+                    <textarea class="form-control" id="declaracion_{{ p.id }}" 
+                              name="declaracion_{{ p.id }}" rows="2"></textarea>
+                    <label for="obs_personal_{{ p.id }}" class="form-label mt-2">Observaciones</label>
+                    <textarea class="form-control" id="obs_personal_{{ p.id }}" 
+                              name="obs_personal_{{ p.id }}" rows="2"></textarea>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            
+            <div class="mb-3">
+                <label for="infracciones" class="form-label">Infracciones Detectadas</label>
+                <textarea class="form-control" id="infracciones" name="infracciones" rows="3" maxlength="1000"></textarea>
+            </div>
+            
+            <div class="mb-3">
+                <label for="observaciones" class="form-label">Observaciones del Control</label>
+                <textarea class="form-control" id="observaciones" name="observaciones" rows="4" maxlength="1000"></textarea>
+            </div>
+            
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle"></i> Registrar Control
+                </button>
+                <a href="{{ url_for('control_educativo.ver', establecimiento_id=establecimiento.id) }}" class="btn btn-secondary">
+                    <i class="bi bi-x-circle"></i> Cancelar
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    // Mostrar/ocultar campos de declaración cuando se marca personal
+    document.querySelectorAll('input[name="personal_entrevistado[]"]').forEach(function(checkbox) {
+        checkbox.addEventListener('change', function() {
+            const container = document.getElementById('declaracion_' + this.value + '_container');
+            if (container) {
+                container.style.display = this.checked ? 'block' : 'none';
+            }
+        });
+    });
+</script>
+{% endblock %}
+

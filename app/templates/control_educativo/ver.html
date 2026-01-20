@@ -1,0 +1,131 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Ver Establecimiento - SIOC{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-building"></i> {{ establecimiento.nombre }}</h1>
+    <p class="text-muted">Detalle del establecimiento educativo</p>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Información General</h5>
+            </div>
+            <div class="card-body">
+                <dl class="row">
+                    <dt class="col-sm-4">Nombre:</dt>
+                    <dd class="col-sm-8"><strong>{{ establecimiento.nombre }}</strong></dd>
+                    
+                    <dt class="col-sm-4">CUE:</dt>
+                    <dd class="col-sm-8">{{ establecimiento.cue or 'N/A' }}</dd>
+                    
+                    <dt class="col-sm-4">Tipo:</dt>
+                    <dd class="col-sm-8">{{ establecimiento.tipo_nombre }}</dd>
+                    
+                    <dt class="col-sm-4">Nivel:</dt>
+                    <dd class="col-sm-8">{{ establecimiento.nivel_educativo or 'N/A' }}</dd>
+                    
+                    <dt class="col-sm-4">Turnos:</dt>
+                    <dd class="col-sm-8">{{ establecimiento.turnos or 'N/A' }}</dd>
+                    
+                    <dt class="col-sm-4">Domicilio:</dt>
+                    <dd class="col-sm-8">{{ establecimiento.domicilio or 'N/A' }}</dd>
+                    
+                    <dt class="col-sm-4">Barrio:</dt>
+                    <dd class="col-sm-8">{{ establecimiento.barrio_nombre }}</dd>
+                    
+                    <dt class="col-sm-4">Matrícula Aproximada:</dt>
+                    <dd class="col-sm-8">{{ establecimiento.matricula_aproximada or 'N/A' }}</dd>
+                </dl>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Controles Realizados</h5>
+                {% if current_user.has_permission('CONTROL_EDUCATIVO_CREATE') %}
+                <a href="{{ url_for('control_educativo.controlar', establecimiento_id=establecimiento.id) }}" class="btn btn-sm btn-primary">
+                    <i class="bi bi-clipboard-check"></i> Nuevo Control
+                </a>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                {% if controles %}
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Usuario</th>
+                                <th>Resultado</th>
+                                <th>Observaciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for control in controles %}
+                            <tr>
+                                <td>{{ control.fecha_control.strftime('%d/%m/%Y %H:%M') if control.fecha_control else 'N/A' }}</td>
+                                <td>{{ control.usuario.username if control.usuario else 'N/A' }}</td>
+                                <td>
+                                    {% if control.resultado %}
+                                        <span class="badge bg-info">{{ control.resultado }}</span>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ control.observaciones[:50] if control.observaciones else '-' }}...</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted">No hay controles registrados.</p>
+                {% endif %}
+            </div>
+        </div>
+        
+        {% if personal %}
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="mb-0">Personal</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>DNI</th>
+                                <th>Nombre</th>
+                                <th>Cargo</th>
+                                <th>Teléfono</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for p in personal %}
+                            <tr>
+                                <td>{{ p.dni }}</td>
+                                <td>{{ p.nombre_completo }}</td>
+                                <td>{{ p.cargo_nombre }}</td>
+                                <td>{{ p.telefono or 'N/A' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="mt-3">
+    <a href="{{ url_for('control_educativo.index') }}" class="btn btn-secondary">
+        <i class="bi bi-arrow-left"></i> Volver a la lista
+    </a>
+</div>
+{% endblock %}
+

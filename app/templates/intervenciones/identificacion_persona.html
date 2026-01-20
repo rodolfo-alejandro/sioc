@@ -1,0 +1,187 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Identificación de Persona - SIOC{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-person-check"></i> Identificación de Persona</h1>
+    <p class="text-muted">Registre una identificación de persona</p>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('intervenciones.identificacion_persona') }}" id="identificacionForm">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            
+            <h5 class="mb-3">Datos de la Persona</h5>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="dni" class="form-label">DNI <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="dni" name="dni" required maxlength="10">
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="nombre" class="form-label">Nombre <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="nombre" name="nombre" required maxlength="100">
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="apellido" class="form-label">Apellido <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="apellido" name="apellido" required maxlength="100">
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="fecha_nacimiento" class="form-label">Fecha de Nacimiento</label>
+                    <input type="date" class="form-control" id="fecha_nacimiento" name="fecha_nacimiento">
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="sexo_id" class="form-label">Sexo</label>
+                    <select class="form-select" id="sexo_id" name="sexo_id">
+                        <option value="">Seleccione...</option>
+                        {% for sexo in datos_referencia.sexos %}
+                        <option value="{{ sexo.id }}">{{ sexo.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="nacionalidad_id" class="form-label">Nacionalidad</label>
+                    <select class="form-select" id="nacionalidad_id" name="nacionalidad_id">
+                        <option value="">Seleccione...</option>
+                        {% for nacionalidad in datos_referencia.nacionalidades %}
+                        <option value="{{ nacionalidad.id }}" {% if nacionalidad.id == 1 %}selected{% endif %}>{{ nacionalidad.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="estado_civil_id" class="form-label">Estado Civil</label>
+                    <select class="form-select" id="estado_civil_id" name="estado_civil_id">
+                        <option value="">Seleccione...</option>
+                        {% for estado in datos_referencia.estados_civiles %}
+                        <option value="{{ estado.id }}">{{ estado.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="ocupacion_id" class="form-label">Ocupación</label>
+                    <select class="form-select" id="ocupacion_id" name="ocupacion_id">
+                        <option value="">Seleccione...</option>
+                        {% for ocupacion in datos_referencia.ocupaciones %}
+                        <option value="{{ ocupacion.id }}">{{ ocupacion.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                <label for="domicilio_persona" class="form-label">Domicilio</label>
+                <input type="text" class="form-control" id="domicilio_persona" name="domicilio_persona" maxlength="200">
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="telefono" class="form-label">Teléfono</label>
+                    <input type="text" class="form-control" id="telefono" name="telefono" maxlength="20">
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="email" class="form-label">Email</label>
+                    <input type="email" class="form-control" id="email" name="email" maxlength="120">
+                </div>
+            </div>
+            
+            <h5 class="mb-3 mt-4">Contacto de Emergencia</h5>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="contacto_emergencia_nombre" class="form-label">Nombre</label>
+                    <input type="text" class="form-control" id="contacto_emergencia_nombre" name="contacto_emergencia_nombre" maxlength="100">
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="contacto_emergencia_telefono" class="form-label">Teléfono</label>
+                    <input type="text" class="form-control" id="contacto_emergencia_telefono" name="contacto_emergencia_telefono" maxlength="20">
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                <label for="contacto_emergencia_relacion_id" class="form-label">Relación</label>
+                <select class="form-select" id="contacto_emergencia_relacion_id" name="contacto_emergencia_relacion_id">
+                    <option value="">Seleccione...</option>
+                    {% for tipo in datos_referencia.tipos_contacto %}
+                    <option value="{{ tipo.id }}">{{ tipo.nombre }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <h5 class="mb-3 mt-4">Ubicación <span class="text-danger">*</span></h5>
+            
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle"></i> <strong>Importante:</strong> Debe seleccionar la ubicación en el mapa. La geolocalización es obligatoria.
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="latitud" class="form-label">Latitud <span class="text-danger">*</span></label>
+                    <input type="number" step="any" class="form-control" id="latitud" name="latitud" required readonly>
+                    <small class="form-text text-muted">Se completará automáticamente al seleccionar en el mapa</small>
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="longitud" class="form-label">Longitud <span class="text-danger">*</span></label>
+                    <input type="number" step="any" class="form-control" id="longitud" name="longitud" required readonly>
+                    <small class="form-text text-muted">Se completará automáticamente al seleccionar en el mapa</small>
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                <div id="map" style="height: 400px; width: 100%; border: 1px solid #ddd; border-radius: 4px;"></div>
+                <small class="form-text text-muted">Haga clic en el mapa para seleccionar la ubicación</small>
+            </div>
+            
+            <div class="mb-3">
+                <label for="observaciones" class="form-label">Observaciones</label>
+                <textarea class="form-control" id="observaciones" name="observaciones" rows="3" maxlength="1000"></textarea>
+            </div>
+            
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle"></i> Registrar Identificación
+                </button>
+                <a href="{{ url_for('intervenciones.listar') }}" class="btn btn-secondary">
+                    <i class="bi bi-x-circle"></i> Cancelar
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    // Mapa básico (Leaflet o Google Maps)
+    // Por ahora, usar geolocalización del navegador
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(function(position) {
+            document.getElementById('latitud').value = position.coords.latitude;
+            document.getElementById('longitud').value = position.coords.longitude;
+        });
+    }
+    
+    // TODO: Implementar mapa interactivo (Leaflet/Google Maps)
+    // Por ahora, permitir edición manual de coordenadas
+    document.getElementById('latitud').removeAttribute('readonly');
+    document.getElementById('longitud').removeAttribute('readonly');
+</script>
+{% endblock %}
+

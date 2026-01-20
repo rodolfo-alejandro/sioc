@@ -1,0 +1,120 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Control Educativo - SIOC{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-building"></i> Control Educativo</h1>
+    <p class="text-muted">Gestión de establecimientos educativos y controles</p>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            <div class="col-md-3">
+                <label for="tipo" class="form-label">Tipo</label>
+                <select class="form-select" id="tipo" name="tipo">
+                    <option value="">Todos</option>
+                    {% for tipo in datos_referencia.tipos %}
+                    <option value="{{ tipo.id }}" {% if request.args.get('tipo')|int == tipo.id %}selected{% endif %}>
+                        {{ tipo.nombre }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="barrio" class="form-label">Barrio</label>
+                <select class="form-select" id="barrio" name="barrio">
+                    <option value="">Todos</option>
+                    {% for barrio in datos_referencia.barrios %}
+                    <option value="{{ barrio.id }}" {% if request.args.get('barrio')|int == barrio.id %}selected{% endif %}>
+                        {{ barrio.nombre }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="nivel" class="form-label">Nivel</label>
+                <select class="form-select" id="nivel" name="nivel">
+                    <option value="">Todos</option>
+                    <option value="primario" {% if request.args.get('nivel') == 'primario' %}selected{% endif %}>Primario</option>
+                    <option value="secundario" {% if request.args.get('nivel') == 'secundario' %}selected{% endif %}>Secundario</option>
+                    <option value="terciario" {% if request.args.get('nivel') == 'terciario' %}selected{% endif %}>Terciario</option>
+                    <option value="universitario" {% if request.args.get('nivel') == 'universitario' %}selected{% endif %}>Universitario</option>
+                    <option value="mixto" {% if request.args.get('nivel') == 'mixto' %}selected{% endif %}>Mixto</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="busqueda" class="form-label">Buscar</label>
+                <input type="text" class="form-control" id="busqueda" name="busqueda" 
+                       value="{{ request.args.get('busqueda', '') }}" placeholder="Nombre, CUE o dirección">
+            </div>
+            <div class="col-12">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-search"></i> Filtrar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Lista de Establecimientos</h5>
+        {% if current_user.has_permission('CONTROL_EDUCATIVO_CREATE') %}
+        <a href="{{ url_for('control_educativo.registrar') }}" class="btn btn-sm btn-primary">
+            <i class="bi bi-plus-circle"></i> Registrar Establecimiento
+        </a>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        {% if establecimientos %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Nombre</th>
+                        <th>CUE</th>
+                        <th>Tipo</th>
+                        <th>Nivel</th>
+                        <th>Domicilio</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for establecimiento in establecimientos %}
+                    <tr>
+                        <td><strong>{{ establecimiento.nombre }}</strong></td>
+                        <td>{{ establecimiento.cue or 'N/A' }}</td>
+                        <td>{{ establecimiento.tipo_nombre }}</td>
+                        <td>{{ establecimiento.nivel_educativo or 'N/A' }}</td>
+                        <td>{{ establecimiento.domicilio or 'N/A' }}</td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <a href="{{ url_for('control_educativo.ver', establecimiento_id=establecimiento.id) }}" class="btn btn-outline-primary">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                {% if current_user.has_permission('CONTROL_EDUCATIVO_CREATE') %}
+                                <a href="{{ url_for('control_educativo.controlar', establecimiento_id=establecimiento.id) }}" class="btn btn-outline-success">
+                                    <i class="bi bi-clipboard-check"></i>
+                                </a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i> No hay establecimientos registrados.
+            {% if current_user.has_permission('CONTROL_EDUCATIVO_CREATE') %}
+            <a href="{{ url_for('control_educativo.registrar') }}" class="alert-link">Registrar un establecimiento</a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+

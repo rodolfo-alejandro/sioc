@@ -1,0 +1,49 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Estado de Operativo - SIOC{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-geo-alt"></i> Estado de operativo activo</h1>
+    <p class="text-muted">Consulta rápida del operativo actualmente activo</p>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        {% if operativo %}
+        <dl class="row">
+            <dt class="col-sm-3">Nombre:</dt>
+            <dd class="col-sm-9"><strong>{{ operativo.nombre_operativo }}</strong></dd>
+
+            <dt class="col-sm-3">Tipo:</dt>
+            <dd class="col-sm-9">{{ operativo.tipo_operativo.nombre if operativo.tipo_operativo else 'N/A' }}</dd>
+
+            <dt class="col-sm-3">Fecha inicio:</dt>
+            <dd class="col-sm-9">{{ operativo.fecha_inicio.strftime('%d/%m/%Y %H:%M') if operativo.fecha_inicio else '' }}</dd>
+
+            <dt class="col-sm-3">Estado:</dt>
+            <dd class="col-sm-9">
+                {% if operativo.activo %}
+                <span class="badge bg-success">Activo</span>
+                {% else %}
+                <span class="badge bg-secondary">Finalizado</span>
+                {% endif %}
+            </dd>
+        </dl>
+
+        {% if operativo.activo %}
+        <form method="POST" action="{{ url_for('operativos.finalizar') }}">
+            {{ csrf_token() }}
+            <button type="submit" class="btn btn-danger">
+                <i class="bi bi-stop-circle"></i> Finalizar operativo
+            </button>
+        </form>
+        {% endif %}
+        {% else %}
+        <p class="text-muted mb-0">No hay operativo activo para el usuario actual.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+

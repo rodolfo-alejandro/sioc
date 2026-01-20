@@ -1,0 +1,45 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Relaciones - SIOC{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-diagram-3"></i> Relaciones entre personas</h1>
+    <p class="text-muted">Vista básica de relaciones detectadas (estructura migrada)</p>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        {% if relaciones %}
+        <div class="table-responsive">
+            <table class="table table-hover table-sm">
+                <thead>
+                    <tr>
+                        <th>Persona 1</th>
+                        <th>Persona 2</th>
+                        <th>Tipo relación</th>
+                        <th>Confianza</th>
+                        <th>Fecha detección</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in relaciones %}
+                    <tr>
+                        <td>{{ r.persona1.nombre_completo if r.persona1 else r.persona1_id }}</td>
+                        <td>{{ r.persona2.nombre_completo if r.persona2 else r.persona2_id }}</td>
+                        <td>{{ r.tipo_relacion }}</td>
+                        <td>{{ r.confianza or '-' }}</td>
+                        <td>{{ r.fecha_deteccion.strftime('%d/%m/%Y %H:%M') if r.fecha_deteccion else '' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted mb-0">Aún no hay relaciones registradas.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+

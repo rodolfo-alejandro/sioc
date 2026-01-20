@@ -1,0 +1,74 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Intervenciones - SIOC{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-file-earmark-text"></i> Intervenciones</h1>
+    <p class="text-muted">Lista de intervenciones registradas</p>
+</div>
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Lista de Intervenciones</h5>
+        {% if current_user.has_permission('INTERVENCIONES_CREATE') %}
+        <div class="btn-group">
+            <a href="{{ url_for('intervenciones.identificacion_persona') }}" class="btn btn-sm btn-primary">
+                <i class="bi bi-person-plus"></i> Identificar Persona
+            </a>
+            <a href="{{ url_for('intervenciones.control_vehicular') }}" class="btn btn-sm btn-primary">
+                <i class="bi bi-car-front"></i> Control Vehicular
+            </a>
+        </div>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        {% if intervenciones %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Fecha/Hora</th>
+                        <th>Tipo</th>
+                        <th>Persona/Vehículo</th>
+                        <th>Usuario</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for intervencion in intervenciones %}
+                    <tr>
+                        <td>{{ intervencion.fecha_hora.strftime('%d/%m/%Y %H:%M') if intervencion.fecha_hora else 'N/A' }}</td>
+                        <td><span class="badge bg-primary">{{ intervencion.tipo_intervencion }}</span></td>
+                        <td>
+                            {% if intervencion.persona %}
+                                {{ intervencion.persona.nombre_completo }} (DNI: {{ intervencion.persona.dni }})
+                            {% elif intervencion.vehiculo %}
+                                Vehículo: {{ intervencion.vehiculo.patente }}
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </td>
+                        <td>{{ intervencion.usuario.username if intervencion.usuario else 'N/A' }}</td>
+                        <td>
+                            <a href="{{ url_for('intervenciones.ver', intervencion_id=intervencion.id) }}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-eye"></i> Ver
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i> No hay intervenciones registradas.
+            {% if current_user.has_permission('INTERVENCIONES_CREATE') %}
+            <a href="{{ url_for('intervenciones.identificacion_persona') }}" class="alert-link">Crear una intervención</a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+

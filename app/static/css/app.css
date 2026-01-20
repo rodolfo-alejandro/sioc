@@ -95,6 +95,10 @@ body {
     transform: translateX(-100%);
 }
 
+.sidebar.collapsed ~ .main-content {
+    margin-left: 0 !important;
+}
+
 .sidebar-content {
     padding: 1rem 0;
 }
@@ -160,6 +164,7 @@ body {
     margin-top: var(--topbar-height);
     padding: 2rem;
     min-height: calc(100vh - var(--topbar-height));
+    transition: margin-left 0.3s ease;
 }
 
 @media (max-width: 991.98px) {

@@ -1,0 +1,2738 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Dashboard Denuncias Web - DataLab{% endblock %}
+
+{% block extra_head %}
+    <style>
+        /* Filtros */
+        .filters-panel {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .filter-group {
+            margin-bottom: 12px;
+        }
+        
+        .filter-label {
+            font-weight: 600;
+            font-size: 0.8rem;
+            color: #495057;
+            margin-bottom: 6px;
+        }
+        
+        .filter-dropdown {
+            position: relative;
+        }
+        
+        .filter-toggle {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            background: white;
+            text-align: left;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.875rem;
+        }
+        
+        .filter-toggle:hover {
+            border-color: #86b7fe;
+        }
+        
+        .filter-menu {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            margin-top: 4px;
+            max-height: 250px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .filter-menu.show {
+            display: block;
+        }
+        
+        .filter-search {
+            padding: 8px;
+            border-bottom: 1px solid #e9ecef;
+            position: sticky;
+            top: 0;
+            background: white;
+            z-index: 10;
+        }
+        
+        .filter-search input {
+            width: 100%;
+            padding: 4px 8px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            font-size: 0.875rem;
+        }
+        
+        .filter-item {
+            padding: 8px 12px;
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+        }
+        
+        .filter-item:hover {
+            background-color: #f8f9fa;
+        }
+        
+        .filter-item input[type="checkbox"] {
+            margin-right: 8px;
+        }
+        
+        .filter-item.filter-hidden {
+            display: none;
+        }
+        
+        /* Tarjetas de resumen */
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 18px;
+            margin-bottom: 20px;
+        }
+        
+        .summary-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 8px;
+            padding: 24px;
+            color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            min-height: 140px;
+        }
+        
+        .summary-card h3 {
+            font-size: 2.2rem;
+            font-weight: 700;
+            margin: 0 0 8px 0;
+        }
+        
+        .summary-card .card-title {
+            font-size: 0.9rem;
+            margin: 0 0 10px 0;
+            opacity: 0.95;
+            font-weight: 500;
+        }
+        
+        .summary-card .card-detail {
+            font-size: 0.75rem;
+            margin: 0;
+            opacity: 0.9;
+            border-top: 1px solid rgba(255,255,255,0.3);
+            padding-top: 10px;
+            margin-top: 10px;
+            font-weight: 400;
+        }
+        
+        /* Toggle cantidad/porcentaje */
+        .view-toggle-container {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 15px;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .view-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        .view-toggle input[type="checkbox"] {
+            width: 44px;
+            height: 24px;
+            cursor: pointer;
+            appearance: none;
+            background-color: #cbd5e0;
+            border-radius: 12px;
+            position: relative;
+            transition: background-color 0.3s;
+        }
+        
+        .view-toggle input[type="checkbox"]:checked {
+            background-color: #667eea;
+        }
+        
+        .view-toggle input[type="checkbox"]::before {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background-color: white;
+            top: 2px;
+            left: 2px;
+            transition: left 0.3s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .view-toggle input[type="checkbox"]:checked::before {
+            left: 22px;
+        }
+        
+        .view-toggle span {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #495057;
+        }
+        
+        .summary-card .card-title {
+            font-size: 0.875rem;
+            margin: 0 0 8px 0;
+            opacity: 0.95;
+            font-weight: 500;
+        }
+        
+        /* Gráficos */
+        .chart-container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .chart-header {
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .chart-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #212529;
+            margin: 0;
+        }
+        
+        .chart-subtitle {
+            font-size: 0.875rem;
+            color: #6c757d;
+            margin: 5px 0 0 0;
+        }
+        
+        .chart-wrapper {
+            min-height: 400px;
+        }
+        
+        /* Botón hamburguesa */
+        .sidebar-toggle {
+            position: fixed;
+            top: 70px;
+            left: 10px;
+            z-index: 1031;
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 8px 12px;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .sidebar-toggle:hover {
+            background: #f8f9fa;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<!-- Botón hamburguesa -->
+<button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()">
+    <i class="bi bi-list"></i>
+</button>
+
+<div class="page-header">
+    <h1><i class="bi bi-bar-chart-line"></i> Dashboard Denuncias Web</h1>
+    <p class="text-muted">Análisis de producción y estados de denuncias</p>
+    <div class="header-actions">
+        <a href="{{ url_for('datalab.denuncias_upload') }}" class="btn btn-secondary">
+            <i class="bi bi-cloud-upload"></i> Cargar Archivo
+        </a>
+    </div>
+</div>
+
+<!-- Panel de Filtros -->
+<div class="filters-panel">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="mb-0"><i class="bi bi-funnel"></i> Filtros</h5>
+        <div class="d-flex gap-2 align-items-center">
+            <span class="badge bg-primary">Total: <strong id="total-badge">{{ datos.total | number_format }}</strong></span>
+            <button type="button" class="btn btn-primary btn-sm" onclick="aplicarFiltros()">
+                <i class="bi bi-funnel-fill"></i> Aplicar Filtros
+            </button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="limpiarFiltros()">
+                <i class="bi bi-x-circle"></i> Limpiar
+            </button>
+        </div>
+    </div>
+    <form method="POST" id="filtersForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        
+        <div class="row g-3">
+            <div class="col-md-2">
+                <div class="filter-group">
+                    <label class="filter-label">Tipo/Origen</label>
+                    <div class="filter-dropdown">
+                        <div class="filter-toggle" onclick="toggleFilter('tipo')">
+                            <span id="tipo-label">Todos</span>
+                            <i class="bi bi-chevron-down"></i>
+                        </div>
+                        <div class="filter-menu" id="tipo-menu">
+                            <div class="filter-search">
+                                <input type="text" placeholder="Buscar..." onkeyup="filtrarOpciones('tipo', this.value)">
+                            </div>
+                            <div class="filter-item">
+                                <input type="checkbox" name="tipos[]" value="" id="tipo-all" onchange="updateFilterLabel('tipo');">
+                                <label for="tipo-all">Todos</label>
+                            </div>
+                            {% for tipo in datos.opciones_filtros.tipos %}
+                            <div class="filter-item" data-text="{{ tipo.lower() }}">
+                                <input type="checkbox" name="tipos[]" value="{{ tipo }}" id="tipo-{{ loop.index }}" onchange="updateFilterLabel('tipo');">
+                                <label for="tipo-{{ loop.index }}">{{ tipo }}</label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-2">
+                <div class="filter-group">
+                    <label class="filter-label">Departamento</label>
+                    <div class="filter-dropdown">
+                        <div class="filter-toggle" onclick="toggleFilter('dept')">
+                            <span id="dept-label">Todos</span>
+                            <i class="bi bi-chevron-down"></i>
+                        </div>
+                        <div class="filter-menu" id="dept-menu">
+                            <div class="filter-search">
+                                <input type="text" placeholder="Buscar..." onkeyup="filtrarOpciones('dept', this.value)">
+                            </div>
+                            <div class="filter-item">
+                                <input type="checkbox" name="departamentos[]" value="" id="dept-all" onchange="updateFilterLabel('dept'); actualizarDivisiones();">
+                                <label for="dept-all">Todos</label>
+                            </div>
+                            {% for dept in datos.opciones_filtros.departamentos %}
+                            <div class="filter-item" data-text="{{ dept.lower() }}">
+                                <input type="checkbox" name="departamentos[]" value="{{ dept }}" id="dept-{{ loop.index }}" onchange="updateFilterLabel('dept'); actualizarDivisiones();">
+                                <label for="dept-{{ loop.index }}">{{ dept }}</label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-2">
+                <div class="filter-group">
+                    <label class="filter-label">División</label>
+                    <div class="filter-dropdown">
+                        <div class="filter-toggle" onclick="toggleFilter('div')">
+                            <span id="div-label">Todas</span>
+                            <i class="bi bi-chevron-down"></i>
+                        </div>
+                        <div class="filter-menu" id="div-menu">
+                            <div class="filter-search">
+                                <input type="text" placeholder="Buscar..." onkeyup="filtrarOpciones('div', this.value)">
+                            </div>
+                            <div class="filter-item">
+                                <input type="checkbox" name="divisiones[]" value="" id="div-all" onchange="updateFilterLabel('div'); actualizarSecciones();">
+                                <label for="div-all">Todas</label>
+                            </div>
+                            <div id="div-options">
+                                {% for div in datos.opciones_filtros.divisiones %}
+                                <div class="filter-item" data-text="{{ div.lower() }}">
+                                    <input type="checkbox" name="divisiones[]" value="{{ div }}" id="div-{{ loop.index }}" onchange="updateFilterLabel('div'); actualizarSecciones();">
+                                    <label for="div-{{ loop.index }}">{{ div }}</label>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-2">
+                <div class="filter-group">
+                    <label class="filter-label">SINAR a Cargo</label>
+                    <div class="filter-dropdown">
+                        <div class="filter-toggle" onclick="toggleFilter('sec')">
+                            <span id="sec-label">Todas</span>
+                            <i class="bi bi-chevron-down"></i>
+                        </div>
+                        <div class="filter-menu" id="sec-menu">
+                            <div class="filter-search">
+                                <input type="text" placeholder="Buscar..." onkeyup="filtrarOpciones('sec', this.value)">
+                            </div>
+                            <div class="filter-item">
+                                <input type="checkbox" name="secciones[]" value="" id="sec-all" onchange="updateFilterLabel('sec');">
+                                <label for="sec-all">Todas</label>
+                            </div>
+                            <div id="sec-options">
+                                {% for sec in datos.opciones_filtros.secciones %}
+                                <div class="filter-item" data-text="{{ sec.lower() }}">
+                                    <input type="checkbox" name="secciones[]" value="{{ sec }}" id="sec-{{ loop.index }}" onchange="updateFilterLabel('sec');">
+                                    <label for="sec-{{ loop.index }}">{{ sec }}</label>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-2">
+                <div class="filter-group">
+                    <label class="filter-label">Estado</label>
+                    <div class="filter-dropdown">
+                        <div class="filter-toggle" onclick="toggleFilter('est')">
+                            <span id="est-label">Todos</span>
+                            <i class="bi bi-chevron-down"></i>
+                        </div>
+                        <div class="filter-menu" id="est-menu">
+                            <div class="filter-search">
+                                <input type="text" placeholder="Buscar..." onkeyup="filtrarOpciones('est', this.value)">
+                            </div>
+                            <div class="filter-item">
+                                <input type="checkbox" name="estados[]" value="" id="est-all" onchange="updateFilterLabel('est');">
+                                <label for="est-all">Todos</label>
+                            </div>
+                            {% for estado in datos.opciones_filtros.estados %}
+                            <div class="filter-item" data-text="{{ estado.lower() }}">
+                                <input type="checkbox" name="estados[]" value="{{ estado }}" id="est-{{ loop.index }}" onchange="updateFilterLabel('est');">
+                                <label for="est-{{ loop.index }}">{{ estado }}</label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-2">
+                <div class="filter-group">
+                    <label class="filter-label">Actuario</label>
+                    <div class="filter-dropdown">
+                        <div class="filter-toggle" onclick="toggleFilter('act')">
+                            <span id="act-label">Todos</span>
+                            <i class="bi bi-chevron-down"></i>
+                        </div>
+                        <div class="filter-menu" id="act-menu">
+                            <div class="filter-search">
+                                <input type="text" placeholder="Buscar..." onkeyup="filtrarOpciones('act', this.value)">
+                            </div>
+                            <div class="filter-item">
+                                <input type="checkbox" name="actuarios[]" value="" id="act-all" onchange="updateFilterLabel('act');">
+                                <label for="act-all">Todos</label>
+                            </div>
+                            {% for actuario in datos.opciones_filtros.actuarios %}
+                            <div class="filter-item" data-text="{{ actuario.lower() }}">
+                                <input type="checkbox" name="actuarios[]" value="{{ actuario }}" id="act-{{ loop.index }}" onchange="updateFilterLabel('act');">
+                                <label for="act-{{ loop.index }}">{{ actuario }}</label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-2">
+                <div class="filter-group">
+                    <label class="filter-label">Avance desde (%)</label>
+                    <input type="number" name="avance_desde" class="form-control form-control-sm" min="0" max="100" placeholder="0" value="{{ filtros_aplicados.avance_desde if filtros_aplicados and filtros_aplicados.get('avance_desde') else '' }}">
+                </div>
+            </div>
+            
+            <div class="col-md-2">
+                <div class="filter-group">
+                    <label class="filter-label">Avance hasta (%)</label>
+                    <input type="number" name="avance_hasta" class="form-control form-control-sm" min="0" max="100" placeholder="100" value="{{ filtros_aplicados.avance_hasta if filtros_aplicados and filtros_aplicados.get('avance_hasta') else '' }}">
+                </div>
+            </div>
+            
+            <div class="col-md-2">
+                <div class="filter-group">
+                    <label class="filter-label">Días desde</label>
+                    <input type="number" name="dias_desde" class="form-control form-control-sm" min="0" placeholder="0" value="{{ filtros_aplicados.dias_desde if filtros_aplicados and filtros_aplicados.get('dias_desde') else '' }}">
+                </div>
+            </div>
+            
+            <div class="col-md-2">
+                <div class="filter-group">
+                    <label class="filter-label">Días hasta</label>
+                    <input type="number" name="dias_hasta" class="form-control form-control-sm" min="0" placeholder="999" value="{{ filtros_aplicados.dias_hasta if filtros_aplicados and filtros_aplicados.get('dias_hasta') else '' }}">
+                </div>
+            </div>
+
+            <div class="col-md-2">
+                <div class="filter-group">
+                    <label class="filter-label">Fecha desde</label>
+                    <input type="date" name="fecha_desde" class="form-control form-control-sm" value="{{ filtros_aplicados.fecha_desde.strftime('%Y-%m-%d') if filtros_aplicados and filtros_aplicados.get('fecha_desde') else '' }}">
+                </div>
+            </div>
+
+            <div class="col-md-2">
+                <div class="filter-group">
+                    <label class="filter-label">Fecha hasta</label>
+                    <input type="date" name="fecha_hasta" class="form-control form-control-sm" value="{{ filtros_aplicados.fecha_hasta.strftime('%Y-%m-%d') if filtros_aplicados and filtros_aplicados.get('fecha_hasta') else '' }}">
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Toggle Cantidad/Porcentaje + Análisis -->
+<div class="view-toggle-container">
+    <span class="text-muted">Vista:</span>
+    <div class="view-toggle" onclick="toggleViewMode()">
+        <span>Cantidad</span>
+        <input type="checkbox" id="viewToggle" onchange="toggleViewMode()">
+        <span>Porcentaje</span>
+    </div>
+    <button type="button" class="btn btn-outline-primary btn-sm" onclick="abrirAnalisis()">
+        <i class="bi bi-search"></i> Análisis
+    </button>
+    <button type="button" class="btn btn-outline-success btn-sm" onclick="abrirSelectorPDF()">
+        <i class="bi bi-file-pdf"></i> Exportar PDF
+    </button>
+</div>
+
+<!-- Tarjetas de Resumen -->
+<div class="summary-cards" id="summary-cards">
+    <!-- Se llenan dinámicamente -->
+</div>
+
+<!-- Gráficos -->
+<div class="row">
+    <div class="col-12">
+        <div class="chart-container">
+            <div class="chart-header d-flex justify-content-between align-items-center">
+                <div>
+                <h5 class="chart-title">RANGO DE DÍAS DE INVESTIGACIÓN</h5>
+                <p class="chart-subtitle">(Etapa Investigativa + Vinculada)</p>
+            </div>
+                <small class="text-muted">
+                    Total actual: <strong class="total-charts">{{ datos.resumen.total_denuncias | number_format }}</strong>
+                </small>
+            </div>
+            <div class="chart-wrapper">
+                <canvas id="chartDias"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-12">
+        <div class="chart-container">
+            <div class="chart-header d-flex justify-content-between align-items-center">
+                <div>
+                <h5 class="chart-title">AVANCE DE INVESTIGACIÓN</h5>
+                <p class="chart-subtitle">(Etapa Investigativa + Vinculada)</p>
+            </div>
+                <small class="text-muted">
+                    Total actual: <strong class="total-charts">{{ datos.resumen.total_denuncias | number_format }}</strong>
+                </small>
+            </div>
+            <div class="chart-wrapper">
+                <canvas id="chartAvance"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-12">
+        <div class="chart-container">
+            <div class="chart-header d-flex justify-content-between align-items-center">
+                <div>
+                <h5 class="chart-title">ESTADOS DE DENUNCIAS</h5>
+            </div>
+                <small class="text-muted">
+                    Total actual: <strong class="total-charts">{{ datos.resumen.total_denuncias | number_format }}</strong>
+                </small>
+            </div>
+            <div class="chart-wrapper">
+                <canvas id="chartEstados"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-12">
+        <div class="chart-container">
+            <div class="chart-header d-flex justify-content-between align-items-center">
+                <div>
+                <h5 class="chart-title">ACTUARIOS</h5>
+            </div>
+                <small class="text-muted">
+                    Total actual: <strong class="total-charts">{{ datos.resumen.total_denuncias | number_format }}</strong>
+                </small>
+            </div>
+            <div class="chart-wrapper">
+                <canvas id="chartActuarios"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Gráficos por Departamento / División / Sección -->
+<div class="row mt-3">
+    <div class="col-12">
+        <div class="chart-container">
+            <div class="chart-header d-flex justify-content-between align-items-center">
+                <div>
+                    <h5 class="chart-title">POR DEPARTAMENTO</h5>
+                </div>
+                <small class="text-muted">
+                    Total actual: <strong class="total-charts">{{ datos.resumen.total_denuncias | number_format }}</strong>
+                </small>
+            </div>
+            <div class="chart-wrapper">
+                <canvas id="chartDeptos"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-3">
+    <div class="col-12">
+        <div class="chart-container">
+            <div class="chart-header d-flex justify-content-between align-items-center">
+                <div>
+                    <h5 class="chart-title">POR DIVISIÓN</h5>
+                </div>
+                <small class="text-muted">
+                    Total actual: <strong class="total-charts">{{ datos.resumen.total_denuncias | number_format }}</strong>
+                </small>
+            </div>
+            <div class="chart-wrapper">
+                <canvas id="chartDivisiones"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-3">
+    <div class="col-12">
+        <div class="chart-container">
+            <div class="chart-header d-flex justify-content-between align-items-center">
+                <div>
+                    <h5 class="chart-title">POR SECCIÓN (SINAR)</h5>
+                </div>
+                <small class="text-muted">
+                    Total actual: <strong class="total-charts">{{ datos.resumen.total_denuncias | number_format }}</strong>
+                </small>
+            </div>
+            <div class="chart-wrapper">
+                <canvas id="chartSecciones"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de análisis -->
+<div class="modal fade" id="analysisModal" tabindex="-1" aria-labelledby="analysisModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="analysisModalLabel">
+                    <i class="bi bi-lightbulb"></i> Análisis del conjunto filtrado
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <div id="analysisContent">
+                    <!-- Se rellena dinámicamente -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <small class="text-muted me-auto">
+                    Generado automáticamente en base a los filtros y gráficos actuales.
+                </small>
+                <button type="button" class="btn btn-success btn-sm" onclick="exportarAnalisisAPDF()">
+                    <i class="bi bi-file-pdf"></i> Exportar PDF
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal lista de denuncias (drill-down) -->
+<div class="modal fade" id="recordsModal" tabindex="-1" aria-labelledby="recordsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="recordsModalLabel">
+                    <i class="bi bi-table"></i> Detalle de denuncias del segmento seleccionado
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <small class="text-muted">
+                        Total en este segmento: <strong id="recordsTotal">0</strong>
+                    </small>
+                    <small class="text-muted">
+                        *Se muestran hasta 200 registros más recientes.
+                    </small>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped align-middle">
+                        <thead>
+                            <tr>
+                                <th>N° AP</th>
+                                <th>Fecha registro</th>
+                                <th>Estado</th>
+                                <th>Actuario</th>
+                                <th>Avance (%)</th>
+                                <th>Departamento</th>
+                                <th>División</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="recordsTableBody">
+                            <!-- Filas dinámicas -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal detalle de denuncia -->
+<div class="modal fade" id="recordDetailModal" tabindex="-1" aria-labelledby="recordDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="recordDetailModalLabel">
+                    <i class="bi bi-file-earmark-text"></i> Detalle de denuncia
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <div id="recordDetailContent">
+                    <!-- Contenido dinámico -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal selector de gráficos para PDF -->
+<div class="modal fade" id="pdfSelectorModal" tabindex="-1" aria-labelledby="pdfSelectorModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="pdfSelectorModalLabel">
+                    <i class="bi bi-file-pdf"></i> Seleccionar gráficos para exportar
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted mb-3">Seleccione los gráficos que desea incluir en el PDF:</p>
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="pdf-chart-dias" checked>
+                    <label class="form-check-label" for="pdf-chart-dias">
+                        Rango de días de investigación
+                    </label>
+                </div>
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="pdf-chart-avance" checked>
+                    <label class="form-check-label" for="pdf-chart-avance">
+                        Avance de investigación
+                    </label>
+                </div>
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="pdf-chart-estados" checked>
+                    <label class="form-check-label" for="pdf-chart-estados">
+                        Estados de denuncias
+                    </label>
+                </div>
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="pdf-chart-actuarios" checked>
+                    <label class="form-check-label" for="pdf-chart-actuarios">
+                        Actuarios
+                    </label>
+                </div>
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="pdf-chart-deptos" checked>
+                    <label class="form-check-label" for="pdf-chart-deptos">
+                        Por departamento
+                    </label>
+                </div>
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="pdf-chart-divisiones" checked>
+                    <label class="form-check-label" for="pdf-chart-divisiones">
+                        Por división
+                    </label>
+                </div>
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="pdf-chart-secciones" checked>
+                    <label class="form-check-label" for="pdf-chart-secciones">
+                        Por sección (SINAR)
+                    </label>
+                </div>
+                <hr class="my-3">
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="pdf-incluir-tarjetas" checked>
+                    <label class="form-check-label" for="pdf-incluir-tarjetas">
+                        <strong>Incluir tarjetas de resumen</strong>
+                    </label>
+                </div>
+                <div class="mt-3">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="seleccionarTodosGraficos(true)">
+                        Seleccionar todos
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="seleccionarTodosGraficos(false)">
+                        Deseleccionar todos
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" onclick="generarPDFConSeleccion()">
+                    <i class="bi bi-file-pdf"></i> Generar PDF
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<!-- Chart.js para gráficos modernos -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+<!-- jsPDF y html2canvas para exportar PDF -->
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+
+<script>
+    // Registrar plugin de datalabels
+    if (window.ChartDataLabels) {
+        Chart.register(ChartDataLabels);
+    }
+    // Datos iniciales
+    let datosGraficos = {
+        estados: {{ datos.estados | tojson }},
+        dias_investigacion: {{ datos.dias_investigacion | tojson }},
+        avance: {{ datos.avance | tojson }},
+        resumen: {{ datos.resumen | tojson }},
+        actuarios: {{ datos.actuarios | tojson if datos.actuarios else {} }},
+        departamentos_chart: {{ datos.departamentos_chart | tojson if datos.departamentos_chart else {} }},
+        divisiones_chart: {{ datos.divisiones_chart | tojson if datos.divisiones_chart else {} }},
+        secciones_chart: {{ datos.secciones_chart | tojson if datos.secciones_chart else {} }}
+    };
+    
+    let viewMode = 'cantidad'; // 'cantidad' o 'porcentaje'
+    
+    // Toggle sidebar
+    function toggleSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        sidebar.classList.toggle('collapsed');
+    }
+    
+    // Inicializar
+    document.addEventListener('DOMContentLoaded', function() {
+        renderizarTarjetas();
+        inicializarGraficos();
+    });
+    
+    // Toggle entre cantidad y porcentaje
+    function toggleViewMode() {
+        const toggle = document.getElementById('viewToggle');
+        viewMode = toggle.checked ? 'porcentaje' : 'cantidad';
+        renderizarTarjetas();
+        actualizarGraficos();
+    }
+    
+    // Renderizar tarjetas de resumen
+    function renderizarTarjetas() {
+        const container = document.getElementById('summary-cards');
+        const resumen = datosGraficos.resumen || {};
+        const estados = datosGraficos.estados || {};
+        const totalGeneral = resumen.total_denuncias || 1; // Evitar división por cero
+        
+        let html = '';
+        
+        // Tarjeta Total
+        const totalDisplay = viewMode === 'porcentaje' 
+            ? '100.0%' 
+            : (resumen.total_denuncias || 0).toLocaleString();
+        
+        html += `
+            <div class="summary-card">
+                <h3>${totalDisplay}</h3>
+                <p class="card-title">Total de Denuncias</p>
+            </div>
+        `;
+        
+        // Mapeo de estados y sus vinculadas correspondientes (nombres exactos del Excel)
+        const estadosConVinculadas = {
+            'ETAPA INVEST.': 'ETAPA INVEST. VINCULADA',
+            'DESESTIMADA': 'DESESTIMADA-VINCULADA',
+            'ALLANADA': 'ALLANADA-VINCULADA',
+            'APERTURA': 'APERTURA-VINCULADA',
+            'APERTURA ': 'APERTURA-VINCULADA', // Con espacio al final
+            'CON SOLICITUD DE ALLANAMIENTO': 'CON SOLICITUD DE ALLANAMIENTO-VINCULADA'
+        };
+        
+        // Función para buscar estado vinculado
+        function buscarEstadoVinculado(estadoPrincipal) {
+            // Normalizar el nombre del estado (sin espacios al final, mayúsculas)
+            const estadoNormalizado = estadoPrincipal.trim().toUpperCase();
+            
+            // Buscar en el mapeo exacto primero
+            for (const [estadoKey, estadoVinculadoKey] of Object.entries(estadosConVinculadas)) {
+                if (estadoNormalizado === estadoKey.trim().toUpperCase()) {
+                    // Verificar que el estado vinculado existe en los datos
+                    if (estados[estadoVinculadoKey]) {
+                        return estadoVinculadoKey;
+                    }
+                }
+            }
+            
+            // Buscar automáticamente en los estados disponibles
+            for (const [estadoKey, cantidadKey] of Object.entries(estados)) {
+                if (!estadoKey) continue;
+                const estadoKeyUpper = estadoKey.toUpperCase();
+                
+                // Verificar si es un estado vinculado
+                if (estadoKeyUpper.includes('VINCULADA')) {
+                    // Extraer el nombre base del estado vinculado
+                    let baseVinculado = estadoKeyUpper;
+                    
+                    // Caso especial: "ETAPA INVEST. VINCULADA"
+                    if (baseVinculado === 'ETAPA INVEST. VINCULADA') {
+                        baseVinculado = 'ETAPA INVEST.';
+                    }
+                    // Caso: "ALLANADA-VINCULADA", "DESESTIMADA-VINCULADA", etc.
+                    else if (baseVinculado.includes('-VINCULADA')) {
+                        baseVinculado = baseVinculado.replace(/-VINCULADA.*/i, '').trim();
+                    }
+                    // Caso: "APERTURA-VINCULADA" o cualquier otro con espacio
+                    else if (baseVinculado.includes(' VINCULADA')) {
+                        baseVinculado = baseVinculado.replace(/\s+VINCULADA.*/i, '').trim();
+                    }
+                    
+                    const basePrincipal = estadoNormalizado.replace(/\s+$/, '').trim();
+                    
+                    // Comparar si el nombre base coincide exactamente
+                    if (baseVinculado === basePrincipal) {
+                        return estadoKey;
+                    }
+                }
+            }
+            
+            return null;
+        }
+        
+        // Tarjetas por estado con desglose
+        for (const [estado, cantidad] of Object.entries(estados)) {
+            if (!estado) continue;
+            
+            // Si es un estado vinculado, lo saltamos (se muestra en el principal)
+            const estadoUpper = estado.toUpperCase();
+            // Verificar si es un estado vinculado (tiene VINCULADA en el nombre)
+            // Saltamos TODOS los estados que contienen "VINCULADA" (incluyendo "ETAPA INVEST. VINCULADA")
+            if (estadoUpper.includes('VINCULADA')) {
+                continue;
+            }
+            
+            // Buscar si hay vinculadas para este estado
+            let detalle = '';
+            let total = cantidad;
+            
+            // Buscar el estado vinculado correspondiente
+            const estadoVinculado = buscarEstadoVinculado(estado);
+            
+            // Si encontramos estado vinculado, calcular desglose
+            if (estadoVinculado && estados[estadoVinculado]) {
+                const vinculadas = estados[estadoVinculado] || 0;
+                const origen = cantidad; // El estado principal es el origen
+                total = origen + vinculadas; // Total es la suma
+                
+                // Calcular porcentajes si está en modo porcentaje
+                if (viewMode === 'porcentaje') {
+                    const pctOrigen = totalGeneral > 0 ? ((origen / totalGeneral) * 100).toFixed(1) : 0;
+                    const pctVinculadas = totalGeneral > 0 ? ((vinculadas / totalGeneral) * 100).toFixed(1) : 0;
+                    detalle = `<p class="card-detail">${pctOrigen}% origen / ${pctVinculadas}% vinculadas</p>`;
+                } else {
+                    detalle = `<p class="card-detail">${origen.toLocaleString()} origen / ${vinculadas.toLocaleString()} vinculadas</p>`;
+                }
+            }
+            
+            // Calcular valor a mostrar
+            let valorDisplay = total;
+            if (viewMode === 'porcentaje') {
+                valorDisplay = totalGeneral > 0 ? ((total / totalGeneral) * 100).toFixed(1) + '%' : '0%';
+            } else {
+                valorDisplay = total.toLocaleString();
+            }
+            
+            html += `
+                <div class="summary-card">
+                    <h3>${valorDisplay}</h3>
+                    <p class="card-title">${estado}</p>
+                    ${detalle}
+                </div>
+            `;
+        }
+        
+        container.innerHTML = html;
+    }
+    
+    // Referencias a instancias de Chart.js
+    let chartDias = null;
+    let chartAvance = null;
+    let chartEstados = null;
+    let chartActuarios = null;
+    let chartDeptos = null;
+    let chartDivisiones = null;
+    let chartSecciones = null;
+    
+    // Helpers
+    function obtenerTotalGeneral() {
+        if (datosGraficos.resumen && typeof datosGraficos.resumen.total_denuncias === 'number') {
+            return datosGraficos.resumen.total_denuncias;
+        }
+        return 0;
+    }
+    
+    function calcularPorcentaje(valor, total) {
+        if (!total || !valor) {
+            return '0%';
+        }
+        return ((valor / total) * 100).toFixed(1) + '%';
+    }
+    
+    function generarAnalisis(datos) {
+        const total = (datos.resumen && typeof datos.resumen.total_denuncias === 'number')
+            ? datos.resumen.total_denuncias
+            : (datos.total || 0);
+        const diasProm = datos.resumen && typeof datos.resumen.dias_promedio === 'number'
+            ? datos.resumen.dias_promedio
+            : 0;
+        const avanceProm = datos.resumen && typeof datos.resumen.avance_promedio === 'number'
+            ? datos.resumen.avance_promedio
+            : 0;
+        
+        if (!total || total === 0) {
+            return `
+                <p class="mb-2"><strong>No hay denuncias para los filtros seleccionados.</strong></p>
+                <p class="text-muted mb-0">Pruebe ampliando el rango de fechas o quitando algunos filtros para obtener un análisis.</p>
+            `;
+        }
+        
+        // Top estados - MOSTRAR TODOS
+        const estadosEntries = Object.entries(datos.estados || {}).filter(([k]) => k);
+        estadosEntries.sort((a, b) => b[1] - a[1]);
+        const topEstados = estadosEntries; // Mostrar todos, no solo los primeros 3
+        
+        // Rango de días predominante
+        const diasEntries = Object.entries(datos.dias_investigacion || {});
+        diasEntries.sort((a, b) => b[1] - a[1]);
+        const rangoDiasTop = diasEntries.length ? diasEntries[0] : null;
+        
+        // Avance predominante
+        const avanceEntries = Object.entries(datos.avance || {});
+        avanceEntries.sort((a, b) => b[1] - a[1]);
+        const rangoAvanceTop = avanceEntries.length ? avanceEntries[0] : null;
+        
+        // Top actuarios - MOSTRAR TODOS
+        const actuariosEntries = Object.entries(datos.actuarios || {}).filter(([k]) => k);
+        actuariosEntries.sort((a, b) => b[1] - a[1]);
+        const topActuarios = actuariosEntries; // Mostrar todos, no solo los primeros 3
+
+        // Top por departamento
+        const deptosEntries = Object.entries(datos.departamentos_chart || {}).filter(([k]) => k);
+        deptosEntries.sort((a, b) => b[1] - a[1]);
+        const topDeptos = deptosEntries.slice(0, 3);
+
+        // Top por división
+        const divisionesEntries = Object.entries(datos.divisiones_chart || {}).filter(([k]) => k);
+        divisionesEntries.sort((a, b) => b[1] - a[1]);
+        const topDivisiones = divisionesEntries; // Mostrar todos
+
+        // Top por sección / SINAR
+        const seccionesEntries = Object.entries(datos.secciones_chart || {}).filter(([k]) => k);
+        seccionesEntries.sort((a, b) => b[1] - a[1]);
+        const topSecciones = seccionesEntries; // Mostrar todos
+        
+        let html = '';
+        
+        // Resumen general
+        html += `
+            <p class="mb-2">
+                Con los filtros actuales se observan <strong>${total.toLocaleString()} denuncias</strong>.
+            </p>
+            <p class="mb-2">
+                El <strong>promedio de días de investigación</strong> indica cuántos días transcurren, en promedio, 
+                desde la <strong>fecha de registro</strong> de cada denuncia hasta su <strong>fecha de elevación</strong>; 
+                si la causa aún no fue elevada, se toma la fecha de hoy para calcular ese tiempo.
+            </p>
+            <p class="mb-3">
+                Con los filtros aplicados, este promedio es de 
+                <strong>${diasProm.toFixed ? diasProm.toFixed(1) : diasProm}</strong> días, y el 
+                <strong>avance promedio</strong> (promedio del porcentaje de avance registrado en cada causa) 
+                alcanza el <strong>${avanceProm.toFixed ? avanceProm.toFixed(1) : avanceProm}%</strong>.
+            </p>
+        `;
+        
+        // Estados
+        if (topEstados.length) {
+            html += '<h6 class="mt-3">Estados de las denuncias</h6><ul>';
+            topEstados.forEach(([estado, cant]) => {
+                html += `
+                    <li>
+                        <strong>${estado}</strong>: ${cant.toLocaleString()} casos
+                        (${calcularPorcentaje(cant, total)} del total).
+                    </li>
+                `;
+            });
+            // Ya no mostramos mensaje de "adicionales" porque mostramos todos
+            html += '</ul>';
+        } else {
+            html += `
+                <h6 class="mt-3">Estados de las denuncias</h6>
+                <p class="mb-2 text-muted">
+                    Con los filtros seleccionados no se registran estados con datos suficientes 
+                    para mostrar en los gráficos, pero el total general sigue considerándose en el análisis.
+                </p>
+            `;
+        }
+        
+        // Días de investigación
+        if (rangoDiasTop) {
+            const [labelDias, valorDias] = rangoDiasTop;
+            html += `
+                <h6 class="mt-3">Rango de días de investigación</h6>
+                <p class="mb-2">
+                    El rango con mayor cantidad de causas es 
+                    <strong>${labelDias}</strong> con 
+                    <strong>${valorDias.toLocaleString()} denuncias</strong>
+                    (${calcularPorcentaje(valorDias, total)} del total).
+                </p>
+            `;
+        } else {
+            html += `
+                <h6 class="mt-3">Rango de días de investigación</h6>
+                <p class="mb-2 text-muted">
+                    Para los filtros actuales no se identifican rangos de días de investigación con volumen suficiente 
+                    para destacarse en los gráficos, aunque igualmente se tuvo en cuenta el promedio general de días.
+                </p>
+            `;
+        }
+        
+        // Avance
+        if (rangoAvanceTop) {
+            const [labelAvance, valorAvance] = rangoAvanceTop;
+            html += `
+                <h6 class="mt-3">Avance de investigación</h6>
+                <p class="mb-2">
+                    La mayor concentración de causas se encuentra en el rango de 
+                    <strong>${labelAvance}%</strong> de avance, con 
+                    <strong>${valorAvance.toLocaleString()} denuncias</strong>
+                    (${calcularPorcentaje(valorAvance, total)} del total).
+                </p>
+            `;
+        } else {
+            html += `
+                <h6 class="mt-3">Avance de investigación</h6>
+                <p class="mb-2 text-muted">
+                    No se observan rangos de avance claramente predominantes con los filtros aplicados; 
+                    el resultado más relevante en este caso es el avance promedio informado arriba.
+                </p>
+            `;
+        }
+        
+        // Actuarios
+        if (topActuarios.length) {
+            html += '<h6 class="mt-3">Distribución por actuario</h6><ul>';
+            topActuarios.forEach(([nombre, cant]) => {
+                html += `
+                    <li>
+                        <strong>${nombre}</strong>: ${cant.toLocaleString()} denuncias
+                        (${calcularPorcentaje(cant, total)} del total).
+                    </li>
+                `;
+            });
+            // Ya no mostramos mensaje de "adicionales" porque mostramos todos
+            html += '</ul>';
+        } else {
+            html += `
+                <h6 class="mt-3">Distribución por actuario</h6>
+                <p class="mb-2 text-muted">
+                    Con los filtros actuales no se destaca ningún actuario en particular en términos de volumen de causas, 
+                    o bien los filtros están acotados a un único responsable.
+                </p>
+            `;
+        }
+
+        // Departamentos
+        if (topDeptos.length) {
+            html += '<h6 class="mt-3">Distribución por departamento</h6><ul>';
+            topDeptos.forEach(([nombre, cant]) => {
+                html += `
+                    <li>
+                        <strong>${nombre}</strong>: ${cant.toLocaleString()} denuncias
+                        (${calcularPorcentaje(cant, total)} del total).
+                    </li>
+                `;
+            });
+            if (deptosEntries.length > topDeptos.length) {
+                const restoD = deptosEntries.length - topDeptos.length;
+                html += `<li class="text-muted">+ ${restoD} departamentos // Ya no mostramos mensaje de adicionales volumen.</li>`;
+            }
+            html += '</ul>';
+        } else {
+            html += `
+                <h6 class="mt-3">Distribución por departamento</h6>
+                <p class="mb-2 text-muted">
+                    No se observan diferencias significativas entre departamentos con los filtros actuales, 
+                    o los datos están concentrados en una sola área.
+                </p>
+            `;
+        }
+
+        // Divisiones
+        if (topDivisiones.length) {
+            html += '<h6 class="mt-3">Distribución por división</h6><ul>';
+            topDivisiones.forEach(([nombre, cant]) => {
+                html += `
+                    <li>
+                        <strong>${nombre}</strong>: ${cant.toLocaleString()} denuncias
+                        (${calcularPorcentaje(cant, total)} del total).
+                    </li>
+                `;
+            });
+            if (divisionesEntries.length > topDivisiones.length) {
+                const restoDiv = divisionesEntries.length - topDivisiones.length;
+                html += `<li class="text-muted">+ ${restoDiv} divisiones // Ya no mostramos mensaje de adicionales volumen.</li>`;
+            }
+            html += '</ul>';
+        } else {
+            html += `
+                <h6 class="mt-3">Distribución por división</h6>
+                <p class="mb-2 text-muted">
+                    Con los filtros seleccionados no se identifican divisiones con un peso claramente predominante 
+                    en la carga de trabajo.
+                </p>
+            `;
+        }
+
+        // Secciones / SINAR
+        if (topSecciones.length) {
+            html += '<h6 class="mt-3">Distribución por sección (SINAR)</h6><ul>';
+            topSecciones.forEach(([nombre, cant]) => {
+                html += `
+                    <li>
+                        <strong>${nombre}</strong>: ${cant.toLocaleString()} denuncias
+                        (${calcularPorcentaje(cant, total)} del total).
+                    </li>
+                `;
+            });
+            if (seccionesEntries.length > topSecciones.length) {
+                const restoSec = seccionesEntries.length - topSecciones.length;
+                html += `<li class="text-muted">+ ${restoSec} secciones // Ya no mostramos mensaje de adicionales volumen.</li>`;
+            }
+            html += '</ul>';
+        } else {
+            html += `
+                <h6 class="mt-3">Distribución por sección (SINAR)</h6>
+                <p class="mb-2 text-muted">
+                    No se observa una sección del SINAR claramente predominante con los filtros actuales, 
+                    o los datos están concentrados en una única sección.
+                </p>
+            `;
+        }
+        
+        // Nota de interpretación
+        html += `
+            <p class="mt-3 text-muted mb-0">
+                Este análisis se actualiza automáticamente según los filtros aplicados y 
+                busca ofrecer una lectura rápida para la toma de decisiones, complementando a los gráficos superiores.
+            </p>
+        `;
+        
+        return html;
+    }
+    
+    // Inicializar gráficos (Chart.js)
+    function inicializarGraficos() {
+        const diasLabels = Object.keys(datosGraficos.dias_investigacion || {});
+        const diasValues = Object.values(datosGraficos.dias_investigacion || {});
+        const avanceLabels = Object.keys(datosGraficos.avance || {});
+        const avanceValues = Object.values(datosGraficos.avance || {});
+        const estadosLabels = Object.keys(datosGraficos.estados || {});
+        const estadosValues = Object.values(datosGraficos.estados || {});
+        const actuariosLabels = Object.keys(datosGraficos.actuarios || {});
+        const actuariosValues = Object.values(datosGraficos.actuarios || {});
+        const deptosLabels = Object.keys(datosGraficos.departamentos_chart || {});
+        const deptosValues = Object.values(datosGraficos.departamentos_chart || {});
+        const divisionesLabels = Object.keys(datosGraficos.divisiones_chart || {});
+        const divisionesValues = Object.values(datosGraficos.divisiones_chart || {});
+        const seccionesLabels = Object.keys(datosGraficos.secciones_chart || {});
+        const seccionesValues = Object.values(datosGraficos.secciones_chart || {});
+        
+        const diasCtx = document.getElementById('chartDias').getContext('2d');
+        chartDias = new Chart(diasCtx, {
+            type: 'bar',
+            data: {
+                labels: diasLabels.length > 0 ? diasLabels : ['Sin datos'],
+                datasets: [{
+                    data: diasValues.length > 0 ? diasValues : [0],
+                    backgroundColor: '#00bcd4'
+                }]
+            },
+            options: {
+                scales: {
+                    x: {
+                        title: { display: true, text: 'Rango de Días' },
+                        ticks: { color: '#4a5568' },
+                        grid: { display: false }
+                    },
+                    y: {
+                        title: { display: true, text: 'Cantidad' },
+                        ticks: { color: '#4a5568' },
+                        grid: { color: 'rgba(226, 232, 240, 0.7)' },
+                        beginAtZero: true,
+                        suggestedMax: function(context) {
+                            const max = Math.max(...context.chart.data.datasets[0].data);
+                            return max * 1.15; // Agregar 15% de espacio arriba
+                        }
+                    }
+                },
+                layout: {
+                    padding: {
+                        top: 20,
+                        bottom: 10,
+                        left: 10,
+                        right: 10
+                    }
+                },
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: '#1a202c',
+                        titleColor: '#edf2f7',
+                        bodyColor: '#edf2f7'
+                    },
+                    datalabels: {
+                        anchor: 'end',
+                        align: 'end',
+                        offset: 4,
+                        color: '#1a202c',
+                        font: { weight: '700', size: 12 },
+                        formatter: function(value) {
+                            var total = obtenerTotalGeneral();
+                            if (viewMode === 'porcentaje' && total > 0) {
+                                return ((value / total) * 100).toFixed(1) + '%';
+                            }
+                            return value ? value.toLocaleString() : '';
+                        }
+                    }
+                }
+            }
+        });
+        
+        const avanceCtx = document.getElementById('chartAvance').getContext('2d');
+        chartAvance = new Chart(avanceCtx, {
+            type: 'bar',
+            data: {
+                labels: avanceLabels.length > 0 ? avanceLabels : ['Sin datos'],
+                datasets: [{
+                    data: avanceValues.length > 0 ? avanceValues : [0],
+                    backgroundColor: '#e91e63'
+                }]
+            },
+            options: {
+                scales: {
+                    x: {
+                        title: { display: true, text: 'Porcentaje de Avance' },
+                        ticks: { color: '#4a5568' },
+                        grid: { display: false }
+                    },
+                    y: {
+                        title: { display: true, text: 'Cantidad' },
+                        ticks: { color: '#4a5568' },
+                        grid: { color: 'rgba(226, 232, 240, 0.7)' },
+                        beginAtZero: true,
+                        suggestedMax: function(context) {
+                            const max = Math.max(...context.chart.data.datasets[0].data);
+                            return max * 1.15; // Agregar 15% de espacio arriba
+                        }
+                    }
+                },
+                layout: {
+                    padding: {
+                        top: 20,
+                        bottom: 10,
+                        left: 10,
+                        right: 10
+                    }
+                },
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: '#1a202c',
+                        titleColor: '#edf2f7',
+                        bodyColor: '#edf2f7'
+                    },
+                    datalabels: {
+                        anchor: 'end',
+                        align: 'end',
+                        offset: 4,
+                        color: '#1a202c',
+                        font: { weight: '700', size: 12 },
+                        formatter: function(value) {
+                            var total = obtenerTotalGeneral();
+                            if (viewMode === 'porcentaje' && total > 0) {
+                                return ((value / total) * 100).toFixed(1) + '%';
+                            }
+                            return value ? value.toLocaleString() : '';
+                        }
+                    }
+                }
+            }
+        });
+        
+        const estadosCtx = document.getElementById('chartEstados').getContext('2d');
+        chartEstados = new Chart(estadosCtx, {
+            type: 'bar',
+            data: {
+                labels: estadosLabels.length > 0 ? estadosLabels : ['Sin datos'],
+                datasets: [{
+                    data: estadosValues.length > 0 ? estadosValues : [0],
+                    backgroundColor: '#4caf50'
+                }]
+            },
+            options: {
+                scales: {
+                    x: {
+                        title: { display: true, text: 'Estado' },
+                        ticks: { color: '#4a5568' },
+                        grid: { display: false }
+                    },
+                    y: {
+                        title: { display: true, text: 'Cantidad' },
+                        ticks: { color: '#4a5568' },
+                        grid: { color: 'rgba(226, 232, 240, 0.7)' },
+                        beginAtZero: true,
+                        suggestedMax: function(context) {
+                            const max = Math.max(...context.chart.data.datasets[0].data);
+                            return max * 1.15; // Agregar 15% de espacio arriba
+                        }
+                    }
+                },
+                layout: {
+                    padding: {
+                        top: 20,
+                        bottom: 10,
+                        left: 10,
+                        right: 10
+                    }
+                },
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: '#1a202c',
+                        titleColor: '#edf2f7',
+                        bodyColor: '#edf2f7'
+                    },
+                    datalabels: {
+                        anchor: 'end',
+                        align: 'end',
+                        offset: 4,
+                        color: '#1a202c',
+                        font: { weight: '700', size: 12 },
+                        formatter: function(value) {
+                            var total = obtenerTotalGeneral();
+                            if (viewMode === 'porcentaje' && total > 0) {
+                                return ((value / total) * 100).toFixed(1) + '%';
+                            }
+                            return value ? value.toLocaleString() : '';
+                        }
+                    }
+                }
+            }
+        });
+        
+        const actuariosCtx = document.getElementById('chartActuarios').getContext('2d');
+        chartActuarios = new Chart(actuariosCtx, {
+            type: 'bar',
+            data: {
+                labels: actuariosLabels.length > 0 ? actuariosLabels : ['Sin datos'],
+                datasets: [{
+                    data: actuariosValues.length > 0 ? actuariosValues : [0],
+                    backgroundColor: '#9c27b0'
+                }]
+            },
+            options: {
+                scales: {
+                    x: {
+                        title: { display: true, text: 'Actuario' },
+                        ticks: { color: '#4a5568' },
+                        grid: { display: false }
+                    },
+                    y: {
+                        title: { display: true, text: 'Cantidad' },
+                        ticks: { color: '#4a5568' },
+                        grid: { color: 'rgba(226, 232, 240, 0.7)' },
+                        beginAtZero: true,
+                        suggestedMax: function(context) {
+                            const max = Math.max(...context.chart.data.datasets[0].data);
+                            return max * 1.15; // Agregar 15% de espacio arriba
+                        }
+                    }
+                },
+                layout: {
+                    padding: {
+                        top: 20,
+                        bottom: 10,
+                        left: 10,
+                        right: 10
+                    }
+                },
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: '#1a202c',
+                        titleColor: '#edf2f7',
+                        bodyColor: '#edf2f7'
+                    },
+                    datalabels: {
+                        anchor: 'end',
+                        align: 'end',
+                        offset: 4,
+                        color: '#1a202c',
+                        font: { weight: '700', size: 12 },
+                        formatter: function(value) {
+                            var total = obtenerTotalGeneral();
+                            if (viewMode === 'porcentaje' && total > 0) {
+                                return ((value / total) * 100).toFixed(1) + '%';
+                            }
+                            return value ? value.toLocaleString() : '';
+                        }
+                    }
+                }
+            }
+        });
+
+        const deptosCtx = document.getElementById('chartDeptos').getContext('2d');
+        chartDeptos = new Chart(deptosCtx, {
+            type: 'bar',
+            data: {
+                labels: deptosLabels.length > 0 ? deptosLabels : ['Sin datos'],
+                datasets: [{
+                    data: deptosValues.length > 0 ? deptosValues : [0],
+                    backgroundColor: '#2196f3'
+                }]
+            },
+            options: {
+                scales: {
+                    x: {
+                        title: { display: true, text: 'Departamento' },
+                        ticks: { color: '#4a5568', maxRotation: 60, minRotation: 45 },
+                        grid: { display: false }
+                    },
+                    y: {
+                        title: { display: true, text: 'Cantidad' },
+                        ticks: { color: '#4a5568' },
+                        grid: { color: 'rgba(226, 232, 240, 0.7)' },
+                        beginAtZero: true,
+                        suggestedMax: function(context) {
+                            const max = Math.max(...context.chart.data.datasets[0].data);
+                            return max * 1.15; // Agregar 15% de espacio arriba
+                        }
+                    }
+                },
+                layout: {
+                    padding: {
+                        top: 20,
+                        bottom: 10,
+                        left: 10,
+                        right: 10
+                    }
+                },
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: '#1a202c',
+                        titleColor: '#edf2f7',
+                        bodyColor: '#edf2f7'
+                    },
+                    datalabels: {
+                        anchor: 'end',
+                        align: 'end',
+                        offset: 4,
+                        color: '#1a202c',
+                        font: { weight: '700', size: 12 },
+                        formatter: function(value) {
+                            var total = obtenerTotalGeneral();
+                            if (viewMode === 'porcentaje' && total > 0) {
+                                return ((value / total) * 100).toFixed(1) + '%';
+                            }
+                            return value ? value.toLocaleString() : '';
+                        }
+                    }
+                }
+            }
+        });
+
+        const divisionesCtx = document.getElementById('chartDivisiones').getContext('2d');
+        chartDivisiones = new Chart(divisionesCtx, {
+            type: 'bar',
+            data: {
+                labels: divisionesLabels.length > 0 ? divisionesLabels : ['Sin datos'],
+                datasets: [{
+                    data: divisionesValues.length > 0 ? divisionesValues : [0],
+                    backgroundColor: '#ff9800'
+                }]
+            },
+            options: {
+                scales: {
+                    x: {
+                        title: { display: true, text: 'División' },
+                        ticks: { color: '#4a5568', maxRotation: 60, minRotation: 45 },
+                        grid: { display: false }
+                    },
+                    y: {
+                        title: { display: true, text: 'Cantidad' },
+                        ticks: { color: '#4a5568' },
+                        grid: { color: 'rgba(226, 232, 240, 0.7)' },
+                        beginAtZero: true,
+                        suggestedMax: function(context) {
+                            const max = Math.max(...context.chart.data.datasets[0].data);
+                            return max * 1.15; // Agregar 15% de espacio arriba
+                        }
+                    }
+                },
+                layout: {
+                    padding: {
+                        top: 20,
+                        bottom: 10,
+                        left: 10,
+                        right: 10
+                    }
+                },
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: '#1a202c',
+                        titleColor: '#edf2f7',
+                        bodyColor: '#edf2f7'
+                    },
+                    datalabels: {
+                        anchor: 'end',
+                        align: 'end',
+                        offset: 4,
+                        color: '#1a202c',
+                        font: { weight: '700', size: 12 },
+                        formatter: function(value) {
+                            var total = obtenerTotalGeneral();
+                            if (viewMode === 'porcentaje' && total > 0) {
+                                return ((value / total) * 100).toFixed(1) + '%';
+                            }
+                            return value ? value.toLocaleString() : '';
+                        }
+                    }
+                }
+            }
+        });
+
+        const seccionesCtx = document.getElementById('chartSecciones').getContext('2d');
+        chartSecciones = new Chart(seccionesCtx, {
+            type: 'bar',
+            data: {
+                labels: seccionesLabels.length > 0 ? seccionesLabels : ['Sin datos'],
+                datasets: [{
+                    data: seccionesValues.length > 0 ? seccionesValues : [0],
+                    backgroundColor: '#009688'
+                }]
+            },
+            options: {
+                scales: {
+                    x: {
+                        title: { display: true, text: 'Sección / SINAR' },
+                        ticks: { color: '#4a5568', maxRotation: 60, minRotation: 45 },
+                        grid: { display: false }
+                    },
+                    y: {
+                        title: { display: true, text: 'Cantidad' },
+                        ticks: { color: '#4a5568' },
+                        grid: { color: 'rgba(226, 232, 240, 0.7)' },
+                        beginAtZero: true,
+                        suggestedMax: function(context) {
+                            const max = Math.max(...context.chart.data.datasets[0].data);
+                            return max * 1.15; // Agregar 15% de espacio arriba
+                        }
+                    }
+                },
+                layout: {
+                    padding: {
+                        top: 20,
+                        bottom: 10,
+                        left: 10,
+                        right: 10
+                    }
+                },
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: '#1a202c',
+                        titleColor: '#edf2f7',
+                        bodyColor: '#edf2f7'
+                    },
+                    datalabels: {
+                        anchor: 'end',
+                        align: 'end',
+                        offset: 4,
+                        color: '#1a202c',
+                        font: { weight: '700', size: 12 },
+                        formatter: function(value) {
+                            var total = obtenerTotalGeneral();
+                            if (viewMode === 'porcentaje' && total > 0) {
+                                return ((value / total) * 100).toFixed(1) + '%';
+                            }
+                            return value ? value.toLocaleString() : '';
+                        }
+                    }
+                }
+            }
+        });
+
+        // Click handlers para drill-down
+        chartDias.canvas.onclick = function(evt) {
+            const points = chartDias.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, false);
+            if (!points.length) return;
+            const index = points[0].index;
+            const label = chartDias.data.labels[index];
+            abrirListaRegistros('dias', label);
+        };
+
+        chartAvance.canvas.onclick = function(evt) {
+            const points = chartAvance.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, false);
+            if (!points.length) return;
+            const index = points[0].index;
+            const label = chartAvance.data.labels[index];
+            abrirListaRegistros('avance', label);
+        };
+
+        chartEstados.canvas.onclick = function(evt) {
+            const points = chartEstados.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, false);
+            if (!points.length) return;
+            const index = points[0].index;
+            const label = chartEstados.data.labels[index];
+            abrirListaRegistros('estados', label);
+        };
+
+        chartActuarios.canvas.onclick = function(evt) {
+            const points = chartActuarios.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, false);
+            if (!points.length) return;
+            const index = points[0].index;
+            const label = chartActuarios.data.labels[index];
+            abrirListaRegistros('actuarios', label);
+        };
+    }
+    
+    // Abrir modal de análisis
+    function abrirAnalisis() {
+        const contenido = generarAnalisis(datosGraficos);
+        const contEl = document.getElementById('analysisContent');
+        if (contEl) {
+            contEl.innerHTML = contenido;
+        }
+        if (window.bootstrap && bootstrap.Modal) {
+            const modalEl = document.getElementById('analysisModal');
+            if (modalEl) {
+                const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                modal.show();
+            }
+        } else {
+            // Fallback simple si Bootstrap JS no está disponible
+            alert('Análisis:\n\n' + contEl.textContent);
+        }
+    }
+    
+    // Exportar análisis a PDF (formato limpio basado en datos, no captura de imagen)
+    async function exportarAnalisisAPDF() {
+        if (!window.jspdf) {
+            alert('Error: La librería jsPDF no está cargada. Por favor, recarga la página.');
+            return;
+        }
+
+        const datos = datosGraficos || {};
+        const resumen = datos.resumen || {};
+        const total = (typeof resumen.total_denuncias === 'number')
+            ? resumen.total_denuncias
+            : (datos.total || 0);
+
+        if (!total || total === 0) {
+            alert('No hay denuncias para exportar análisis con los filtros actuales.');
+            return;
+        }
+
+        const diasProm = (typeof resumen.dias_promedio === 'number') ? resumen.dias_promedio : 0;
+        const avanceProm = (typeof resumen.avance_promedio === 'number') ? resumen.avance_promedio : 0;
+
+        // Preparar estructuras de datos igual que en generarAnalisis
+        const estadosEntries = Object.entries(datos.estados || {}).filter(([k]) => k).sort((a, b) => b[1] - a[1]);
+        const diasEntries = Object.entries(datos.dias_investigacion || {}).sort((a, b) => b[1] - a[1]);
+        const rangoDiasTop = diasEntries.length ? diasEntries[0] : null;
+        const avanceEntries = Object.entries(datos.avance || {}).sort((a, b) => b[1] - a[1]);
+        const rangoAvanceTop = avanceEntries.length ? avanceEntries[0] : null;
+        const actuariosEntries = Object.entries(datos.actuarios || {}).filter(([k]) => k).sort((a, b) => b[1] - a[1]);
+        const deptosEntries = Object.entries(datos.departamentos_chart || {}).filter(([k]) => k).sort((a, b) => b[1] - a[1]);
+        const divisionesEntries = Object.entries(datos.divisiones_chart || {}).filter(([k]) => k).sort((a, b) => b[1] - a[1]);
+        const seccionesEntries = Object.entries(datos.secciones_chart || {}).filter(([k]) => k).sort((a, b) => b[1] - a[1]);
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('p', 'mm', 'a4');
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const margin = 15;
+        const maxWidth = pageWidth - 2 * margin;
+        let yPos = 15;
+
+        function nuevaPaginaSiNecesario(extra = 10) {
+            if (yPos > pageHeight - extra) {
+                doc.addPage();
+                yPos = 15;
+            }
+        }
+
+        function escribirTituloPrincipal(texto) {
+            doc.setFontSize(18);
+            doc.setFont('helvetica', 'bold');
+            doc.text(texto, margin, yPos);
+            yPos += 10;
+        }
+
+        function escribirSubtitulo(texto) {
+            nuevaPaginaSiNecesario(20);
+            doc.setFontSize(12);
+            doc.setFont('helvetica', 'bold');
+            doc.text(texto, margin, yPos);
+            yPos += 7;
+        }
+
+        function escribirParrafo(texto) {
+            if (!texto) return;
+            nuevaPaginaSiNecesario(20);
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            const lineas = doc.splitTextToSize(texto, maxWidth);
+            lineas.forEach(linea => {
+                nuevaPaginaSiNecesario(15);
+                doc.text(linea, margin, yPos);
+                yPos += 4.5;
+            });
+            yPos += 2;
+        }
+
+        function escribirItemLista(texto) {
+            if (!texto) return;
+            nuevaPaginaSiNecesario(20);
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            const prefijo = '• ';
+            const lineas = doc.splitTextToSize(prefijo + texto, maxWidth);
+            lineas.forEach((linea, idx) => {
+                nuevaPaginaSiNecesario(15);
+                const x = margin + (idx === 0 ? 0 : 4);
+                doc.text(linea, x, yPos);
+                yPos += 4.3;
+            });
+        }
+
+        // Encabezado
+        escribirTituloPrincipal('Análisis de Denuncias Web - SIOC');
+
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        const fechaExport = new Date().toLocaleString('es-AR', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        doc.text(`Exportado el: ${fechaExport}`, margin, yPos);
+        yPos += 5;
+
+        // Filtros aplicados
+        const form = document.getElementById('filtersForm');
+        const filtrosTexto = form ? obtenerFiltrosTexto(form) : '';
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Filtros aplicados:', margin, yPos);
+        yPos += 4.5;
+        doc.setFont('helvetica', 'normal');
+        const filtrosLines = doc.splitTextToSize(filtrosTexto || 'Sin filtros aplicados (mostrando totalidad)', maxWidth);
+        filtrosLines.forEach(linea => {
+            nuevaPaginaSiNecesario(15);
+            doc.text(linea, margin, yPos);
+            yPos += 4.2;
+        });
+        yPos += 3;
+
+        // Total
+        doc.setFont('helvetica', 'bold');
+        doc.text(`Total de denuncias: ${total.toLocaleString()}`, margin, yPos);
+        yPos += 8;
+
+        // Línea separadora
+        doc.setDrawColor(200, 200, 200);
+        doc.line(margin, yPos, pageWidth - margin, yPos);
+        yPos += 8;
+
+        // Resumen general
+        escribirParrafo(
+            `Con los filtros actuales se observan ${total.toLocaleString()} denuncias.`
+        );
+        escribirParrafo(
+            'El promedio de días de investigación indica cuántos días transcurren, en promedio, '
+            + 'desde la fecha de registro de cada denuncia hasta su fecha de elevación; si la causa aún no fue elevada, '
+            + 'se toma la fecha de hoy para calcular ese tiempo.'
+        );
+        escribirParrafo(
+            `Con los filtros aplicados, este promedio es de ${diasProm.toFixed(1)} días, y el avance promedio `
+            + `(promedio del porcentaje de avance registrado en cada causa) alcanza el ${avanceProm.toFixed(1)}%.`
+        );
+
+        // Estados
+        escribirSubtitulo('Estados de las denuncias');
+        estadosEntries.forEach(([estado, cant]) => {
+            const porcentaje = ((cant / total) * 100).toFixed(1);
+            escribirItemLista(`${estado}: ${cant.toLocaleString()} casos (${porcentaje}% del total).`);
+        });
+
+        // Rango de días
+        escribirSubtitulo('Rango de días de investigación');
+        if (rangoDiasTop) {
+            const [labelDias, valorDias] = rangoDiasTop;
+            const pct = ((valorDias / total) * 100).toFixed(1);
+            escribirParrafo(
+                `El rango con mayor cantidad de causas es ${labelDias} días, con `
+                + `${valorDias.toLocaleString()} denuncias (${pct}% del total).`
+            );
+        } else {
+            escribirParrafo(
+                'Con los filtros actuales no se identifican rangos de días de investigación predominantes.'
+            );
+        }
+
+        // Avance
+        escribirSubtitulo('Avance de investigación');
+        if (rangoAvanceTop) {
+            const [labelAvance, valorAvance] = rangoAvanceTop;
+            const pct = ((valorAvance / total) * 100).toFixed(1);
+            escribirParrafo(
+                `La mayor concentración de causas se encuentra en el rango de ${labelAvance}% de avance, con `
+                + `${valorAvance.toLocaleString()} denuncias (${pct}% del total).`
+            );
+        } else {
+            escribirParrafo(
+                'No se observan rangos de avance claramente predominantes con los filtros aplicados.'
+            );
+        }
+
+        // Actuarios
+        escribirSubtitulo('Distribución por actuario');
+        if (actuariosEntries.length) {
+            actuariosEntries.forEach(([nombre, cant]) => {
+                const pct = ((cant / total) * 100).toFixed(1);
+                escribirItemLista(`${nombre}: ${cant.toLocaleString()} denuncias (${pct}% del total).`);
+            });
+        } else {
+            escribirParrafo(
+                'Con los filtros actuales no se destaca ningún actuario en particular en términos de volumen de causas.'
+            );
+        }
+
+        // Departamentos
+        escribirSubtitulo('Distribución por departamento');
+        if (deptosEntries.length) {
+            deptosEntries.forEach(([nombre, cant]) => {
+                const pct = ((cant / total) * 100).toFixed(1);
+                escribirItemLista(`${nombre}: ${cant.toLocaleString()} denuncias (${pct}% del total).`);
+            });
+        } else {
+            escribirParrafo(
+                'No se observan diferencias significativas entre departamentos con los filtros actuales.'
+            );
+        }
+
+        // Divisiones
+        escribirSubtitulo('Distribución por división');
+        if (divisionesEntries.length) {
+            divisionesEntries.forEach(([nombre, cant]) => {
+                const pct = ((cant / total) * 100).toFixed(1);
+                escribirItemLista(`${nombre}: ${cant.toLocaleString()} denuncias (${pct}% del total).`);
+            });
+        } else {
+            escribirParrafo(
+                'No se identifican divisiones con un peso claramente predominante en la carga de trabajo.'
+            );
+        }
+
+        // Secciones / SINAR
+        escribirSubtitulo('Distribución por sección (SINAR)');
+        if (seccionesEntries.length) {
+            seccionesEntries.forEach(([nombre, cant]) => {
+                const pct = ((cant / total) * 100).toFixed(1);
+                escribirItemLista(`${nombre}: ${cant.toLocaleString()} denuncias (${pct}% del total).`);
+            });
+        } else {
+            escribirParrafo(
+                'No se observa una sección del SINAR claramente predominante con los filtros actuales.'
+            );
+        }
+
+        // Nota final
+        yPos += 4;
+        escribirParrafo(
+            'Este análisis se actualiza automáticamente según los filtros aplicados y busca ofrecer una lectura rápida '
+            + 'para la toma de decisiones, complementando a los gráficos del dashboard.'
+        );
+
+        const nombreArchivo = `Analisis_Denuncias_${new Date().toISOString().split('T')[0]}_${new Date().toTimeString().split(' ')[0].replace(/:/g, '-')}.pdf`;
+        doc.save(nombreArchivo);
+    }
+    
+    // Abrir modal selector de gráficos para PDF
+    function abrirSelectorPDF() {
+        if (window.bootstrap && bootstrap.Modal) {
+            const modalEl = document.getElementById('pdfSelectorModal');
+            if (modalEl) {
+                const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                modal.show();
+            }
+        } else {
+            // Fallback: exportar todos si no hay Bootstrap
+            exportarPDF([]);
+        }
+    }
+    
+    // Seleccionar/deseleccionar todos los gráficos
+    function seleccionarTodosGraficos(seleccionar) {
+        // Solo seleccionar los checkboxes de gráficos, no el de tarjetas
+        const checkboxes = document.querySelectorAll('#pdfSelectorModal input[type="checkbox"]:not(#pdf-incluir-tarjetas)');
+        checkboxes.forEach(cb => cb.checked = seleccionar);
+    }
+    
+    // Generar PDF con los gráficos seleccionados
+    async function generarPDFConSeleccion() {
+        const graficosSeleccionados = [];
+        
+        // Mapeo de checkboxes a gráficos
+        const graficos = [
+            { id: 'pdf-chart-dias', canvasId: 'chartDias', titulo: 'RANGO DE DÍAS DE INVESTIGACIÓN' },
+            { id: 'pdf-chart-avance', canvasId: 'chartAvance', titulo: 'AVANCE DE INVESTIGACIÓN' },
+            { id: 'pdf-chart-estados', canvasId: 'chartEstados', titulo: 'ESTADOS DE DENUNCIAS' },
+            { id: 'pdf-chart-actuarios', canvasId: 'chartActuarios', titulo: 'ACTUARIOS' },
+            { id: 'pdf-chart-deptos', canvasId: 'chartDeptos', titulo: 'POR DEPARTAMENTO' },
+            { id: 'pdf-chart-divisiones', canvasId: 'chartDivisiones', titulo: 'POR DIVISIÓN' },
+            { id: 'pdf-chart-secciones', canvasId: 'chartSecciones', titulo: 'POR SECCIÓN (SINAR)' }
+        ];
+        
+        graficos.forEach(grafico => {
+            const checkbox = document.getElementById(grafico.id);
+            if (checkbox && checkbox.checked) {
+                graficosSeleccionados.push({ canvasId: grafico.canvasId, titulo: grafico.titulo });
+            }
+        });
+        
+        if (graficosSeleccionados.length === 0) {
+            alert('Por favor, seleccione al menos un gráfico para exportar.');
+            return;
+        }
+        
+        // Verificar si incluir tarjetas
+        const incluirTarjetas = document.getElementById('pdf-incluir-tarjetas').checked;
+        
+        // Cerrar modal
+        if (window.bootstrap && bootstrap.Modal) {
+            const modalEl = document.getElementById('pdfSelectorModal');
+            if (modalEl) {
+                const modal = bootstrap.Modal.getInstance(modalEl);
+                if (modal) modal.hide();
+            }
+        }
+        
+        // Generar PDF
+        await exportarPDF(graficosSeleccionados, incluirTarjetas);
+    }
+    
+    // Exportar dashboard a PDF
+    async function exportarPDF(graficosSeleccionados = null, incluirTarjetas = false) {
+        if (!window.jspdf || !window.html2canvas) {
+            alert('Error: Las librerías de PDF no están cargadas. Por favor, recarga la página.');
+            return;
+        }
+        
+        // Si no se pasan gráficos, usar todos por defecto
+        if (!graficosSeleccionados || graficosSeleccionados.length === 0) {
+            graficosSeleccionados = [
+                { canvasId: 'chartDias', titulo: 'RANGO DE DÍAS DE INVESTIGACIÓN' },
+                { canvasId: 'chartAvance', titulo: 'AVANCE DE INVESTIGACIÓN' },
+                { canvasId: 'chartEstados', titulo: 'ESTADOS DE DENUNCIAS' },
+                { canvasId: 'chartActuarios', titulo: 'ACTUARIOS' },
+                { canvasId: 'chartDeptos', titulo: 'POR DEPARTAMENTO' },
+                { canvasId: 'chartDivisiones', titulo: 'POR DIVISIÓN' },
+                { canvasId: 'chartSecciones', titulo: 'POR SECCIÓN (SINAR)' }
+            ];
+        }
+        
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('p', 'mm', 'a4');
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        let yPos = 10;
+        const margin = 10;
+        const maxWidth = pageWidth - (2 * margin);
+        
+        // Título
+        doc.setFontSize(18);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Dashboard Denuncias Web - SIOC', margin, yPos);
+        yPos += 8;
+        
+        // Fecha y hora de exportación
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        const fechaExport = new Date().toLocaleString('es-AR', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        doc.text(`Exportado el: ${fechaExport}`, margin, yPos);
+        yPos += 6;
+        
+        // Resumen de filtros aplicados
+        const form = document.getElementById('filtersForm');
+        const filtrosTexto = obtenerFiltrosTexto(form);
+        if (filtrosTexto) {
+            doc.setFontSize(11);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Filtros aplicados:', margin, yPos);
+            yPos += 5;
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'normal');
+            const filtrosLines = doc.splitTextToSize(filtrosTexto, maxWidth);
+            filtrosLines.forEach(line => {
+                if (yPos > pageHeight - 20) {
+                    doc.addPage();
+                    yPos = 10;
+                }
+                doc.text(line, margin, yPos);
+                yPos += 4;
+            });
+            yPos += 3;
+        }
+        
+        // Total actual
+        const totalActual = obtenerTotalGeneral();
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`Total de denuncias: ${totalActual.toLocaleString()}`, margin, yPos);
+        yPos += 8;
+        
+        // Agregar tarjetas de resumen si está seleccionado
+        if (incluirTarjetas) {
+            const tarjetasContainer = document.getElementById('summary-cards');
+            if (tarjetasContainer && tarjetasContainer.children.length > 0) {
+                try {
+                    // Verificar si hay nueva página necesaria
+                    if (yPos > pageHeight - 100) {
+                        doc.addPage();
+                        yPos = 10;
+                    }
+                    
+                    // Título de la sección
+                    doc.setFontSize(14);
+                    doc.setFont('helvetica', 'bold');
+                    doc.text('Resumen de Denuncias', margin, yPos);
+                    yPos += 8;
+                    
+                    // Capturar tarjetas con html2canvas
+                    const canvas = await html2canvas(tarjetasContainer, {
+                        backgroundColor: '#ffffff',
+                        scale: 2,
+                        logging: false
+                    });
+                    
+                    const imgData = canvas.toDataURL('image/png', 1.0);
+                    const imgWidth = maxWidth;
+                    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                    
+                    // Verificar si la imagen cabe en la página actual
+                    if (yPos + imgHeight > pageHeight - 10) {
+                        doc.addPage();
+                        yPos = 10;
+                    }
+                    
+                    // Agregar imagen de tarjetas
+                    doc.addImage(imgData, 'PNG', margin, yPos, imgWidth, imgHeight);
+                    yPos += imgHeight + 10;
+                } catch (error) {
+                    console.error('Error al capturar tarjetas:', error);
+                    doc.setFontSize(10);
+                    doc.setFont('helvetica', 'italic');
+                    doc.text('(Error al capturar tarjetas de resumen)', margin, yPos);
+                    yPos += 5;
+                }
+            }
+        }
+        
+        // Función auxiliar para agregar gráfico
+        async function agregarGrafico(canvasId, titulo) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+            
+            // Verificar si hay nueva página necesaria
+            if (yPos > pageHeight - 80) {
+                doc.addPage();
+                yPos = 10;
+            }
+            
+            try {
+                // Esperar un momento para que Chart.js termine de renderizar
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
+                // Buscar el contenedor chart-wrapper que contiene el canvas
+                const chartWrapper = canvas.closest('.chart-wrapper');
+                let imgData;
+                let imgWidth, imgHeight;
+                
+                if (chartWrapper && window.html2canvas) {
+                    // Capturar el contenedor completo con html2canvas para incluir todo el padding
+                    const canvasImg = await html2canvas(chartWrapper, {
+                        backgroundColor: '#ffffff',
+                        scale: 2,
+                        logging: false,
+                        useCORS: true
+                    });
+                    imgData = canvasImg.toDataURL('image/png', 1.0);
+                    imgWidth = maxWidth;
+                    imgHeight = (canvasImg.height * imgWidth) / canvasImg.width;
+                } else {
+                    // Fallback: capturar solo el canvas
+                    imgData = canvas.toDataURL('image/png', 1.0);
+                    imgWidth = maxWidth;
+                    imgHeight = (canvas.height * imgWidth) / canvas.width;
+                }
+                
+                // Título del gráfico
+                doc.setFontSize(12);
+                doc.setFont('helvetica', 'bold');
+                doc.text(titulo, margin, yPos);
+                yPos += 6;
+                
+                // Agregar imagen
+                doc.addImage(imgData, 'PNG', margin, yPos, imgWidth, imgHeight);
+                yPos += imgHeight + 8;
+            } catch (error) {
+                console.error('Error al capturar gráfico:', error);
+                doc.setFontSize(10);
+                doc.setFont('helvetica', 'italic');
+                doc.text(`(Error al capturar ${titulo})`, margin, yPos);
+                yPos += 5;
+            }
+        }
+        
+        // Agregar solo los gráficos seleccionados
+        for (const grafico of graficosSeleccionados) {
+            await agregarGrafico(grafico.canvasId, grafico.titulo);
+        }
+        
+        // Guardar PDF
+        const nombreArchivo = `Dashboard_Denuncias_${new Date().toISOString().split('T')[0]}.pdf`;
+        doc.save(nombreArchivo);
+    }
+    
+    // Obtener texto de filtros aplicados
+    function obtenerFiltrosTexto(form) {
+        const filtros = [];
+        
+        // Tipos
+        const tipos = Array.from(form.querySelectorAll('input[name="tipos[]"]:checked:not([id$="-all"])')).map(cb => cb.nextElementSibling.textContent);
+        if (tipos.length > 0) filtros.push(`Tipo/Origen: ${tipos.join(', ')}`);
+        
+        // Departamentos
+        const deptos = Array.from(form.querySelectorAll('input[name="departamentos[]"]:checked:not([id$="-all"])')).map(cb => cb.nextElementSibling.textContent);
+        if (deptos.length > 0) filtros.push(`Departamento: ${deptos.join(', ')}`);
+        
+        // Divisiones
+        const divs = Array.from(form.querySelectorAll('input[name="divisiones[]"]:checked:not([id$="-all"])')).map(cb => cb.nextElementSibling.textContent);
+        if (divs.length > 0) filtros.push(`División: ${divs.join(', ')}`);
+        
+        // Secciones
+        const secs = Array.from(form.querySelectorAll('input[name="secciones[]"]:checked:not([id$="-all"])')).map(cb => cb.nextElementSibling.textContent);
+        if (secs.length > 0) filtros.push(`SINAR a Cargo: ${secs.join(', ')}`);
+        
+        // Estados
+        const estados = Array.from(form.querySelectorAll('input[name="estados[]"]:checked:not([id$="-all"])')).map(cb => cb.nextElementSibling.textContent);
+        if (estados.length > 0) filtros.push(`Estado: ${estados.join(', ')}`);
+        
+        // Actuarios
+        const actuarios = Array.from(form.querySelectorAll('input[name="actuarios[]"]:checked:not([id$="-all"])')).map(cb => cb.nextElementSibling.textContent);
+        if (actuarios.length > 0) filtros.push(`Actuario: ${actuarios.join(', ')}`);
+        
+        // Rangos numéricos
+        const avanceDesde = form.querySelector('input[name="avance_desde"]').value;
+        const avanceHasta = form.querySelector('input[name="avance_hasta"]').value;
+        if (avanceDesde || avanceHasta) {
+            filtros.push(`Avance: ${avanceDesde || '0'}% - ${avanceHasta || '100'}%`);
+        }
+        
+        const diasDesde = form.querySelector('input[name="dias_desde"]').value;
+        const diasHasta = form.querySelector('input[name="dias_hasta"]').value;
+        if (diasDesde || diasHasta) {
+            filtros.push(`Días: ${diasDesde || '0'} - ${diasHasta || '999'}`);
+        }
+        
+        const fechaDesde = form.querySelector('input[name="fecha_desde"]').value;
+        const fechaHasta = form.querySelector('input[name="fecha_hasta"]').value;
+        if (fechaDesde || fechaHasta) {
+            filtros.push(`Fecha: ${fechaDesde || '...'} hasta ${fechaHasta || '...'}`);
+        }
+        
+        return filtros.length > 0 ? filtros.join(' | ') : 'Sin filtros aplicados (mostrando totalidad)';
+    }
+
+    // --------- Drill-down: lista y detalle de denuncias ---------
+    async function abrirListaRegistros(sliceTipo, sliceLabel) {
+        const form = document.getElementById('filtersForm');
+        const formData = new FormData(form);
+        const params = new URLSearchParams();
+
+        formData.getAll('tipos[]').forEach(t => { if (t) params.append('tipos[]', t); });
+        formData.getAll('departamentos[]').forEach(d => { if (d) params.append('departamentos[]', d); });
+        formData.getAll('divisiones[]').forEach(d => { if (d) params.append('divisiones[]', d); });
+        formData.getAll('secciones[]').forEach(s => { if (s) params.append('secciones[]', s); });
+        formData.getAll('estados[]').forEach(e => { if (e) params.append('estados[]', e); });
+        formData.getAll('actuarios[]').forEach(a => { if (a) params.append('actuarios[]', a); });
+
+        const fechaDesde = formData.get('fecha_desde');
+        const fechaHasta = formData.get('fecha_hasta');
+        const avanceDesde = formData.get('avance_desde');
+        const avanceHasta = formData.get('avance_hasta');
+        const diasDesde = formData.get('dias_desde');
+        const diasHasta = formData.get('dias_hasta');
+
+        if (fechaDesde) params.append('fecha_desde', fechaDesde);
+        if (fechaHasta) params.append('fecha_hasta', fechaHasta);
+        if (avanceDesde) params.append('avance_desde', avanceDesde);
+        if (avanceHasta) params.append('avance_hasta', avanceHasta);
+        if (diasDesde) params.append('dias_desde', diasDesde);
+        if (diasHasta) params.append('dias_hasta', diasHasta);
+
+        if (sliceTipo && sliceLabel) {
+            params.append('slice_tipo', sliceTipo);
+            params.append('slice_label', sliceLabel);
+        }
+
+        try {
+            const response = await fetch(`{{ url_for("datalab.denuncias_lista") }}?${params.toString()}`);
+            const data = await response.json();
+
+            const tbody = document.getElementById('recordsTableBody');
+            const totalEl = document.getElementById('recordsTotal');
+            if (tbody) tbody.innerHTML = '';
+            if (totalEl) totalEl.textContent = (data.total || 0).toLocaleString();
+
+            (data.registros || []).forEach(reg => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${reg.numero_ap || '-'}</td>
+                    <td>${reg.fecha_registro ? reg.fecha_registro.substring(0, 10) : '-'}</td>
+                    <td>${reg.estado || '-'}</td>
+                    <td>${reg.actuario || '-'}</td>
+                    <td>${reg.avance != null ? reg.avance : '-'}</td>
+                    <td>${reg.departamento || '-'}</td>
+                    <td>${reg.division || '-'}</td>
+                    <td class="text-end">
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="abrirDetalleDenuncia(${reg.id})">
+                            Ver
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            if (window.bootstrap && bootstrap.Modal) {
+                const modalEl = document.getElementById('recordsModal');
+                if (modalEl) {
+                    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                    modal.show();
+                }
+            }
+        } catch (error) {
+            console.error('Error cargando lista de denuncias:', error);
+        }
+    }
+
+    async function abrirDetalleDenuncia(id) {
+        try {
+            const response = await fetch(`{{ url_for("datalab.denuncias_detalle", denuncia_id=0) }}`.replace('0', id));
+            const d = await response.json();
+            const cont = document.getElementById('recordDetailContent');
+            if (!cont) return;
+
+            cont.innerHTML = `
+                <div class="mb-2">
+                    <strong>N° AP:</strong> ${d.numero_ap || '-'}
+                </div>
+                <div class="mb-2">
+                    <strong>Estado:</strong> ${d.estado || '-'} &nbsp; | &nbsp;
+                    <strong>Avance:</strong> ${d.avance != null ? d.avance + '%' : '-'}
+                </div>
+                <div class="mb-2">
+                    <strong>Actuario:</strong> ${d.actuario || '-'}
+                </div>
+                <div class="mb-2">
+                    <strong>Fecha registro:</strong> ${d.fecha_registro ? d.fecha_registro.substring(0, 10) : '-'} &nbsp; | &nbsp;
+                    <strong>Fecha del hecho:</strong> ${d.fecha_hecho ? d.fecha_hecho.substring(0, 10) : '-'}
+                </div>
+                <div class="mb-2">
+                    <strong>Departamento / División:</strong> ${d.departamento || '-'} / ${d.division || '-'}
+                </div>
+                <div class="mb-2">
+                    <strong>SINAR a cargo:</strong> ${d.sinar_a_cargo || '-'}
+                </div>
+                <hr/>
+                <div class="mb-2">
+                    <strong>Carátula:</strong><br/>
+                    <span>${(d.caratula || '').replace(/\\n/g, '<br>')}</span>
+                </div>
+                <div class="mb-2">
+                    <strong>Lugar del hecho:</strong><br/>
+                    <span>${d.lugar_hecho || '-'}</span>
+                </div>
+                <div class="mb-2">
+                    <strong>Municipio:</strong><br/>
+                    <span>${d.municipio || '-'}</span>
+                </div>
+                <div class="mb-2">
+                    <strong>Relato del hecho:</strong><br/>
+                    <span>${(d.relato_hecho || '').replace(/\\n/g, '<br>')}</span>
+                </div>
+                <div class="mb-2">
+                    <strong>Acciones desplegadas:</strong><br/>
+                    <span>${(d.acciones_desplegadas || '').replace(/\\n/g, '<br>')}</span>
+                </div>
+                <div class="mb-2">
+                    <strong>Observaciones:</strong><br/>
+                    <span>${(d.observaciones || '').replace(/\\n/g, '<br>')}</span>
+                </div>
+            `;
+
+            if (window.bootstrap && bootstrap.Modal) {
+                const modalEl = document.getElementById('recordDetailModal');
+                if (modalEl) {
+                    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                    modal.show();
+                }
+            }
+        } catch (error) {
+            console.error('Error cargando detalle de denuncia:', error);
+        }
+    }
+    
+    // Aplicar filtros
+    async function aplicarFiltros() {
+        const form = document.getElementById('filtersForm');
+        const formData = new FormData(form);
+        const params = new URLSearchParams();
+        
+        formData.getAll('tipos[]').forEach(t => { if (t) params.append('tipos[]', t); });
+        formData.getAll('departamentos[]').forEach(d => { if (d) params.append('departamentos[]', d); });
+        formData.getAll('divisiones[]').forEach(d => { if (d) params.append('divisiones[]', d); });
+        formData.getAll('secciones[]').forEach(s => { if (s) params.append('secciones[]', s); });
+        formData.getAll('estados[]').forEach(e => { if (e) params.append('estados[]', e); });
+        formData.getAll('actuarios[]').forEach(a => { if (a) params.append('actuarios[]', a); });
+        
+        const fechaDesde = formData.get('fecha_desde');
+        const fechaHasta = formData.get('fecha_hasta');
+        const avanceDesde = formData.get('avance_desde');
+        const avanceHasta = formData.get('avance_hasta');
+        const diasDesde = formData.get('dias_desde');
+        const diasHasta = formData.get('dias_hasta');
+        
+        if (fechaDesde) params.append('fecha_desde', fechaDesde);
+        if (fechaHasta) params.append('fecha_hasta', fechaHasta);
+        if (avanceDesde) params.append('avance_desde', avanceDesde);
+        if (avanceHasta) params.append('avance_hasta', avanceHasta);
+        if (diasDesde) params.append('dias_desde', diasDesde);
+        if (diasHasta) params.append('dias_hasta', diasHasta);
+        
+        try {
+            const response = await fetch(`{{ url_for("datalab.denuncias_dashboard_api") }}?${params.toString()}`);
+            const data = await response.json();
+            
+            datosGraficos = {
+                estados: data.estados || {},
+                dias_investigacion: data.dias_investigacion || {},
+                avance: data.avance || {},
+                resumen: data.resumen || {},
+                actuarios: data.actuarios || {},
+                departamentos_chart: data.departamentos_chart || {},
+                divisiones_chart: data.divisiones_chart || {},
+                secciones_chart: data.secciones_chart || {}
+            };
+            
+            var totalActual = 0;
+            if (data.resumen && typeof data.resumen.total_denuncias === 'number') {
+                totalActual = data.resumen.total_denuncias;
+            } else if (typeof data.total === 'number') {
+                totalActual = data.total;
+            }
+            document.getElementById('total-badge').textContent = totalActual.toLocaleString();
+            const totalChartsEls = document.querySelectorAll('.total-charts');
+            totalChartsEls.forEach(function(el) {
+                el.textContent = totalActual.toLocaleString();
+            });
+            renderizarTarjetas();
+            actualizarGraficos();
+        } catch (error) {
+            console.error('Error:', error);
+        }
+    }
+    
+    // Actualizar gráficos (Chart.js)
+    function actualizarGraficos() {
+        const diasLabels = Object.keys(datosGraficos.dias_investigacion || {});
+        const diasValues = Object.values(datosGraficos.dias_investigacion || {});
+        if (chartDias) {
+            chartDias.data.labels = diasLabels.length > 0 ? diasLabels : ['Sin datos'];
+            chartDias.data.datasets[0].data = diasValues.length > 0 ? diasValues : [0];
+            chartDias.update();
+        }
+        
+        const avanceLabels = Object.keys(datosGraficos.avance || {});
+        const avanceValues = Object.values(datosGraficos.avance || {});
+        if (chartAvance) {
+            chartAvance.data.labels = avanceLabels.length > 0 ? avanceLabels : ['Sin datos'];
+            chartAvance.data.datasets[0].data = avanceValues.length > 0 ? avanceValues : [0];
+            chartAvance.update();
+        }
+        
+        const estadosLabels = Object.keys(datosGraficos.estados || {});
+        const estadosValues = Object.values(datosGraficos.estados || {});
+        if (chartEstados) {
+            chartEstados.data.labels = estadosLabels.length > 0 ? estadosLabels : ['Sin datos'];
+            chartEstados.data.datasets[0].data = estadosValues.length > 0 ? estadosValues : [0];
+            chartEstados.update();
+        }
+        
+        const actuariosLabels = Object.keys(datosGraficos.actuarios || {});
+        const actuariosValues = Object.values(datosGraficos.actuarios || {});
+        if (chartActuarios) {
+            chartActuarios.data.labels = actuariosLabels.length > 0 ? actuariosLabels : ['Sin datos'];
+            chartActuarios.data.datasets[0].data = actuariosValues.length > 0 ? actuariosValues : [0];
+            chartActuarios.update();
+        }
+
+        const deptosLabels = Object.keys(datosGraficos.departamentos_chart || {});
+        const deptosValues = Object.values(datosGraficos.departamentos_chart || {});
+        if (chartDeptos) {
+            chartDeptos.data.labels = deptosLabels.length > 0 ? deptosLabels : ['Sin datos'];
+            chartDeptos.data.datasets[0].data = deptosValues.length > 0 ? deptosValues : [0];
+            chartDeptos.update();
+        }
+
+        const divisionesLabels = Object.keys(datosGraficos.divisiones_chart || {});
+        const divisionesValues = Object.values(datosGraficos.divisiones_chart || {});
+        if (chartDivisiones) {
+            chartDivisiones.data.labels = divisionesLabels.length > 0 ? divisionesLabels : ['Sin datos'];
+            chartDivisiones.data.datasets[0].data = divisionesValues.length > 0 ? divisionesValues : [0];
+            chartDivisiones.update();
+        }
+
+        const seccionesLabels = Object.keys(datosGraficos.secciones_chart || {});
+        const seccionesValues = Object.values(datosGraficos.secciones_chart || {});
+        if (chartSecciones) {
+            chartSecciones.data.labels = seccionesLabels.length > 0 ? seccionesLabels : ['Sin datos'];
+            chartSecciones.data.datasets[0].data = seccionesValues.length > 0 ? seccionesValues : [0];
+            chartSecciones.update();
+        }
+    }
+    
+    // Funciones de filtros
+    function toggleFilter(id) {
+        document.getElementById(id + '-menu').classList.toggle('show');
+    }
+    
+    function filtrarOpciones(filterId, searchText) {
+        const menu = document.getElementById(filterId + '-menu');
+        const searchLower = searchText.toLowerCase();
+        menu.querySelectorAll('.filter-item').forEach(item => {
+            if (item.querySelector('input[id$="-all"]')) return;
+            const text = item.getAttribute('data-text') || item.textContent.toLowerCase();
+            item.classList.toggle('filter-hidden', searchText !== '' && !text.includes(searchLower));
+        });
+    }
+    
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.filter-dropdown')) {
+            document.querySelectorAll('.filter-menu').forEach(m => m.classList.remove('show'));
+        }
+    });
+    
+    function updateFilterLabel(filterId) {
+        const checkboxes = document.querySelectorAll(`#${filterId}-menu input[type="checkbox"]:checked`);
+        const label = document.getElementById(`${filterId}-label`);
+        const defaultText = (filterId === 'div' || filterId === 'sec') ? 'Todas' : 'Todos';
+        const allChecked = Array.from(checkboxes).some(cb => cb.id === `${filterId}-all` || cb.value === '');
+        if (allChecked || checkboxes.length === 0) {
+            label.textContent = defaultText;
+        } else if (checkboxes.length === 1) {
+            const text = checkboxes[0].nextElementSibling.textContent;
+            label.textContent = text.length > 15 ? text.substring(0, 12) + '...' : text;
+        } else {
+            label.textContent = `${checkboxes.length} sel.`;
+        }
+    }
+    
+    async function actualizarDivisiones() {
+        const deptCheckboxes = document.querySelectorAll('#dept-menu input[type="checkbox"]:checked:not(#dept-all)');
+        const departamentos = Array.from(deptCheckboxes).map(cb => cb.value).filter(v => v);
+        const divOptions = document.getElementById('div-options');
+        
+        if (departamentos.length === 0) {
+            divOptions.querySelectorAll('.filter-item').forEach(item => {
+                item.style.display = '';
+                const checkbox = item.querySelector('input[type="checkbox"]');
+                if (checkbox) checkbox.disabled = false;
+            });
+            actualizarSecciones();
+            return;
+        }
+        
+        try {
+            const params = new URLSearchParams();
+            departamentos.forEach(dept => params.append('departamentos[]', dept));
+            params.append('opciones', 'divisiones');
+            const response = await fetch(`{{ url_for("datalab.denuncias_dashboard_api") }}?${params.toString()}`);
+            const data = await response.json();
+            const divisionesDisponibles = data.divisiones || [];
+            divOptions.querySelectorAll('.filter-item').forEach(item => {
+                const checkbox = item.querySelector('input[type="checkbox"]');
+                const divValue = checkbox.value;
+                if (divisionesDisponibles.includes(divValue)) {
+                    item.style.display = '';
+                    checkbox.disabled = false;
+                } else {
+                    item.style.display = 'none';
+                    checkbox.checked = false;
+                    checkbox.disabled = true;
+                }
+            });
+            updateFilterLabel('div');
+            actualizarSecciones();
+        } catch (error) {
+            console.error('Error:', error);
+        }
+    }
+    
+    async function actualizarSecciones() {
+        const deptCheckboxes = document.querySelectorAll('#dept-menu input[type="checkbox"]:checked:not(#dept-all)');
+        const divCheckboxes = document.querySelectorAll('#div-menu input[type="checkbox"]:checked:not(#div-all)');
+        const departamentos = Array.from(deptCheckboxes).map(cb => cb.value).filter(v => v);
+        const divisiones = Array.from(divCheckboxes).map(cb => cb.value).filter(v => v);
+        const secOptions = document.getElementById('sec-options');
+        
+        if (departamentos.length === 0 && divisiones.length === 0) {
+            secOptions.querySelectorAll('.filter-item').forEach(item => {
+                item.style.display = '';
+                const checkbox = item.querySelector('input[type="checkbox"]');
+                if (checkbox) checkbox.disabled = false;
+            });
+            return;
+        }
+        
+        try {
+            const params = new URLSearchParams();
+            departamentos.forEach(dept => params.append('departamentos[]', dept));
+            divisiones.forEach(div => params.append('divisiones[]', div));
+            params.append('opciones', 'secciones');
+            const response = await fetch(`{{ url_for("datalab.denuncias_dashboard_api") }}?${params.toString()}`);
+            const data = await response.json();
+            const seccionesDisponibles = data.secciones || [];
+            secOptions.querySelectorAll('.filter-item').forEach(item => {
+                const checkbox = item.querySelector('input[type="checkbox"]');
+                if (!checkbox) return;
+                const secValue = checkbox.value;
+                if (seccionesDisponibles.includes(secValue)) {
+                    item.style.display = '';
+                    checkbox.disabled = false;
+                } else {
+                    item.style.display = 'none';
+                    checkbox.checked = false;
+                    checkbox.disabled = true;
+                }
+            });
+            updateFilterLabel('sec');
+        } catch (error) {
+            console.error('Error:', error);
+        }
+    }
+    
+    function limpiarFiltros() {
+        document.querySelectorAll('input[type="checkbox"]').forEach(cb => { cb.checked = false; cb.disabled = false; });
+        document.querySelectorAll('input[type="number"], input[type="date"]').forEach(input => input.value = '');
+        ['tipo', 'dept', 'div', 'sec', 'est', 'act'].forEach(id => {
+            document.getElementById(`${id}-label`).textContent = (id === 'div' || id === 'sec') ? 'Todas' : 'Todos';
+        });
+        document.querySelectorAll('#div-options .filter-item, #sec-options .filter-item').forEach(item => item.style.display = '');
+        aplicarFiltros();
+    }
+</script>
+{% endblock %}

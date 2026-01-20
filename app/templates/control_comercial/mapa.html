@@ -1,0 +1,31 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Mapa de Comercios - SIOC{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-geo-alt"></i> Mapa de Comercios</h1>
+    <p class="text-muted">Visualización geográfica de comercios</p>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div id="map" style="height: 600px; width: 100%; border: 1px solid #ddd; border-radius: 4px;"></div>
+    </div>
+</div>
+
+<div class="mt-3">
+    <a href="{{ url_for('control_comercial.index') }}" class="btn btn-secondary">
+        <i class="bi bi-arrow-left"></i> Volver a la lista
+    </a>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    // TODO: Implementar mapa interactivo con Leaflet o Google Maps
+    // Por ahora, mostrar mensaje
+    document.getElementById('map').innerHTML = '<div class="d-flex align-items-center justify-content-center h-100 text-muted"><p>Mapa interactivo - Pendiente de implementar</p></div>';
+</script>
+{% endblock %}
+

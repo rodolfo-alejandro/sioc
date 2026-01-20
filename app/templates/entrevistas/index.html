@@ -1,0 +1,45 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Entrevistas - SIOC{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-chat-dots"></i> Entrevistas puerta a puerta</h1>
+    <p class="text-muted">Listado básico de entrevistas registradas (estructura migrada)</p>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        {% if entrevistas %}
+        <div class="table-responsive">
+            <table class="table table-hover table-sm">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Tipo</th>
+                        <th>Barrio entrevista</th>
+                        <th>Tema principal</th>
+                        <th>Cant. personas</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for e in entrevistas %}
+                    <tr>
+                        <td>{{ e.fecha_entrevista.strftime('%d/%m/%Y %H:%M') if e.fecha_entrevista else '' }}</td>
+                        <td>{{ e.tipo_entrevista }}</td>
+                        <td>{{ e.barrio_entrevista.nombre if e.barrio_entrevista else 'N/A' }}</td>
+                        <td>{{ e.tema_principal or '-' }}</td>
+                        <td>{{ e.cantidad_personas }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted mb-0">Aún no hay entrevistas registradas.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+

@@ -1,0 +1,85 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Controlar Comercio - SIOC{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-clipboard-check"></i> Controlar Comercio</h1>
+    <p class="text-muted">Registre un control para: <strong>{{ comercio.denominacion }}</strong></p>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('control_comercial.controlar', comercio_id=comercio.id) }}">
+            {{ csrf_token() }}
+            
+            <h5 class="mb-3">Datos del Control</h5>
+            
+            <div class="mb-3">
+                <label for="resultado" class="form-label">Resultado</label>
+                <select class="form-select" id="resultado" name="resultado">
+                    <option value="">Seleccione...</option>
+                    <option value="Conforme">Conforme</option>
+                    <option value="Infracción">Infracción</option>
+                    <option value="Clausura">Clausura</option>
+                    <option value="Advertencia">Advertencia</option>
+                </select>
+            </div>
+            
+            <div class="mb-3">
+                <label for="dni_presente" class="form-label">DNI Persona Presente</label>
+                <input type="text" class="form-control" id="dni_presente" name="dni_presente" maxlength="10" placeholder="Opcional">
+                <small class="form-text text-muted">Si hay una persona presente durante el control</small>
+            </div>
+            
+            <h5 class="mb-3 mt-4">Infracciones Detectadas</h5>
+            
+            <div class="mb-3">
+                {% for infraccion in datos_referencia.infracciones %}
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="infraccion_{{ infraccion.id }}" 
+                           name="infracciones[]" value="{{ infraccion.id }}">
+                    <label class="form-check-label" for="infraccion_{{ infraccion.id }}">
+                        <strong>{{ infraccion.codigo }}</strong> - {{ infraccion.descripcion }}
+                    </label>
+                </div>
+                <div class="mb-3 ms-4" id="obs_infraccion_{{ infraccion.id }}_container" style="display: none;">
+                    <label for="obs_infraccion_{{ infraccion.id }}" class="form-label">Observaciones</label>
+                    <textarea class="form-control" id="obs_infraccion_{{ infraccion.id }}" 
+                              name="obs_infraccion_{{ infraccion.id }}" rows="2"></textarea>
+                </div>
+                {% endfor %}
+            </div>
+            
+            <div class="mb-3">
+                <label for="observaciones_control" class="form-label">Observaciones del Control</label>
+                <textarea class="form-control" id="observaciones_control" name="observaciones_control" rows="4" maxlength="1000"></textarea>
+            </div>
+            
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle"></i> Registrar Control
+                </button>
+                <a href="{{ url_for('control_comercial.ver', comercio_id=comercio.id) }}" class="btn btn-secondary">
+                    <i class="bi bi-x-circle"></i> Cancelar
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    // Mostrar/ocultar observaciones cuando se marca una infracción
+    document.querySelectorAll('input[name="infracciones[]"]').forEach(function(checkbox) {
+        checkbox.addEventListener('change', function() {
+            const container = document.getElementById('obs_infraccion_' + this.value + '_container');
+            if (container) {
+                container.style.display = this.checked ? 'block' : 'none';
+            }
+        });
+    });
+</script>
+{% endblock %}
+

@@ -1,0 +1,128 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Control Vehicular - SIOC{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-car-front"></i> Control Vehicular</h1>
+    <p class="text-muted">Registre un control vehicular</p>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('intervenciones.control_vehicular') }}" id="controlVehicularForm">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            
+            <h5 class="mb-3">Datos del Vehículo</h5>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="patente" class="form-label">Patente <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control text-uppercase" id="patente" name="patente" required maxlength="10" placeholder="ABC123">
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="tipo_vehiculo_id" class="form-label">Tipo de Vehículo</label>
+                    <select class="form-select" id="tipo_vehiculo_id" name="tipo_vehiculo_id">
+                        <option value="">Seleccione...</option>
+                        {% for tipo in datos_referencia.tipos_vehiculo %}
+                        <option value="{{ tipo.id }}">{{ tipo.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="marca_id" class="form-label">Marca</label>
+                    <select class="form-select" id="marca_id" name="marca_id">
+                        <option value="">Seleccione...</option>
+                        {% for marca in datos_referencia.marcas %}
+                        <option value="{{ marca.id }}">{{ marca.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="modelo_id" class="form-label">Modelo</label>
+                    <select class="form-select" id="modelo_id" name="modelo_id">
+                        <option value="">Seleccione...</option>
+                        {% for modelo in datos_referencia.modelos %}
+                        <option value="{{ modelo.id }}">{{ modelo.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="color_id" class="form-label">Color</label>
+                    <select class="form-select" id="color_id" name="color_id">
+                        <option value="">Seleccione...</option>
+                        {% for color in datos_referencia.colores %}
+                        <option value="{{ color.id }}">{{ color.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="dni_conductor" class="form-label">DNI Conductor</label>
+                    <input type="text" class="form-control" id="dni_conductor" name="dni_conductor" maxlength="10" placeholder="Opcional">
+                </div>
+            </div>
+            
+            <h5 class="mb-3 mt-4">Ubicación <span class="text-danger">*</span></h5>
+            
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle"></i> <strong>Importante:</strong> Debe seleccionar la ubicación en el mapa. La geolocalización es obligatoria.
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="latitud" class="form-label">Latitud <span class="text-danger">*</span></label>
+                    <input type="number" step="any" class="form-control" id="latitud" name="latitud" required>
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="longitud" class="form-label">Longitud <span class="text-danger">*</span></label>
+                    <input type="number" step="any" class="form-control" id="longitud" name="longitud" required>
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                <div id="map" style="height: 400px; width: 100%; border: 1px solid #ddd; border-radius: 4px;"></div>
+                <small class="form-text text-muted">Haga clic en el mapa para seleccionar la ubicación</small>
+            </div>
+            
+            <div class="mb-3">
+                <label for="observaciones" class="form-label">Observaciones</label>
+                <textarea class="form-control" id="observaciones" name="observaciones" rows="3" maxlength="1000"></textarea>
+            </div>
+            
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle"></i> Registrar Control
+                </button>
+                <a href="{{ url_for('intervenciones.listar') }}" class="btn btn-secondary">
+                    <i class="bi bi-x-circle"></i> Cancelar
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    // Mapa básico - usar geolocalización del navegador
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(function(position) {
+            document.getElementById('latitud').value = position.coords.latitude;
+            document.getElementById('longitud').value = position.coords.longitude;
+        });
+    }
+    
+    // TODO: Implementar mapa interactivo (Leaflet/Google Maps)
+</script>
+{% endblock %}
+

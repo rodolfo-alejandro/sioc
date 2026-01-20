@@ -1,0 +1,116 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Control Comercial - SIOC{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-shop"></i> Control Comercial</h1>
+    <p class="text-muted">Gestión de comercios y controles</p>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            <div class="col-md-3">
+                <label for="rubro_id" class="form-label">Rubro</label>
+                <select class="form-select" id="rubro_id" name="rubro_id">
+                    <option value="">Todos</option>
+                    {% for rubro in datos_referencia.rubros %}
+                    <option value="{{ rubro.id }}" {% if request.args.get('rubro_id')|int == rubro.id %}selected{% endif %}>
+                        {{ rubro.nombre }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="barrio_id" class="form-label">Barrio</label>
+                <select class="form-select" id="barrio_id" name="barrio_id">
+                    <option value="">Todos</option>
+                    {% for barrio in datos_referencia.barrios %}
+                    <option value="{{ barrio.id }}" {% if request.args.get('barrio_id')|int == barrio.id %}selected{% endif %}>
+                        {{ barrio.nombre }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label for="buscar" class="form-label">Buscar</label>
+                <input type="text" class="form-control" id="buscar" name="buscar" 
+                       value="{{ request.args.get('buscar', '') }}" placeholder="Nombre o dirección">
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="bi bi-search"></i> Filtrar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Lista de Comercios</h5>
+        {% if current_user.has_permission('CONTROL_COMERCIAL_CREATE') %}
+        <a href="{{ url_for('control_comercial.registrar') }}" class="btn btn-sm btn-primary">
+            <i class="bi bi-plus-circle"></i> Registrar Comercio
+        </a>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        {% if comercios %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Denominación</th>
+                        <th>Rubro</th>
+                        <th>Domicilio</th>
+                        <th>Barrio</th>
+                        <th>Habilitaciones</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for comercio in comercios %}
+                    <tr>
+                        <td><strong>{{ comercio.denominacion }}</strong></td>
+                        <td>{{ comercio.rubro.nombre if comercio.rubro else 'N/A' }}</td>
+                        <td>{{ comercio.domicilio }}</td>
+                        <td>{{ comercio.barrio.nombre if comercio.barrio else 'N/A' }}</td>
+                        <td>
+                            {% set vencidas = comercio.tiene_habilitaciones_vencidas() %}
+                            {% if vencidas %}
+                                <span class="badge bg-danger">Vencidas: {{ vencidas|join(', ') }}</span>
+                            {% else %}
+                                <span class="badge bg-success">Al día</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <a href="{{ url_for('control_comercial.ver', comercio_id=comercio.id) }}" class="btn btn-outline-primary">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                {% if current_user.has_permission('CONTROL_COMERCIAL_CREATE') %}
+                                <a href="{{ url_for('control_comercial.controlar', comercio_id=comercio.id) }}" class="btn btn-outline-success">
+                                    <i class="bi bi-clipboard-check"></i>
+                                </a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i> No hay comercios registrados.
+            {% if current_user.has_permission('CONTROL_COMERCIAL_CREATE') %}
+            <a href="{{ url_for('control_comercial.registrar') }}" class="alert-link">Registrar un comercio</a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+

@@ -44,6 +44,27 @@ def create_app(config_class=Config):
     from app.blueprints.datalab import bp as datalab_bp
     app.register_blueprint(datalab_bp, url_prefix='/datalab')
     
+    from app.blueprints.intervenciones import bp as intervenciones_bp
+    app.register_blueprint(intervenciones_bp, url_prefix='/intervenciones')
+    
+    from app.blueprints.control_comercial import bp as control_comercial_bp
+    app.register_blueprint(control_comercial_bp, url_prefix='/control-comercial')
+    
+    from app.blueprints.control_educativo import bp as control_educativo_bp
+    app.register_blueprint(control_educativo_bp, url_prefix='/control-educativo')
+
+    from app.blueprints.entrevistas import bp as entrevistas_bp
+    app.register_blueprint(entrevistas_bp, url_prefix='/entrevistas')
+
+    from app.blueprints.grupos import bp as grupos_bp
+    app.register_blueprint(grupos_bp, url_prefix='/grupos')
+
+    from app.blueprints.relaciones import bp as relaciones_bp
+    app.register_blueprint(relaciones_bp, url_prefix='/relaciones')
+
+    from app.blueprints.operativos import bp as operativos_bp
+    app.register_blueprint(operativos_bp, url_prefix='/operativos')
+    
     # Crear directorios necesarios
     upload_folder = app.config.get('UPLOAD_FOLDER', 'instance/uploads')
     os.makedirs(upload_folder, exist_ok=True)
@@ -56,6 +77,15 @@ def create_app(config_class=Config):
             return "{:,}".format(int(value))
         except (ValueError, TypeError):
             return str(value)
+    
+    # Agregar helper CSRF al contexto de templates
+    @app.context_processor
+    def inject_csrf_token():
+        from flask import request
+        from flask_wtf.csrf import generate_csrf
+        def get_csrf_token():
+            return generate_csrf()
+        return dict(csrf_token=get_csrf_token)
     
     # NO inicializar base de datos aquí - se hace con Flask-Migrate o create_admin.py
     # Esto evita problemas al importar la app antes de que la DB esté lista

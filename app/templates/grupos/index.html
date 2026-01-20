@@ -1,0 +1,49 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Grupos - SIOC{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-people"></i> Grupos de intervención</h1>
+    <p class="text-muted">Listado básico de grupos asociados a intervenciones</p>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        {% if grupos %}
+        <div class="table-responsive">
+            <table class="table table-hover table-sm">
+                <thead>
+                    <tr>
+                        <th>Nombre</th>
+                        <th>Descripción</th>
+                        <th>Fecha creación</th>
+                        <th>Activo</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for g in grupos %}
+                    <tr>
+                        <td><strong>{{ g.nombre_grupo }}</strong></td>
+                        <td>{{ g.descripcion or '-' }}</td>
+                        <td>{{ g.fecha_creacion.strftime('%d/%m/%Y %H:%M') if g.fecha_creacion else '' }}</td>
+                        <td>
+                            {% if g.activo %}
+                            <span class="badge bg-success">Sí</span>
+                            {% else %}
+                            <span class="badge bg-secondary">No</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted mb-0">Aún no hay grupos registrados.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+

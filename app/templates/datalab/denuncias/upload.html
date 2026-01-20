@@ -1,0 +1,149 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Cargar Denuncias Web - DataLab{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-cloud-upload"></i> Cargar Denuncias Web</h1>
+    <p class="text-muted">Subir archivo Excel de denuncias de la Dirección General de Drogas Peligrosas</p>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Advertencia Importante</h5>
+            </div>
+            <div class="card-body">
+                <p class="mb-3">
+                    <strong>Subir un nuevo archivo eliminará TODOS los datos actuales de denuncias.</strong>
+                </p>
+                <p class="text-muted">
+                    Esta acción no se puede deshacer. Asegúrese de tener un respaldo si es necesario.
+                </p>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="mb-0">📋 Estado Actual del Sistema</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Total de denuncias:</strong> <span class="badge bg-primary">{{ total_actual | number_format }}</span></p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Última carga:</strong> 
+                            {% if ultima_carga %}
+                                {{ ultima_carga.created_at.strftime('%d/%m/%Y %H:%M') }}
+                            {% else %}
+                                <span class="text-muted">Nunca</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="mb-0">📤 Cargar Nuevo Archivo Excel</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('datalab.denuncias_upload') }}" enctype="multipart/form-data" id="uploadForm">
+                    {{ form.hidden_tag() }}
+                    
+                    <div class="mb-3">
+                        {{ form.file.label(class="form-label") }}
+                        {{ form.file(class="form-control" + (" is-invalid" if form.file.errors else ""), accept=".xlsx,.xlsm") }}
+                        {% if form.file.errors %}
+                            <div class="invalid-feedback">
+                                {% for error in form.file.errors %}{{ error }}{% endfor %}
+                            </div>
+                        {% endif %}
+                        <small class="form-text text-muted">
+                            Formatos permitidos: Excel (.xlsx, .xlsm). Tamaño máximo: 20MB
+                        </small>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="form-check">
+                            {{ form.confirmar_eliminacion(class="form-check-input" + (" is-invalid" if form.confirmar_eliminacion.errors else "")) }}
+                            {{ form.confirmar_eliminacion.label(class="form-check-label") }}
+                            {% if form.confirmar_eliminacion.errors %}
+                                <div class="invalid-feedback">
+                                    {% for error in form.confirmar_eliminacion.errors %}{{ error }}{% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                        <small class="form-text text-danger">
+                            <i class="bi bi-exclamation-circle"></i> Debe confirmar esta acción para continuar
+                        </small>
+                    </div>
+
+                    <div id="uploadProgress" class="d-none mb-3">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Procesando...</span>
+                        </div>
+                        <span class="ms-2">Procesando archivo, por favor espere... Esto puede tardar varios minutos.</span>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary" id="submitBtn">
+                            <i class="bi bi-upload"></i> Cargar y Procesar
+                        </button>
+                        <a href="{{ url_for('datalab.denuncias_dashboard') }}" class="btn btn-secondary">
+                            <i class="bi bi-x-circle"></i> Cancelar
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-info-circle"></i> Información</h5>
+            </div>
+            <div class="card-body">
+                <h6>Columnas Requeridas:</h6>
+                <ul class="small">
+                    <li>ID</li>
+                    <li>FECHA DE REGISTRO</li>
+                    <li>DEPARTAMENTO</li>
+                    <li>DIVISION</li>
+                    <li>TIPO/ORIGEN</li>
+                    <li>ESTADO_NOMBRE</li>
+                    <li>AVANCE</li>
+                </ul>
+                
+                <h6 class="mt-3">Proceso:</h6>
+                <ol class="small">
+                    <li>Se eliminan todas las denuncias actuales</li>
+                    <li>Se lee el archivo Excel</li>
+                    <li>Se calculan los días de investigación</li>
+                    <li>Se guardan en la base de datos</li>
+                </ol>
+
+                <div class="alert alert-info mt-3 small">
+                    <i class="bi bi-lightbulb"></i> <strong>Tip:</strong> El cálculo de días de investigación se hace automáticamente desde la fecha de registro hasta la fecha de elevación (o fecha actual si no hay elevación).
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/datalab.js') }}"></script>
+<script>
+document.getElementById('uploadForm').addEventListener('submit', function() {
+    document.getElementById('uploadProgress').classList.remove('d-none');
+    document.getElementById('submitBtn').disabled = true;
+    document.getElementById('submitBtn').innerHTML = '<span class="spinner-border spinner-border-sm"></span> Procesando...';
+});
+</script>
+{% endblock %}
+

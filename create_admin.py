@@ -80,6 +80,27 @@ def create_seed_data():
             ('DATALAB_VIEW', 'Ver datasets del DataLab'),
             ('ADMIN_USERS', 'Administrar usuarios'),
             ('ADMIN_ROLES', 'Administrar roles'),
+            # Permisos de Intervenciones
+            ('INTERVENCIONES_CREATE', 'Crear intervenciones'),
+            ('INTERVENCIONES_VIEW', 'Ver intervenciones propias'),
+            ('INTERVENCIONES_VIEW_ALL', 'Ver todas las intervenciones de la unidad'),
+            # Permisos de Control Comercial
+            ('CONTROL_COMERCIAL_CREATE', 'Crear comercios y controles'),
+            ('CONTROL_COMERCIAL_VIEW', 'Ver comercios y controles'),
+            # Permisos de Control Educativo
+            ('CONTROL_EDUCATIVO_CREATE', 'Crear establecimientos y controles educativos'),
+            ('CONTROL_EDUCATIVO_VIEW', 'Ver establecimientos y controles educativos'),
+            # Permisos de Entrevistas
+            ('ENTREVISTAS_VIEW', 'Ver entrevistas'),
+            ('ENTREVISTAS_CREATE', 'Crear entrevistas'),
+            # Permisos de Grupos
+            ('GRUPOS_VIEW', 'Ver grupos'),
+            ('GRUPOS_CREATE', 'Crear grupos'),
+            # Permisos de Relaciones
+            ('RELACIONES_VIEW', 'Ver relaciones entre personas'),
+            # Permisos de Operativos
+            ('OPERATIVOS_VIEW', 'Ver estado de operativos'),
+            ('OPERATIVOS_CREATE', 'Iniciar y finalizar operativos'),
         ]
         
         permisos_creados = {}
@@ -116,7 +137,14 @@ def create_seed_data():
         if not admin_role:
             admin_role = Role(name='ADMIN', description='Administrador de unidad')
             db.session.add(admin_role)
-            admin_perms = ['CORE_VIEW', 'DATALAB_UPLOAD', 'DATALAB_VIEW', 'ADMIN_USERS']
+            admin_perms = ['CORE_VIEW', 'DATALAB_UPLOAD', 'DATALAB_VIEW', 'ADMIN_USERS', 
+                          'INTERVENCIONES_CREATE', 'INTERVENCIONES_VIEW', 'INTERVENCIONES_VIEW_ALL',
+                          'CONTROL_COMERCIAL_CREATE', 'CONTROL_COMERCIAL_VIEW',
+                          'CONTROL_EDUCATIVO_CREATE', 'CONTROL_EDUCATIVO_VIEW',
+                          'ENTREVISTAS_VIEW', 'ENTREVISTAS_CREATE',
+                          'GRUPOS_VIEW', 'GRUPOS_CREATE',
+                          'RELACIONES_VIEW',
+                          'OPERATIVOS_VIEW', 'OPERATIVOS_CREATE']
             for perm_code in admin_perms:
                 if perm_code in permisos_creados:
                     admin_role.permissions.append(permisos_creados[perm_code])

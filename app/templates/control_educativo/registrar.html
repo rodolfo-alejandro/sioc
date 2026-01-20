@@ -1,0 +1,120 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Registrar Establecimiento - SIOC{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-building"></i> Registrar Establecimiento Educativo</h1>
+    <p class="text-muted">Registre un nuevo establecimiento educativo</p>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('control_educativo.registrar') }}">
+            {{ csrf_token() }}
+            
+            <h5 class="mb-3">Datos del Establecimiento</h5>
+            
+            <div class="row">
+                <div class="col-md-8 mb-3">
+                    <label for="nombre" class="form-label">Nombre <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="nombre" name="nombre" required maxlength="200">
+                </div>
+                
+                <div class="col-md-4 mb-3">
+                    <label for="cue" class="form-label">CUE</label>
+                    <input type="text" class="form-control" id="cue" name="cue" maxlength="20" placeholder="Código Único">
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label for="tipo_establecimiento_id" class="form-label">Tipo</label>
+                    <select class="form-select" id="tipo_establecimiento_id" name="tipo_establecimiento_id">
+                        <option value="">Seleccione...</option>
+                        {% for tipo in datos_referencia.tipos %}
+                        <option value="{{ tipo.id }}">{{ tipo.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="col-md-4 mb-3">
+                    <label for="nivel_educativo" class="form-label">Nivel Educativo</label>
+                    <select class="form-select" id="nivel_educativo" name="nivel_educativo">
+                        <option value="">Seleccione...</option>
+                        <option value="primario">Primario</option>
+                        <option value="secundario">Secundario</option>
+                        <option value="terciario">Terciario</option>
+                        <option value="universitario">Universitario</option>
+                        <option value="mixto">Mixto</option>
+                    </select>
+                </div>
+                
+                <div class="col-md-4 mb-3">
+                    <label for="turnos" class="form-label">Turnos</label>
+                    <input type="text" class="form-control" id="turnos" name="turnos" maxlength="100" placeholder="mañana, tarde, noche">
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                <label for="domicilio" class="form-label">Domicilio</label>
+                <input type="text" class="form-control" id="domicilio" name="domicilio" maxlength="200">
+            </div>
+            
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label for="barrio_id" class="form-label">Barrio</label>
+                    <select class="form-select" id="barrio_id" name="barrio_id">
+                        <option value="">Seleccione...</option>
+                        {% for barrio in datos_referencia.barrios %}
+                        <option value="{{ barrio.id }}">{{ barrio.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="col-md-4 mb-3">
+                    <label for="telefono" class="form-label">Teléfono</label>
+                    <input type="text" class="form-control" id="telefono" name="telefono" maxlength="20">
+                </div>
+                
+                <div class="col-md-4 mb-3">
+                    <label for="email" class="form-label">Email</label>
+                    <input type="email" class="form-control" id="email" name="email" maxlength="100">
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label for="matricula_aproximada" class="form-label">Matrícula Aproximada</label>
+                    <input type="number" class="form-control" id="matricula_aproximada" name="matricula_aproximada" min="0">
+                </div>
+                
+                <div class="col-md-4 mb-3">
+                    <label for="latitud" class="form-label">Latitud</label>
+                    <input type="number" step="any" class="form-control" id="latitud" name="latitud">
+                </div>
+                
+                <div class="col-md-4 mb-3">
+                    <label for="longitud" class="form-label">Longitud</label>
+                    <input type="number" step="any" class="form-control" id="longitud" name="longitud">
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                <label for="observaciones" class="form-label">Observaciones</label>
+                <textarea class="form-control" id="observaciones" name="observaciones" rows="3" maxlength="1000"></textarea>
+            </div>
+            
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle"></i> Registrar Establecimiento
+                </button>
+                <a href="{{ url_for('control_educativo.index') }}" class="btn btn-secondary">
+                    <i class="bi bi-x-circle"></i> Cancelar
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+

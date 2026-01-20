@@ -41,9 +41,44 @@ Sistema web modular, profesional, seguro y escalable para gestión operativa y a
 - **Docker** y **Docker Compose** instalados
 - **Git** (opcional, para clonar el repositorio)
 
-## 🚀 Instalación Rápida (Recomendada)
+## 🚀 Instalación y Ejecución
 
-### Opción A: Script Automático (Recomendado)
+### Opción 1: Ejecutar TODO con Docker (Más Simple) ⭐
+
+Ejecuta MySQL y Flask en contenedores Docker:
+
+**Linux/Mac:**
+```bash
+cd sioc
+chmod +x scripts/run_docker.sh
+./scripts/run_docker.sh
+```
+
+**Windows (PowerShell):**
+```powershell
+cd sioc
+.\scripts\run_docker.ps1
+```
+
+O manualmente:
+```bash
+docker compose up -d --build
+docker compose exec flask python create_admin.py
+```
+
+La aplicación estará disponible en: **http://localhost:5001**
+
+**Ver logs:**
+```bash
+docker compose logs -f flask
+```
+
+**Detener servicios:**
+```bash
+docker compose down
+```
+
+### Opción 2: MySQL en Docker + Flask Local (Desarrollo)
 
 **Linux/Mac:**
 ```bash
@@ -64,6 +99,18 @@ El script automático:
 3. ✅ Crea el entorno virtual de Python
 4. ✅ Instala todas las dependencias
 5. ✅ Inicializa la base de datos y crea datos semilla
+
+**Luego ejecuta Flask localmente:**
+```bash
+# Activar entorno virtual
+.\venv\Scripts\Activate.ps1  # Windows
+source venv/bin/activate     # Linux/Mac
+
+# Ejecutar aplicación
+python run.py
+```
+
+La aplicación estará disponible en: **http://localhost:5001**
 
 ### Opción B: Instalación Manual
 
@@ -136,7 +183,7 @@ Este script:
 python run.py
 ```
 
-La aplicación estará disponible en: **http://localhost:5000**
+La aplicación estará disponible en: **http://localhost:5001**
 
 ## 🔐 Credenciales por Defecto
 

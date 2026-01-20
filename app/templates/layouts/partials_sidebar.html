@@ -11,9 +11,19 @@
                     <ul class="nav flex-column collapse" id="submenuRegistro">
                         <li class="nav-item"><a class="nav-link submenu-item" href="#"><i class="bi bi-person"></i> Personas</a></li>
                         <li class="nav-item"><a class="nav-link submenu-item" href="#"><i class="bi bi-car-front"></i> Vehículos</a></li>
-                        <li class="nav-item"><a class="nav-link submenu-item" href="#"><i class="bi bi-shop"></i> Comercios</a></li>
-                        <li class="nav-item"><a class="nav-link submenu-item" href="#"><i class="bi bi-building"></i> Establecimientos</a></li>
-                        <li class="nav-item"><a class="nav-link submenu-item" href="#"><i class="bi bi-file-earmark-text"></i> Intervenciones</a></li>
+                        {% if current_user.has_permission('CONTROL_COMERCIAL_VIEW') %}
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('control_comercial.index') }}"><i class="bi bi-shop"></i> Comercios</a></li>
+                        {% endif %}
+                        {% if current_user.has_permission('CONTROL_EDUCATIVO_VIEW') %}
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('control_educativo.index') }}"><i class="bi bi-building"></i> Establecimientos</a></li>
+                        {% endif %}
+                        {% if current_user.has_permission('INTERVENCIONES_VIEW') %}
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('intervenciones.listar') }}"><i class="bi bi-file-earmark-text"></i> Intervenciones</a></li>
+                        {% endif %}
+                        {% if current_user.has_permission('INTERVENCIONES_CREATE') %}
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('intervenciones.identificacion_persona') }}"><i class="bi bi-person-check"></i> Identificar Persona</a></li>
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('intervenciones.control_vehicular') }}"><i class="bi bi-car-front"></i> Control Vehicular</a></li>
+                        {% endif %}
                     </ul>
                 </li>
                 
@@ -38,7 +48,9 @@
                     </a>
                     <ul class="nav flex-column collapse" id="submenuInvestigacion">
                         <li class="nav-item"><a class="nav-link submenu-item" href="#"><i class="bi bi-headphones"></i> Escuchas</a></li>
-                        <li class="nav-item"><a class="nav-link submenu-item" href="#"><i class="bi bi-diagram-3"></i> Relaciones</a></li>
+                        {% if current_user.has_permission('RELACIONES_VIEW') %}
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('relaciones.index') }}"><i class="bi bi-diagram-3"></i> Relaciones</a></li>
+                        {% endif %}
                         <li class="nav-item"><a class="nav-link submenu-item" href="#"><i class="bi bi-folder"></i> Evidencias</a></li>
                     </ul>
                 </li>
@@ -51,7 +63,9 @@
                     </a>
                     <ul class="nav flex-column collapse" id="submenuOperaciones">
                         <li class="nav-item"><a class="nav-link submenu-item" href="#"><i class="bi bi-people"></i> Recursos</a></li>
-                        <li class="nav-item"><a class="nav-link submenu-item" href="#"><i class="bi bi-geo-alt"></i> Seguimiento</a></li>
+                        {% if current_user.has_permission('OPERATIVOS_VIEW') %}
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('operativos.estado') }}"><i class="bi bi-geo-alt"></i> Operativo activo</a></li>
+                        {% endif %}
                     </ul>
                 </li>
                 
@@ -67,6 +81,12 @@
                         {% endif %}
                         {% if current_user.has_permission('DATALAB_VIEW') %}
                         <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('datalab.datasets') }}"><i class="bi bi-table"></i> Datasets</a></li>
+                        {% endif %}
+                        {% if current_user.has_permission('DATALAB_UPLOAD') %}
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('datalab.denuncias_upload') }}"><i class="bi bi-cloud-upload"></i> Cargar Denuncias</a></li>
+                        {% endif %}
+                        {% if current_user.has_permission('DATALAB_VIEW') %}
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('datalab.denuncias_dashboard') }}"><i class="bi bi-bar-chart-line"></i> Dashboard Denuncias</a></li>
                         {% endif %}
                     </ul>
                 </li>

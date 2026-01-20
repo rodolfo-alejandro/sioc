@@ -19,8 +19,39 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - sioc_network
+
+  flask:
+    build: .
+    container_name: sioc_flask
+    restart: unless-stopped
+    ports:
+      - "5001:5001"
+    volumes:
+      - .:/app
+      - uploads_data:/app/instance/uploads
+    environment:
+      - FLASK_ENV=development
+      - FLASK_DEBUG=1
+      - DATABASE_URL=mysql+pymysql://sioc_user:sioc_password@mysql:3306/sioc_db
+      - SECRET_KEY=dev-secret-key-change-in-production-use-random-key-here
+      - MAX_CONTENT_LENGTH=20971520
+      - UPLOAD_FOLDER=instance/uploads
+      - SESSION_COOKIE_SECURE=False
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - sioc_network
 
 volumes:
   mysql_data:
     driver: local
+  uploads_data:
+    driver: local
+
+networks:
+  sioc_network:
+    driver: bridge
 

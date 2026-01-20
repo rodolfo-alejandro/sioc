@@ -1,0 +1,155 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Registrar Comercio - SIOC{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-shop"></i> Registrar Comercio</h1>
+    <p class="text-muted">Registre un nuevo comercio en el sistema</p>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('control_comercial.registrar') }}">
+            {{ csrf_token() }}
+            
+            <h5 class="mb-3">Datos del Comercio</h5>
+            
+            <div class="row">
+                <div class="col-md-8 mb-3">
+                    <label for="denominacion" class="form-label">Denominación <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="denominacion" name="denominacion" required maxlength="200">
+                </div>
+                
+                <div class="col-md-4 mb-3">
+                    <label for="rubro_id" class="form-label">Rubro <span class="text-danger">*</span></label>
+                    <select class="form-select" id="rubro_id" name="rubro_id" required>
+                        <option value="">Seleccione...</option>
+                        {% for rubro in datos_referencia.rubros %}
+                        <option value="{{ rubro.id }}">{{ rubro.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                <label for="domicilio" class="form-label">Domicilio <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="domicilio" name="domicilio" required maxlength="300">
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="barrio_id" class="form-label">Barrio</label>
+                    <select class="form-select" id="barrio_id" name="barrio_id">
+                        <option value="">Seleccione...</option>
+                        {% for barrio in datos_referencia.barrios %}
+                        <option value="{{ barrio.id }}">{{ barrio.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="telefono" class="form-label">Teléfono</label>
+                    <input type="text" class="form-control" id="telefono" name="telefono" maxlength="20">
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                <label for="email" class="form-label">Email</label>
+                <input type="email" class="form-control" id="email" name="email" maxlength="100">
+            </div>
+            
+            <h5 class="mb-3 mt-4">Ubicación <span class="text-danger">*</span></h5>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="latitud" class="form-label">Latitud <span class="text-danger">*</span></label>
+                    <input type="number" step="any" class="form-control" id="latitud" name="latitud" required>
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="longitud" class="form-label">Longitud <span class="text-danger">*</span></label>
+                    <input type="number" step="any" class="form-control" id="longitud" name="longitud" required>
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                <div id="map" style="height: 400px; width: 100%; border: 1px solid #ddd; border-radius: 4px;"></div>
+                <small class="form-text text-muted">Haga clic en el mapa para seleccionar la ubicación</small>
+            </div>
+            
+            <h5 class="mb-3 mt-4">Habilitaciones</h5>
+            
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="habilitacion_municipal" name="habilitacion_municipal">
+                        <label class="form-check-label" for="habilitacion_municipal">Habilitación Municipal</label>
+                    </div>
+                    <input type="text" class="form-control mt-2" id="habilitacion_municipal_numero" name="habilitacion_municipal_numero" placeholder="Número" maxlength="50">
+                    <input type="date" class="form-control mt-2" id="habilitacion_municipal_vencimiento" name="habilitacion_municipal_vencimiento" placeholder="Vencimiento">
+                </div>
+                
+                <div class="col-md-4 mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="habilitacion_bomberos" name="habilitacion_bomberos">
+                        <label class="form-check-label" for="habilitacion_bomberos">Habilitación Bomberos</label>
+                    </div>
+                    <input type="text" class="form-control mt-2" id="habilitacion_bomberos_numero" name="habilitacion_bomberos_numero" placeholder="Número" maxlength="50">
+                    <input type="date" class="form-control mt-2" id="habilitacion_bomberos_vencimiento" name="habilitacion_bomberos_vencimiento" placeholder="Vencimiento">
+                </div>
+                
+                <div class="col-md-4 mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="habilitacion_bebidas" name="habilitacion_bebidas">
+                        <label class="form-check-label" for="habilitacion_bebidas">Habilitación Bebidas</label>
+                    </div>
+                    <input type="text" class="form-control mt-2" id="habilitacion_bebidas_numero" name="habilitacion_bebidas_numero" placeholder="Número" maxlength="50">
+                    <input type="date" class="form-control mt-2" id="habilitacion_bebidas_vencimiento" name="habilitacion_bebidas_vencimiento" placeholder="Vencimiento">
+                </div>
+            </div>
+            
+            <h5 class="mb-3 mt-4">Propietario (Opcional)</h5>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="dni_propietario" class="form-label">DNI Propietario</label>
+                    <input type="text" class="form-control" id="dni_propietario" name="dni_propietario" maxlength="10" placeholder="Si existe en el sistema">
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="porcentaje_propietario" class="form-label">Porcentaje</label>
+                    <input type="number" class="form-control" id="porcentaje_propietario" name="porcentaje_propietario" value="100" min="0" max="100">
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                <label for="observaciones" class="form-label">Observaciones</label>
+                <textarea class="form-control" id="observaciones" name="observaciones" rows="3" maxlength="1000"></textarea>
+            </div>
+            
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle"></i> Registrar Comercio
+                </button>
+                <a href="{{ url_for('control_comercial.index') }}" class="btn btn-secondary">
+                    <i class="bi bi-x-circle"></i> Cancelar
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    // Mapa básico - usar geolocalización del navegador
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(function(position) {
+            document.getElementById('latitud').value = position.coords.latitude;
+            document.getElementById('longitud').value = position.coords.longitude;
+        });
+    }
+</script>
+{% endblock %}
+
