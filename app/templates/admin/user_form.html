@@ -69,6 +69,14 @@
                     {% endif %}
                 </div>
             </div>
+
+            <div class="mb-3">
+                {{ form.permissions.label(class="form-label") }}
+                {{ form.permissions(class="form-select", multiple=True) }}
+                <small class="form-text text-muted">
+                    Estos permisos se suman a los del rol seleccionado (no los reemplazan).
+                </small>
+            </div>
             
             <div class="row">
                 <div class="col-md-6 mb-3">

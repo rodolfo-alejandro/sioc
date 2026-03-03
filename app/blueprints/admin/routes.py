@@ -9,6 +9,7 @@ from app.blueprints.admin.services import create_user, update_user, reset_user_p
 from app.services.rbac import require_permission
 from app.models.user import User
 from app.models.role import Role
+from app.models.permission import Permission
 from app.extensions import db
 
 
@@ -62,6 +63,15 @@ def user_new():
         )
         
         if user:
+            # Actualizar permisos adicionales del usuario
+            selected_ids = form.permissions.data or []
+            user.extra_permissions.clear()
+            if selected_ids:
+                perms = Permission.query.filter(Permission.id.in_(selected_ids)).all()
+                for perm in perms:
+                    user.extra_permissions.append(perm)
+            db.session.commit()
+
             flash(f'Usuario {user.username} creado correctamente', 'success')
             return redirect(url_for('admin.users'))
         else:
@@ -87,6 +97,9 @@ def user_edit(user_id):
     # Pre-llenar rol
     if user.roles:
         form.role_id.data = user.roles[0].id
+
+    # Pre-llenar permisos adicionales
+    form.permissions.data = [p.id for p in user.extra_permissions]
     
     # Si no es superadmin, no puede cambiar unidad
     if not current_user.has_role('SUPERADMIN'):
@@ -104,6 +117,15 @@ def user_edit(user_id):
         )
         
         if user:
+            # Actualizar permisos adicionales del usuario
+            selected_ids = form.permissions.data or []
+            user.extra_permissions.clear()
+            if selected_ids:
+                perms = Permission.query.filter(Permission.id.in_(selected_ids)).all()
+                for perm in perms:
+                    user.extra_permissions.append(perm)
+            db.session.commit()
+
             flash(f'Usuario {user.username} actualizado correctamente', 'success')
             return redirect(url_for('admin.users'))
         else:

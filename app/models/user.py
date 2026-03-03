@@ -14,6 +14,13 @@ user_roles = db.Table(
     db.Column('role_id', db.Integer, db.ForeignKey('roles.id'), primary_key=True)
 )
 
+# Tabla de asociación muchos a muchos: permisos adicionales por usuario
+user_permissions = db.Table(
+    'user_permissions',
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
+    db.Column('permission_id', db.Integer, db.ForeignKey('permissions.id'), primary_key=True)
+)
+
 
 class User(UserMixin, db.Model):
     """Modelo de usuario con autenticación y RBAC"""
@@ -31,6 +38,11 @@ class User(UserMixin, db.Model):
     
     # Relaciones
     roles = db.relationship('Role', secondary=user_roles, backref=db.backref('users', lazy='dynamic'))
+    extra_permissions = db.relationship(
+        'Permission',
+        secondary=user_permissions,
+        backref=db.backref('users_with_extra', lazy='dynamic')
+    )
     audit_logs = db.relationship('AuditLog', backref='user', lazy='dynamic')
     datasets = db.relationship('Dataset', backref='user', lazy='dynamic')
     
@@ -48,6 +60,12 @@ class User(UserMixin, db.Model):
         if self.has_role('SUPERADMIN'):
             return True
         
+        # Permisos adicionales asignados directamente al usuario
+        for perm in self.extra_permissions:
+            if perm.code == permission_code:
+                return True
+        
+        # Permisos heredados de los roles
         for role in self.roles:
             if role.has_permission(permission_code):
                 return True
@@ -63,6 +81,8 @@ class User(UserMixin, db.Model):
         for role in self.roles:
             for perm in role.permissions:
                 permissions.add(perm.code)
+        for perm in self.extra_permissions:
+            permissions.add(perm.code)
         return permissions
     
     def __repr__(self):
