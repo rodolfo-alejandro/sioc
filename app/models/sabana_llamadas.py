@@ -102,6 +102,27 @@ class SujetoCompartido(db.Model):
     shared_by = db.relationship('User', foreign_keys=[shared_by_user_id])
 
 
+class SujetoNumero(db.Model):
+    """
+    Relación explícita entre Sujeto y Número telefónico.
+    Permite fijar a qué sujeto pertenece un número, independientemente de en qué cargas aparezca.
+    """
+    __tablename__ = 'sabana_sujeto_numeros'
+
+    id = db.Column(db.Integer, primary_key=True)
+    unidad_id = db.Column(db.Integer, db.ForeignKey('unidades.id'), nullable=False, index=True)
+    sujeto_id = db.Column(db.Integer, db.ForeignKey('sabana_sujetos.id'), nullable=False, index=True)
+    numero = db.Column(db.String(64), nullable=False, index=True)
+    notas = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    unidad = db.relationship('Unidad', backref='sabana_sujeto_numeros')
+    sujeto = db.relationship('Sujeto', backref='numeros_explicit', foreign_keys=[sujeto_id])
+
+    def __repr__(self):
+        return f'<SujetoNumero sujeto={self.sujeto_id} numero={self.numero}>'
+
+
 class ResultadoTraficoGPRS(db.Model):
     """Registros de la hoja 'Resultado de Trafico' de un archivo GPRS."""
     __tablename__ = 'sabana_trafico_gprs'

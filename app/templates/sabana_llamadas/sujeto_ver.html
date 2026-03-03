@@ -28,12 +28,71 @@
 
 <div class="row">
     <div class="col-md-4">
-        <div class="card">
+        <div class="card mb-3">
             <div class="card-body text-center">
                 {% if sujeto.imagen %}
                 <img src="{{ url_for('sabana_llamadas.sujetos_imagen', sujeto_id=sujeto.id) }}" alt="" class="img-fluid rounded" style="max-height:280px;object-fit:cover">
                 {% else %}
                 <i class="bi bi-person-circle text-muted" style="font-size:8rem"></i>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">Números del sujeto</div>
+            <div class="card-body">
+                {% if numeros_exp %}
+                <ul class="list-group list-group-flush mb-3">
+                    {% for n in numeros_exp %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <code>{{ n.numero }}</code>
+                            {% if n.notas %}
+                            <div class="small text-muted">{{ n.notas }}</div>
+                            {% endif %}
+                        </div>
+                        {% if current_user.has_permission('SABANA_LLAMADAS_UPLOAD') and sujeto.user_id == current_user.id %}
+                        <form method="POST" action="{{ url_for('sabana_llamadas.sujetos_del_numero', sujeto_id=sujeto.id, num_id=n.id) }}" onsubmit="return confirm('¿Quitar este número del sujeto?');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-x"></i></button>
+                        </form>
+                        {% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted">Aún no se asignaron números explícitamente a este sujeto.</p>
+                {% endif %}
+
+                {% if numeros_sugeridos %}
+                <div class="mb-2">
+                    <div class="small text-muted mb-1">Números detectados en cargas (sugeridos)</div>
+                    <div class="d-flex flex-wrap gap-1">
+                        {% for num in numeros_sugeridos %}
+                        <form method="POST" action="{{ url_for('sabana_llamadas.sujetos_add_numero', sujeto_id=sujeto.id) }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="numero" value="{{ num }}">
+                            <button type="submit" class="btn btn-sm btn-outline-secondary">
+                                {{ num }} <i class="bi bi-plus"></i>
+                            </button>
+                        </form>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if current_user.has_permission('SABANA_LLAMADAS_UPLOAD') and sujeto.user_id == current_user.id %}
+                <form method="POST" action="{{ url_for('sabana_llamadas.sujetos_add_numero', sujeto_id=sujeto.id) }}" class="mt-2">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-2">
+                        <label class="form-label small mb-1">Agregar número manualmente</label>
+                        <input type="text" name="numero" class="form-control form-control-sm" placeholder="Ej: 3875...">
+                    </div>
+                    <div class="mb-2">
+                        <input type="text" name="notas" class="form-control form-control-sm" placeholder="Notas (opcional)">
+                    </div>
+                    <button type="submit" class="btn btn-sm btn-primary">Agregar número</button>
+                </form>
                 {% endif %}
             </div>
         </div>

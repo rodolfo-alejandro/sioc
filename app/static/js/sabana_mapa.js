@@ -2916,6 +2916,40 @@
             }
         });
 
+        // Inicializar selección de números/IMEIs desde la URL (por ejemplo, links desde Relaciones)
+        var hadUrlNumeros = false;
+        try {
+            var sp = new URLSearchParams(window.location.search || '');
+            var urlNumeros = [];
+            sp.getAll('numeros').forEach(function (v) {
+                if (v != null && String(v).trim()) urlNumeros.push(String(v).trim());
+            });
+            sp.getAll('numeros[]').forEach(function (v) {
+                if (v != null && String(v).trim()) urlNumeros.push(String(v).trim());
+            });
+            urlNumeros.forEach(function (n) { selectedNumeros.add(n); });
+            hadUrlNumeros = urlNumeros.length > 0;
+        } catch (e) {}
+
+        // Si venimos desde Relaciones (números en URL), por defecto mostrar solo VOZ y sin cluster
+        if (hadUrlNumeros) {
+            try {
+                var cbVoz = document.getElementById('tipo-voz');
+                var cbGprs = document.getElementById('tipo-gprs');
+                if (cbVoz) cbVoz.checked = true;
+                if (cbGprs) cbGprs.checked = false;
+                updateDdTipos();
+            } catch (eTipos) {}
+            try {
+                var cbCluster = document.getElementById('toggle-cluster');
+                if (cbCluster && cbCluster.checked) {
+                    cbCluster.checked = false;
+                    try { localStorage.setItem('sabana_cluster_enabled', '0'); } catch (eLs) {}
+                    rebuildMarkersLayer();
+                }
+            } catch (eCl) {}
+        }
+
         fetchFiltros().then(function (data) {
             renderCheckboxes('filtro-sujetos', data.sujetos || [], 'nombre', 'id');
             var cargas = (data.cargas || []).map(function (c) {
@@ -2930,6 +2964,11 @@
         initDropdownSearch();
         renderNumerosSelected();
         renderImeisSelected();
+
+        // Si venimos desde Relaciones con números en la URL, aplicar filtros automáticamente
+        if (hadUrlNumeros) {
+            scheduleAutoApply(400);
+        }
 
         // Precargar provincias/localidades (desde datos subidos)
         fetchProvincias('', { sujeto_ids: [], carga_ids: [], tipos: [] }).then(function (items) {

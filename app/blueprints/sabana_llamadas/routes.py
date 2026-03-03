@@ -29,6 +29,7 @@ from app.models.sabana_llamadas import (
     CargaLlamada,
     CargaLlamadaCompartida,
     SujetoCompartido,
+    SujetoNumero,
     DatoTecnico,
     ResultadoTraficoGPRS,
     ResultadoTraficoVOZ,
@@ -270,6 +271,152 @@ def index():
     return render_template('sabana_llamadas/index.html', cargas=cargas_recientes)
 
 
+@bp.route('/relaciones')
+def relaciones():
+    """Vista de relaciones VOZ (tipo i2 simplificado)."""
+    if not _permiso():
+        return redirect(url_for('core.dashboard'))
+
+    # Leer filtros crudos para reusarlos en el formulario
+    sujeto_id = request.args.get('sujeto_id', type=int)
+    carga_id = request.args.get('carga_id', type=int)
+    numero_raw = (request.args.get('numero') or '').strip()
+    fecha_desde_str = request.args.get('fecha_desde') or ''
+    fecha_hasta_str = request.args.get('fecha_hasta') or ''
+    hora_desde_str = request.args.get('hora_desde') or ''
+    hora_hasta_str = request.args.get('hora_hasta') or ''
+    limit = request.args.get('limit', type=int) or 200
+    if limit < 1:
+        limit = 1
+    if limit > 1000:
+        limit = 1000
+
+    # Parseos para la query
+    fecha_desde = _parse_ymd(fecha_desde_str)
+    fecha_hasta = _parse_ymd(fecha_hasta_str)
+    hora_desde_hm = _normalize_hm(hora_desde_str)
+    hora_hasta_hm = _normalize_hm(hora_hasta_str)
+
+    rows = _query_relaciones_voz(
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        hora_desde_hm=hora_desde_hm,
+        hora_hasta_hm=hora_hasta_hm,
+        sujeto_id=sujeto_id,
+        carga_id=carga_id,
+        numero_filtro=numero_raw or None,
+        max_rows=limit,
+    )
+
+    # Mapear números -> sujeto, priorizando la tabla explícita SujetoNumero
+    numero_set = set()
+    for r in rows:
+        if getattr(r, 'numero_a', None):
+            numero_set.add(str(r.numero_a).strip())
+        if getattr(r, 'numero_b', None):
+            numero_set.add(str(r.numero_b).strip())
+
+    sujetos_por_numero = {}
+    if numero_set:
+        try:
+            # 1) Mapeos explícitos
+            exp_rows = db.session.query(
+                SujetoNumero.numero,
+                Sujeto.id,
+                Sujeto.apodo,
+                Sujeto.nombre,
+                Sujeto.dni,
+                Sujeto.imagen,
+            ).join(Sujeto, SujetoNumero.sujeto_id == Sujeto.id) \
+             .filter(
+                 SujetoNumero.unidad_id == current_user.unidad_id,
+                 SujetoNumero.numero.in_(list(numero_set)),
+             ).order_by(SujetoNumero.numero, Sujeto.id).all()
+
+            for num, sid, apodo, nombre, dni, imagen in exp_rows:
+                key = (str(num) or '').strip()
+                if not key:
+                    continue
+                if key not in sujetos_por_numero:
+                    display = nombre or apodo or (f"DNI {dni}" if dni else f"Sujeto #{sid}")
+                    img_url = url_for('sabana_llamadas.sujetos_imagen', sujeto_id=sid) if imagen else None
+                    sujetos_por_numero[key] = {
+                        'id': sid,
+                        'display': display,
+                        'imagen_url': img_url,
+                    }
+
+            # 2) Si algún número aún no tiene mapeo explícito, usar sujeto de la carga como sugerencia
+            faltantes = [n for n in numero_set if n not in sujetos_por_numero]
+            if faltantes:
+                q_num_imp = db.session.query(
+                    ResultadoTraficoVOZ.numero,
+                    Sujeto.id,
+                    Sujeto.apodo,
+                    Sujeto.nombre,
+                    Sujeto.dni,
+                    Sujeto.imagen,
+                ).join(CargaLlamada, ResultadoTraficoVOZ.carga_id == CargaLlamada.id) \
+                 .join(Sujeto, CargaLlamada.sujeto_id == Sujeto.id) \
+                 .filter(
+                     CargaLlamada.unidad_id == current_user.unidad_id,
+                     _carga_access_predicate(),
+                     ResultadoTraficoVOZ.numero.in_(faltantes),
+                 ).order_by(ResultadoTraficoVOZ.numero, Sujeto.id)
+
+                for num, sid, apodo, nombre, dni, imagen in q_num_imp.all():
+                    key = str(num).strip()
+                    if key and key not in sujetos_por_numero:
+                        display = nombre or apodo or (f"DNI {dni}" if dni else f"Sujeto #{sid}")
+                        img_url = url_for('sabana_llamadas.sujetos_imagen', sujeto_id=sid) if imagen else None
+                        sujetos_por_numero[key] = {
+                            'id': sid,
+                            'display': display,
+                            'imagen_url': img_url,
+                        }
+        except Exception:
+            sujetos_por_numero = {}
+
+    relaciones_data = []
+    for r in rows:
+        sa = sujetos_por_numero.get(str(r.numero_a).strip()) if getattr(r, 'numero_a', None) else None
+        sb = sujetos_por_numero.get(str(r.numero_b).strip()) if getattr(r, 'numero_b', None) else None
+        relaciones_data.append({
+            'numero_a': r.numero_a,
+            'numero_b': r.numero_b,
+            'cantidad': int(r.cantidad or 0),
+            'primera_fecha': r.primera_fecha,
+            'ultima_fecha': r.ultima_fecha,
+            'sujeto_a': sa,
+            'sujeto_b': sb,
+        })
+
+    # Datos para selects
+    sujetos = _sujetos_query_accessible().order_by(Sujeto.apodo, Sujeto.nombre, Sujeto.dni).all()
+    cargas_voz = _cargas_query_accessible().filter(
+        CargaLlamada.tipo == 'voz'
+    ).order_by(CargaLlamada.created_at.desc()).all()
+
+    filtros = {
+        'sujeto_id': sujeto_id,
+        'carga_id': carga_id,
+        'numero': numero_raw,
+        'fecha_desde': fecha_desde_str,
+        'fecha_hasta': fecha_hasta_str,
+        'hora_desde': hora_desde_str,
+        'hora_hasta': hora_hasta_str,
+        'limit': limit,
+    }
+
+    return render_template(
+        'sabana_llamadas/relaciones.html',
+        sujetos=sujetos,
+        cargas_voz=cargas_voz,
+        relaciones=relaciones_data,
+        filtros=filtros,
+    )
+
+
 @bp.route('/sujetos')
 def sujetos_list():
     if not _permiso():
@@ -332,7 +479,49 @@ def sujetos_ver(sujeto_id):
     # (por ejemplo, si el acceso al sujeto vino por una carga compartida).
     cargas = _cargas_query_accessible().filter(CargaLlamada.sujeto_id == sujeto.id) \
         .order_by(CargaLlamada.created_at.desc()).all()
-    return render_template('sabana_llamadas/sujeto_ver.html', sujeto=sujeto, cargas=cargas)
+
+    # Números asignados explícitamente al sujeto
+    numeros_exp = SujetoNumero.query.filter_by(
+        unidad_id=current_user.unidad_id,
+        sujeto_id=sujeto.id,
+    ).order_by(SujetoNumero.numero).all()
+
+    # Números detectados en cargas VOZ/GPRS de este sujeto (sugerencias)
+    numeros_detectados = set()
+    if cargas:
+        carga_ids = [c.id for c in cargas]
+        # VOZ
+        rows_voz = ResultadoTraficoVOZ.query.filter(
+            ResultadoTraficoVOZ.carga_id.in_(carga_ids),
+            ResultadoTraficoVOZ.numero.isnot(None),
+            ResultadoTraficoVOZ.numero != '',
+        ).with_entities(ResultadoTraficoVOZ.numero).distinct().all()
+        for (num,) in rows_voz:
+            n = (num or '').strip()
+            if n:
+                numeros_detectados.add(n)
+        # GPRS
+        rows_gprs = ResultadoTraficoGPRS.query.filter(
+            ResultadoTraficoGPRS.carga_id.in_(carga_ids),
+            ResultadoTraficoGPRS.numero.isnot(None),
+            ResultadoTraficoGPRS.numero != '',
+        ).with_entities(ResultadoTraficoGPRS.numero).distinct().all()
+        for (num,) in rows_gprs:
+            n = (num or '').strip()
+            if n:
+                numeros_detectados.add(n)
+
+    # Quitar los que ya están explícitos
+    exp_set = { (n.numero or '').strip() for n in numeros_exp if n.numero }
+    sugeridos = sorted([n for n in numeros_detectados if n not in exp_set])
+
+    return render_template(
+        'sabana_llamadas/sujeto_ver.html',
+        sujeto=sujeto,
+        cargas=cargas,
+        numeros_exp=numeros_exp,
+        numeros_sugeridos=sugeridos,
+    )
 
 
 @bp.route('/sujetos/<int:sujeto_id>/imagen')
@@ -379,6 +568,55 @@ def sujetos_editar(sujeto_id):
         flash('Sujeto actualizado.', 'success')
         return redirect(url_for('sabana_llamadas.sujetos_ver', sujeto_id=sujeto.id))
     return render_template('sabana_llamadas/sujeto_form.html', form=form, sujeto=sujeto)
+
+
+@bp.route('/sujetos/<int:sujeto_id>/numeros', methods=['POST'])
+def sujetos_add_numero(sujeto_id):
+    if not current_user.has_permission('SABANA_LLAMADAS_UPLOAD'):
+        flash('Sin permiso para editar.', 'warning')
+        return redirect(url_for('sabana_llamadas.sujetos_list'))
+    sujeto = _sujetos_query_accessible().filter(Sujeto.id == sujeto_id).first_or_404()
+    _assert_owner_or_404(sujeto)
+    numero = (request.form.get('numero') or '').strip()
+    if not numero:
+        flash('Número vacío.', 'warning')
+        return redirect(url_for('sabana_llamadas.sujetos_ver', sujeto_id=sujeto.id))
+    # Normalizar básico
+    numero_norm = numero.replace(' ', '')
+    # Evitar duplicados exactos para este sujeto
+    exists_num = SujetoNumero.query.filter_by(
+        unidad_id=current_user.unidad_id,
+        sujeto_id=sujeto.id,
+        numero=numero_norm,
+    ).first()
+    if exists_num:
+        flash('El número ya está asignado a este sujeto.', 'info')
+        return redirect(url_for('sabana_llamadas.sujetos_ver', sujeto_id=sujeto.id))
+
+    sn = SujetoNumero(
+        unidad_id=current_user.unidad_id,
+        sujeto_id=sujeto.id,
+        numero=numero_norm,
+        notas=(request.form.get('notas') or '').strip() or None,
+    )
+    db.session.add(sn)
+    db.session.commit()
+    flash(f'Número {numero_norm} asignado al sujeto.', 'success')
+    return redirect(url_for('sabana_llamadas.sujetos_ver', sujeto_id=sujeto.id))
+
+
+@bp.route('/sujetos/<int:sujeto_id>/numeros/<int:num_id>/eliminar', methods=['POST'])
+def sujetos_del_numero(sujeto_id, num_id):
+    if not current_user.has_permission('SABANA_LLAMADAS_UPLOAD'):
+        flash('Sin permiso para editar.', 'warning')
+        return redirect(url_for('sabana_llamadas.sujetos_list'))
+    sujeto = _sujetos_query_accessible().filter(Sujeto.id == sujeto_id).first_or_404()
+    _assert_owner_or_404(sujeto)
+    sn = SujetoNumero.query.filter_by(id=num_id, sujeto_id=sujeto.id, unidad_id=current_user.unidad_id).first_or_404()
+    db.session.delete(sn)
+    db.session.commit()
+    flash(f'Número {sn.numero} eliminado del sujeto.', 'success')
+    return redirect(url_for('sabana_llamadas.sujetos_ver', sujeto_id=sujeto.id))
 
 
 @bp.route('/gprs/upload', methods=['GET', 'POST'])
@@ -595,6 +833,140 @@ def _apply_fecha_hora_filters(q, Model, fecha_desde, fecha_hasta, hora_desde_hm,
     if hora_hasta_hm:
         q = q.filter(Model.hora.isnot(None), func.substr(_hora_ord_sql(Model.hora), 1, 5) <= hora_hasta_hm)
     return q
+
+
+def _apply_numeros_filter_voz(q, numeros):
+    """
+    Aplica filtro por números a una query sobre ResultadoTraficoVOZ.
+    Comportamiento:
+    - 1 número: OR estándar (coincide en numero u otro, con LIKE).
+    - 2 números: solo llamadas entre ese par (A<->B), en cualquier sentido.
+    - 3+ números: OR estándar entre todos.
+    """
+    if not numeros:
+        return q
+    nums = [str(n or '').strip().lower() for n in numeros if str(n or '').strip()]
+    if not nums:
+        return q
+
+    # Modo "par" cuando hay exactamente dos números
+    if len(nums) == 2:
+        a, b = nums[0], nums[1]
+        cond_pair = or_(
+            and_(func.lower(ResultadoTraficoVOZ.numero) == a, func.lower(ResultadoTraficoVOZ.otro) == b),
+            and_(func.lower(ResultadoTraficoVOZ.numero) == b, func.lower(ResultadoTraficoVOZ.otro) == a),
+        )
+        return q.filter(
+            or_(ResultadoTraficoVOZ.otro.isnot(None), ResultadoTraficoVOZ.numero.isnot(None))
+        ).filter(cond_pair)
+
+    # Caso general: OR entre todos los números (como antes)
+    ors = []
+    for n in nums[:50]:
+        ors.append(func.lower(ResultadoTraficoVOZ.otro).like(f"%{n}%"))
+        ors.append(func.lower(ResultadoTraficoVOZ.numero).like(f"%{n}%"))
+    if ors:
+        q = q.filter(
+            or_(ResultadoTraficoVOZ.otro.isnot(None), ResultadoTraficoVOZ.numero.isnot(None))
+        ).filter(or_(*ors))
+    return q
+
+
+def _query_relaciones_voz(fecha_desde, fecha_hasta, hora_desde_hm, hora_hasta_hm,
+                          sujeto_id=None, carga_id=None, numero_filtro=None, max_rows=500):
+    """
+    Construye y ejecuta una query agregada de relaciones VOZ (numero <-> otro)
+    sobre las cargas accesibles al usuario actual.
+    """
+    # Cargas VOZ accesibles
+    qc = _cargas_query_accessible().filter(
+        CargaLlamada.unidad_id == current_user.unidad_id,
+        CargaLlamada.tipo == 'voz',
+    )
+    if sujeto_id:
+        qc = qc.filter(CargaLlamada.sujeto_id == sujeto_id)
+    if carga_id:
+        qc = qc.filter(CargaLlamada.id == carga_id)
+
+    carga_ids = [cid for (cid,) in qc.with_entities(CargaLlamada.id).all()]
+    if not carga_ids:
+        return []
+
+    q = db.session.query(
+        ResultadoTraficoVOZ.numero.label('numero_a'),
+        ResultadoTraficoVOZ.otro.label('numero_b'),
+        func.count(ResultadoTraficoVOZ.id).label('cantidad'),
+        func.min(ResultadoTraficoVOZ.fecha).label('primera_fecha'),
+        func.max(ResultadoTraficoVOZ.fecha).label('ultima_fecha'),
+    ).filter(
+        ResultadoTraficoVOZ.carga_id.in_(carga_ids),
+        ResultadoTraficoVOZ.numero.isnot(None),
+        ResultadoTraficoVOZ.otro.isnot(None),
+        ResultadoTraficoVOZ.numero != '',
+        ResultadoTraficoVOZ.otro != '',
+    )
+
+    # Filtros de fecha/hora reutilizando helper común
+    q = _apply_fecha_hora_filters(q, ResultadoTraficoVOZ, fecha_desde, fecha_hasta, hora_desde_hm, hora_hasta_hm)
+
+    # Filtro por número concreto (aplicado a cualquiera de las puntas)
+    if numero_filtro:
+        nf = numero_filtro.strip()
+        if nf:
+            q = q.filter(or_(ResultadoTraficoVOZ.numero == nf, ResultadoTraficoVOZ.otro == nf))
+
+    q = q.group_by(ResultadoTraficoVOZ.numero, ResultadoTraficoVOZ.otro) \
+        .order_by(func.count(ResultadoTraficoVOZ.id).desc())
+
+    if max_rows and max_rows > 0:
+        q = q.limit(int(max_rows))
+
+    return q.all()
+
+
+@bp.route('/api/relaciones')
+def api_relaciones():
+    """
+    API JSON de relaciones VOZ (numero <-> otro) agregadas.
+    Pensada para futuras visualizaciones tipo grafo.
+    """
+    if not _permiso():
+        return jsonify({'error': 'forbidden'}), 403
+
+    sujeto_id = request.args.get('sujeto_id', type=int)
+    carga_id = request.args.get('carga_id', type=int)
+    numero_raw = (request.args.get('numero') or '').strip()
+    fecha_desde = _parse_ymd(request.args.get('fecha_desde') or '')
+    fecha_hasta = _parse_ymd(request.args.get('fecha_hasta') or '')
+    hora_desde_hm = _normalize_hm(request.args.get('hora_desde') or '')
+    hora_hasta_hm = _normalize_hm(request.args.get('hora_hasta') or '')
+    limit = request.args.get('limit', type=int) or 500
+    if limit < 1:
+        limit = 1
+    if limit > 2000:
+        limit = 2000
+
+    rows = _query_relaciones_voz(
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        hora_desde_hm=hora_desde_hm,
+        hora_hasta_hm=hora_hasta_hm,
+        sujeto_id=sujeto_id,
+        carga_id=carga_id,
+        numero_filtro=numero_raw or None,
+        max_rows=limit,
+    )
+
+    out = []
+    for r in rows:
+        out.append({
+            'numero_a': r.numero_a,
+            'numero_b': r.numero_b,
+            'cantidad': int(r.cantidad or 0),
+            'primera_fecha': r.primera_fecha.isoformat() if r.primera_fecha else None,
+            'ultima_fecha': r.ultima_fecha.isoformat() if r.ultima_fecha else None,
+        })
+    return jsonify(out)
 
 
 @bp.route('/api/mapa/puntos')
@@ -815,12 +1187,7 @@ def api_mapa_impactos():
             if imeis:
                 q_reg = q_reg.filter(ResultadoTraficoVOZ.imei.isnot(None)).filter(ResultadoTraficoVOZ.imei.in_(imeis))
             if numeros:
-                ors = []
-                for n in numeros[:50]:
-                    ors.append(func.lower(ResultadoTraficoVOZ.otro).like(f"%{n.lower()}%"))
-                    ors.append(func.lower(ResultadoTraficoVOZ.numero).like(f"%{n.lower()}%"))
-                if ors:
-                    q_reg = q_reg.filter(or_(ResultadoTraficoVOZ.otro.isnot(None), ResultadoTraficoVOZ.numero.isnot(None))).filter(or_(*ors))
+                q_reg = _apply_numeros_filter_voz(q_reg, numeros)
             if resumen_flag:
                 # Más eficiente en MySQL: agrupar y contar en DB (evita traer todas las filas).
                 celda_norm_col = _normalize_celda_id_sql(ResultadoTraficoVOZ.celda_id)
