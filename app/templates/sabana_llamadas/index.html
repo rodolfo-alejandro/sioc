@@ -52,6 +52,16 @@
             </div>
         </div>
     </div>
+    <div class="col-md-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-diagram-3 display-4 text-danger"></i>
+                <h5 class="card-title mt-2">Relaciones (VOZ)</h5>
+                <p class="card-text text-muted">Resumen de relaciones entre números basado en llamadas VOZ.</p>
+                <a href="{{ url_for('sabana_llamadas.relaciones') }}" class="btn btn-outline-danger">Ver relaciones</a>
+            </div>
+        </div>
+    </div>
     {% endif %}
     {% if cargas %}
     <div class="col-12 mt-3">
