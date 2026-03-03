@@ -1,0 +1,268 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Mapa - Sabana de Llamadas{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" crossorigin="">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" crossorigin="">
+<link href="{{ url_for('static', filename='css/sabana_mapa.css') }}" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div class="page-header mb-2">
+    <h1 class="h5 mb-0"><i class="bi bi-geo-alt"></i> Mapa de geolocalización</h1>
+</div>
+
+<div class="card mb-3 sabana-filtros-top">
+    <div class="card-header d-flex align-items-center justify-content-between">
+        <span class="d-flex align-items-center gap-2">
+            <span>Filtros</span>
+            <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#sabana-filtros-collapse" aria-expanded="true" aria-controls="sabana-filtros-collapse">
+                <i class="bi bi-chevron-up"></i>
+            </button>
+        </span>
+    </div>
+    <div class="collapse show" id="sabana-filtros-collapse">
+        <div class="card-body p-2">
+        <div class="sabana-filtros-bar">
+            <div class="sabana-filtros-bar-left">
+                <div class="input-group input-group-sm sabana-ig">
+                    <span class="input-group-text">Fecha</span>
+                    <input type="date" class="form-control" id="filtro-fecha-desde" aria-label="Fecha desde">
+                    <span class="input-group-text">a</span>
+                    <input type="date" class="form-control" id="filtro-fecha-hasta" aria-label="Fecha hasta">
+                </div>
+                <div class="input-group input-group-sm sabana-ig">
+                    <span class="input-group-text">Hora</span>
+                    <input type="time" class="form-control" id="filtro-hora-desde" aria-label="Hora desde">
+                    <span class="input-group-text">a</span>
+                    <input type="time" class="form-control" id="filtro-hora-hasta" aria-label="Hora hasta">
+                </div>
+            </div>
+            <div class="sabana-filtros-bar-right">
+                <div class="input-group input-group-sm" style="width: 190px;">
+                    <span class="input-group-text">Ir a #</span>
+                    <input type="number" min="1" class="form-control" id="goto-orden" placeholder="orden">
+                    <button class="btn btn-outline-primary" type="button" id="btn-goto-orden">Ir</button>
+                    <button class="btn btn-outline-secondary" type="button" id="btn-goto-inicio" title="Ir al inicio (#1)">Inicio</button>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-limpiar-filtros">Limpiar</button>
+            </div>
+        </div>
+
+        <div class="mt-1" id="sabana-filtros-avanzados">
+            <div class="row g-1 align-items-end">
+                <div class="col-12 col-md-6 col-lg-2">
+                    <label class="form-label fw-bold mb-0 small">Provincia</label>
+                    <div class="dropdown w-100">
+                        <button class="btn btn-outline-secondary btn-sm w-100 sabana-dd-btn" type="button" id="dd-provincias" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                            Seleccionar…
+                        </button>
+                        <div class="dropdown-menu p-2 sabana-dd-menu w-100" aria-labelledby="dd-provincias">
+                            <input type="text" class="form-control form-control-sm mb-1 sabana-dd-search" placeholder="Buscar provincia…" data-target="filtro-provincias">
+                            <div id="filtro-provincias" class="sabana-filtro-checkboxes sabana-dd-list"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-6 col-lg-2">
+                    <label class="form-label fw-bold mb-0 small">Localidad</label>
+                    <div class="dropdown w-100">
+                        <button class="btn btn-outline-secondary btn-sm w-100 sabana-dd-btn" type="button" id="dd-localidades" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                            Seleccionar…
+                        </button>
+                        <div class="dropdown-menu p-2 sabana-dd-menu w-100" aria-labelledby="dd-localidades">
+                            <input type="text" class="form-control form-control-sm mb-1 sabana-dd-search" placeholder="Buscar localidad…" data-target="filtro-localidades">
+                            <div id="filtro-localidades" class="sabana-filtro-checkboxes sabana-dd-list"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-6 col-lg-2">
+                    <label class="form-label fw-bold mb-0 small">Sujetos</label>
+                    <div class="dropdown w-100">
+                        <button class="btn btn-outline-secondary btn-sm w-100 sabana-dd-btn" type="button" id="dd-sujetos" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                            Seleccionar…
+                        </button>
+                        <div class="dropdown-menu p-2 sabana-dd-menu w-100" aria-labelledby="dd-sujetos">
+                            <input type="text" class="form-control form-control-sm mb-1 sabana-dd-search" placeholder="Buscar sujeto…" data-target="filtro-sujetos">
+                            <div id="filtro-sujetos" class="sabana-filtro-checkboxes sabana-dd-list"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-6 col-lg-2">
+                    <label class="form-label fw-bold mb-0 small">Cargas</label>
+                    <div class="dropdown w-100">
+                        <button class="btn btn-outline-secondary btn-sm w-100 sabana-dd-btn" type="button" id="dd-cargas" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                            Seleccionar…
+                        </button>
+                        <div class="dropdown-menu p-2 sabana-dd-menu w-100" aria-labelledby="dd-cargas">
+                            <input type="text" class="form-control form-control-sm mb-1 sabana-dd-search" placeholder="Buscar carga…" data-target="filtro-cargas">
+                            <div id="filtro-cargas" class="sabana-filtro-checkboxes sabana-dd-list"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-6 col-lg-2">
+                    <label class="form-label fw-bold mb-0 small">Tipo</label>
+                    <div class="dropdown w-100">
+                        <button class="btn btn-outline-secondary btn-sm w-100 sabana-dd-btn" type="button" id="dd-tipos" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                            Seleccionar…
+                        </button>
+                        <div class="dropdown-menu p-2 sabana-dd-menu w-100" aria-labelledby="dd-tipos">
+                            <div id="filtro-tipos" class="sabana-filtro-checkboxes sabana-dd-list">
+                                <div class="form-check"><input class="form-check-input" type="checkbox" id="tipo-gprs" value="gprs"><label class="form-check-label" for="tipo-gprs">GPRS</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" id="tipo-voz" value="voz"><label class="form-check-label" for="tipo-voz">VOZ</label></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-lg-2">
+                    <label class="form-label fw-bold mb-0 small">IMEI</label>
+                    <div class="dropdown w-100">
+                        <button class="btn btn-outline-secondary btn-sm w-100 sabana-dd-btn" type="button" id="dd-imeis" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                            Buscar y seleccionar…
+                        </button>
+                        <div class="dropdown-menu p-2 sabana-dd-menu w-100" aria-labelledby="dd-imeis">
+                            <input type="text" class="form-control form-control-sm mb-1" id="imeis-search" placeholder="Buscar IMEI…">
+                            <div id="imeis-selected" class="mb-1"></div>
+                            <div id="filtro-imeis" class="sabana-filtro-checkboxes sabana-dd-list"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-lg-2">
+                    <label class="form-label fw-bold mb-0 small">Número</label>
+                    <div class="dropdown w-100">
+                        <button class="btn btn-outline-secondary btn-sm w-100 sabana-dd-btn" type="button" id="dd-numeros" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                            Buscar y seleccionar…
+                        </button>
+                        <div class="dropdown-menu p-2 sabana-dd-menu w-100" aria-labelledby="dd-numeros">
+                            <input type="text" class="form-control form-control-sm mb-1" id="numeros-search" placeholder="Buscar número…">
+                            <div id="numeros-selected" class="mb-1"></div>
+                            <div id="filtro-numeros" class="sabana-filtro-checkboxes sabana-dd-list"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-2 d-flex flex-wrap align-items-center gap-2" id="sabana-controles-orden">
+            <div class="form-check form-switch" id="cluster-toggle-wrap">
+                <input class="form-check-input" type="checkbox" role="switch" id="toggle-cluster" checked>
+                <label class="form-check-label small" for="toggle-cluster">Cluster</label>
+            </div>
+
+            <div class="form-check form-switch" id="orden-toggle-wrap">
+                <input class="form-check-input" type="checkbox" role="switch" id="toggle-orden">
+                <label class="form-check-label small" for="toggle-orden">Orden</label>
+            </div>
+
+            <div class="form-check form-switch d-none" id="trazado-toggle-wrap" title="Trazar una línea cronológica sobre el mapa de celdas">
+                <input class="form-check-input" type="checkbox" role="switch" id="toggle-trazado">
+                <label class="form-check-label small" for="toggle-trazado">Trazado</label>
+            </div>
+
+            <div class="d-none align-items-center gap-1" id="trazado-controls">
+                <button type="button" class="btn btn-sm btn-success" id="btn-play-trazado" title="Play trazado"><i class="bi bi-play-fill"></i></button>
+                <button type="button" class="btn btn-sm btn-secondary" id="btn-pause-trazado" title="Pausar trazado"><i class="bi bi-pause-fill"></i></button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-reset-trazado" title="Reiniciar trazado"><i class="bi bi-arrow-counterclockwise"></i></button>
+                <select class="form-select form-select-sm" id="trazado-velocidad" style="width:auto;" title="Segundos por tramo">
+                    <option value="0.5">0,5 s</option>
+                    <option value="1" selected>1 s</option>
+                    <option value="2">2 s</option>
+                    <option value="3">3 s</option>
+                </select>
+                <select class="form-select form-select-sm" id="trazado-pausa" style="width:auto;" title="Pausa en cada punto">
+                    <option value="0">0 s</option>
+                    <option value="2">2 s</option>
+                    <option value="3" selected>3 s</option>
+                    <option value="4">4 s</option>
+                    <option value="5">5 s</option>
+                </select>
+                <span class="small text-muted ms-2" id="trazado-tiempo"></span>
+            </div>
+
+            <div class="form-check form-switch d-none" id="orden-prog-wrap">
+                <input class="form-check-input" type="checkbox" role="switch" id="toggle-orden-prog" checked>
+                <label class="form-check-label small" for="toggle-orden-prog">Progresivo</label>
+            </div>
+            <div class="input-group input-group-sm d-none" id="orden-prog-max-wrap" style="width: auto; max-width: 170px;">
+                <span class="input-group-text">hasta</span>
+                <select class="form-select" id="orden-prog-max" title="Mostrar hasta # (inicial)">
+                    <option value="50">#50</option>
+                    <option value="100" selected>#100</option>
+                    <option value="200">#200</option>
+                    <option value="500">#500</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="panel-ruta" class="d-none mt-3">
+            <label class="form-label fw-bold small">Recorrido (orden fecha/hora)</label>
+            <div class="mb-2">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="ver-linea-completa">
+                    <label class="form-check-label" for="ver-linea-completa">Ver línea completa (si no, la línea se traza al dar Play)</label>
+                </div>
+            </div>
+            <div class="d-flex flex-wrap gap-1 mb-2 align-items-center">
+                <button type="button" class="btn btn-sm btn-success" id="btn-play-ruta" title="Play"><i class="bi bi-play-fill"></i></button>
+                <button type="button" class="btn btn-sm btn-secondary" id="btn-pause-ruta" title="Pausar"><i class="bi bi-pause-fill"></i></button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-reset-ruta" title="Reiniciar"><i class="bi bi-arrow-counterclockwise"></i></button>
+                <label class="small mb-0 ms-2">Velocidad (por tramo):</label>
+                <select class="form-select form-select-sm ms-1" id="ruta-velocidad" style="width: auto;">
+                    <option value="0.5">Rápido (0,5 s por tramo)</option>
+                    <option value="1" selected>Normal (1 s por tramo)</option>
+                    <option value="2">Lento (2 s por tramo)</option>
+                    <option value="3">Muy lento (3 s por tramo)</option>
+                </select>
+                <label class="small mb-0 ms-2">Pausa en cada punto:</label>
+                <select class="form-select form-select-sm ms-1" id="ruta-pausa-lectura" style="width: auto;">
+                    <option value="2">2 s</option>
+                    <option value="3" selected>3 s</option>
+                    <option value="4">4 s</option>
+                    <option value="5">5 s</option>
+                </select>
+            </div>
+            <p class="small text-muted mb-0" id="ruta-info">Puntos: 0</p>
+        </div>
+        </div>
+    </div>
+</div>
+
+<div class="sabana-mapa-wrap">
+    <div id="mapa-sabana" class="sabana-mapa"></div>
+    <button type="button" class="btn btn-light btn-sm sabana-mapa-expand" id="btn-mapa-expand" title="Pantalla completa" aria-label="Pantalla completa">
+        <i class="bi bi-arrows-fullscreen"></i>
+    </button>
+
+    <!-- Panel (sin popups/modales) -->
+    <div id="sabana-panel" class="sabana-panel d-none" role="dialog" aria-label="Detalle">
+        <div class="sabana-panel-header">
+            <div id="sabana-panel-title" class="sabana-panel-title"></div>
+            <div class="d-flex gap-1">
+                <span class="small text-muted d-none align-self-center" id="sabana-panel-pos"></span>
+                <button type="button" class="btn btn-sm btn-outline-secondary d-none" id="sabana-panel-prev" title="Anterior">
+                    <i class="bi bi-chevron-left"></i>
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary d-none" id="sabana-panel-next" title="Siguiente">
+                    <i class="bi bi-chevron-right"></i>
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary d-none" id="sabana-panel-back">Volver</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="sabana-panel-close" aria-label="Cerrar">×</button>
+            </div>
+        </div>
+        <div id="sabana-panel-body" class="sabana-panel-body"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" crossorigin=""></script>
+<script src="{{ url_for('static', filename='js/sabana_mapa.js') }}"></script>
+{% endblock %}

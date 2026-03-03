@@ -1,0 +1,459 @@
+.sabana-mapa-wrap {
+    position: relative;
+}
+
+.sabana-legend {
+    position: absolute;
+    left: 10px;
+    bottom: 10px;
+    z-index: 920;
+    width: min(360px, calc(100% - 20px));
+    background: rgba(255,255,255,0.92);
+    border: 1px solid rgba(0,0,0,0.12);
+    border-radius: 0.5rem;
+    box-shadow: 0 10px 24px rgba(0,0,0,0.16);
+    padding: 0.5rem;
+    max-height: 40%;
+    overflow: auto;
+}
+
+.sabana-legend-title {
+    font-weight: 700;
+    font-size: 0.85rem;
+    margin-bottom: 0.25rem;
+}
+
+.sabana-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    margin-bottom: 0.25rem;
+}
+
+.sabana-legend-swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+    border: 1px solid rgba(0,0,0,0.18);
+    flex: 0 0 14px;
+}
+
+.sabana-legend-note {
+    font-size: 0.75rem;
+    color: rgba(0,0,0,0.6);
+    margin-top: 0.25rem;
+}
+
+.sabana-panel {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    /* Leaflet controls suelen usar z-index ~1000 */
+    z-index: 1200;
+    width: min(420px, calc(100% - 20px));
+    /* Asegura scroll real aunque el contenedor no tenga altura explícita */
+    max-height: calc(100vh - var(--topbar-height, 60px) - 20px);
+    background: var(--bs-body-bg, #fff);
+    border: 1px solid rgba(0,0,0,0.12);
+    border-radius: 0.5rem;
+    box-shadow: 0 12px 28px rgba(0,0,0,0.2);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    resize: both;
+    min-width: 320px;
+    min-height: 220px;
+}
+
+.sabana-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.5rem 0.5rem;
+    border-bottom: 1px solid rgba(0,0,0,0.08);
+    background: rgba(248,249,250,0.9);
+    cursor: move;
+    user-select: none;
+    touch-action: none;
+}
+
+.sabana-panel.dragging {
+    box-shadow: 0 16px 36px rgba(0,0,0,0.28);
+}
+
+.sabana-panel-title {
+    font-weight: 700;
+    font-size: 0.9rem;
+    line-height: 1.1;
+    color: rgba(0,0,0,0.85);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sabana-panel-body {
+    padding: 0.5rem;
+    overflow: auto;
+    flex: 1 1 auto;
+    max-height: none;
+    font-size: 0.9rem;
+}
+
+.sabana-panel-body .table-responsive {
+    overflow-x: auto;
+}
+
+.sabana-panel-body .table {
+    margin-bottom: 0;
+}
+
+.sabana-panel-list tr {
+    cursor: pointer;
+}
+.sabana-panel-list tr:hover {
+    background: rgba(13,110,253,0.06);
+}
+
+.sabana-mapa-expand {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 900;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.18);
+    border: 1px solid rgba(0,0,0,0.08);
+}
+
+/* Pantalla completa real (Fullscreen API): estilos del contenedor */
+.sabana-mapa-wrap:fullscreen {
+    width: 100vw;
+    height: 100vh;
+    background: var(--bs-body-bg, #fff);
+    padding: 0.5rem;
+}
+.sabana-mapa-wrap:fullscreen .sabana-mapa {
+    height: 100%;
+    min-height: unset;
+    border-radius: 0;
+}
+
+/* Safari/legacy */
+.sabana-mapa-wrap:-webkit-full-screen {
+    width: 100vw;
+    height: 100vh;
+    background: var(--bs-body-bg, #fff);
+    padding: 0.5rem;
+}
+.sabana-mapa-wrap:-webkit-full-screen .sabana-mapa {
+    height: 100%;
+    min-height: unset;
+    border-radius: 0;
+}
+
+body.sabana-mapa-fullscreen .page-header,
+body.sabana-mapa-fullscreen .sabana-filtros-top {
+    display: none !important;
+}
+
+body.sabana-mapa-fullscreen .sabana-mapa-wrap {
+    position: fixed;
+    top: var(--topbar-height, 60px);
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1040;
+    background: var(--bs-body-bg, #fff);
+    padding: 0.5rem;
+}
+
+body.sabana-mapa-fullscreen .sabana-mapa {
+    height: calc(100vh - var(--topbar-height, 60px) - 1rem);
+    min-height: unset;
+}
+
+.sabana-mapa {
+    height: calc(100vh - var(--topbar-height, 60px) - 270px);
+    min-height: 520px;
+    width: 100%;
+    border-radius: 0.375rem;
+    border: 1px solid var(--bs-border-color, #dee2e6);
+}
+
+.sabana-filtro-checkboxes {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+/* Filtros arriba: listas más bajas para no robar alto */
+.sabana-filtros-top .sabana-filtro-checkboxes {
+    max-height: 140px;
+}
+
+.sabana-filtros-bar {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+}
+
+.sabana-filtros-bar-left {
+    display: flex;
+    gap: 0.35rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.sabana-filtros-bar-right {
+    display: flex;
+    gap: 0.35rem;
+    align-items: center;
+}
+
+.sabana-ig {
+    width: 360px;
+    max-width: 100%;
+}
+
+.sabana-vista {
+    white-space: nowrap;
+}
+
+.sabana-dd-menu {
+    max-height: 380px;
+    overflow: hidden;
+}
+
+.sabana-dd-list {
+    max-height: 240px;
+    overflow-y: auto;
+}
+
+/* Que los dropdowns parezcan selects (más prolijo tipo Denuncias) */
+.sabana-dd-btn {
+    text-align: left;
+    position: relative;
+    padding-right: 1.75rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.sabana-dd-btn::after {
+    content: "";
+    position: absolute;
+    right: 0.65rem;
+    top: 50%;
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid rgba(0,0,0,0.55);
+    transform: translateY(-30%);
+    pointer-events: none;
+}
+.sabana-dd-btn.btn-outline-secondary::after {
+    border-top-color: rgba(0,0,0,0.55);
+}
+
+.sabana-filtros-top .card-header .btn i {
+    pointer-events: none;
+}
+
+.sabana-filtros-top .form-text.small {
+    margin-top: 0.15rem;
+    line-height: 1.1;
+}
+
+.sabana-filtros-top .dropdown-menu {
+    box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+}
+
+#numeros-selected .badge {
+    margin-right: 0.25rem;
+    margin-bottom: 0.25rem;
+    cursor: pointer;
+}
+
+#imeis-selected .badge {
+    margin-right: 0.25rem;
+    margin-bottom: 0.25rem;
+    cursor: pointer;
+}
+
+@media (max-width: 991.98px) {
+    .sabana-mapa {
+        height: calc(100vh - var(--topbar-height, 60px) - 320px);
+        min-height: 420px;
+    }
+    .sabana-filtros-top .sabana-filtro-checkboxes {
+        max-height: 180px;
+    }
+    .sabana-dd-menu {
+        max-height: 520px;
+    }
+    .sabana-dd-list {
+        max-height: 320px;
+    }
+    .sabana-ig {
+        width: 100%;
+    }
+}
+
+.sabana-filtro-checkboxes .form-check {
+    margin-bottom: 0.25rem;
+}
+
+/* Mini-pines de explosión de impactos (al hacer clic en celda) */
+/* Pines de celdas: contador (prolijo) */
+.sabana-celda-pin {
+    background: none !important;
+    border: none !important;
+}
+.sabana-celda-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 999px;
+    background: #0d6efd;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    border: 2px solid rgba(255,255,255,0.9);
+}
+.sabana-celda-num:hover {
+    background: #0a58ca;
+    transform: translateY(-1px);
+}
+
+/* Spiderfy: pines numerados + líneas desde el centro */
+.sabana-spider-pin {
+    background: none !important;
+    border: none !important;
+}
+.sabana-spider-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 999px;
+    background: #ffffff;
+    color: #0d6efd;
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+    border: 2px solid rgba(13,110,253,0.85);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.18);
+}
+.sabana-spider-num:hover {
+    background: #f8f9fa;
+    transform: scale(1.06);
+}
+.sabana-spider-num.sabana-spider-num-selected {
+    border-color: #ffc107;
+    box-shadow: 0 0 0 3px rgba(255,193,7,0.35), 0 3px 14px rgba(0,0,0,0.22);
+    transform: scale(1.1);
+}
+.sabana-spider-leg {
+    opacity: 0.85;
+}
+
+/* Orden destacado del impacto seleccionado (#1, #2, etc.) */
+.sabana-selected-ord-icon {
+    background: none !important;
+    border: none !important;
+}
+.sabana-selected-ord {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    border-radius: 999px;
+    background: rgba(255,193,7,0.98);
+    color: rgba(0,0,0,0.88);
+    font-size: 16px;
+    font-weight: 900;
+    border: 2px solid rgba(255,255,255,0.95);
+    box-shadow: 0 3px 14px rgba(0,0,0,0.28);
+    animation: sabanaPulse 1.15s ease-in-out infinite;
+}
+
+@keyframes sabanaPulse {
+    0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255,193,7,0.45), 0 3px 14px rgba(0,0,0,0.28); }
+    65% { transform: scale(1.08); box-shadow: 0 0 0 14px rgba(255,193,7,0), 0 3px 14px rgba(0,0,0,0.28); }
+    100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255,193,7,0), 0 3px 14px rgba(0,0,0,0.28); }
+}
+
+/* Números de la ruta (vista orden fecha/hora) */
+.sabana-ruta-num {
+    background: none !important;
+    border: none !important;
+}
+.sabana-ruta-numero {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #198754;
+    color: #fff;
+    font-size: 11px;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+}
+.sabana-ruta-numero:hover {
+    background: #157347;
+}
+
+/* Icono de auto para animación del recorrido */
+.sabana-marker-auto {
+    background: none !important;
+    border: none !important;
+}
+.sabana-auto-icon {
+    font-size: 28px;
+    line-height: 1;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
+}
+
+/* Modal detalle más chico para que entre en pantalla */
+#modal-impacto-detalle .modal-dialog {
+    max-width: 420px;
+}
+#modal-impacto-detalle .modal-body {
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+/* Modal detalle posicionado junto al punto en el mapa (durante recorrido) */
+#modal-impacto-detalle.sabana-detalle-en-punto .modal-dialog {
+    position: fixed;
+    margin: 0;
+    max-width: 300px;
+    transform: none;
+}
+#modal-impacto-detalle.sabana-detalle-en-punto .modal-body {
+    max-height: 50vh;
+    font-size: 0.875rem;
+}
+#modal-impacto-detalle.sabana-detalle-en-punto .modal-header {
+    padding: 0.35rem 0.5rem;
+}
+#modal-impacto-detalle.sabana-detalle-en-punto .modal-header .modal-title {
+    font-size: 0.9rem;
+}
+#modal-impacto-detalle.sabana-detalle-en-punto .modal-body .table {
+    font-size: 0.8rem;
+}
+#modal-impacto-detalle.sabana-detalle-en-punto .modal-body .table th,
+#modal-impacto-detalle.sabana-detalle-en-punto .modal-body .table td {
+    padding: 0.2rem 0.35rem;
+}

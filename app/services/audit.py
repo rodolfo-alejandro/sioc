@@ -1,7 +1,7 @@
 """
 Servicio de Auditoría
 """
-from flask import request
+from flask import request, has_request_context
 from flask_login import current_user
 from app.extensions import db
 from app.models.audit_log import AuditLog
@@ -18,13 +18,17 @@ def audit_log(action, details=None, user_id=None):
     """
     try:
         if user_id is None:
-            user_id = current_user.id if current_user.is_authenticated else None
+            # current_user requiere request context; fuera de request (scripts/CLI) dejamos user_id=None
+            if has_request_context():
+                user_id = current_user.id if current_user.is_authenticated else None
+            else:
+                user_id = None
         
         log_entry = AuditLog(
             user_id=user_id,
             action=action,
             details=details,
-            ip=request.remote_addr if request else None
+            ip=request.remote_addr if has_request_context() else None
         )
         db.session.add(log_entry)
         db.session.commit()

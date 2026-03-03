@@ -1,0 +1,38 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Vincular carga - Sabana de Llamadas{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-link-45deg"></i> Vincular carga</h1>
+    <p class="text-muted">Seleccione el sujeto al que debe vincularse este archivo o deje "Sin sujeto".</p>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <dl class="row mb-0">
+            <dt class="col-sm-2">Tipo</dt>
+            <dd class="col-sm-10"><span class="badge bg-{{ 'success' if carga.tipo == 'gprs' else 'info' }}">{{ carga.tipo|upper }}</span></dd>
+            <dt class="col-sm-2">Archivo</dt>
+            <dd class="col-sm-10">{{ carga.nombre_archivo or 'Sin nombre' }}</dd>
+            <dt class="col-sm-2">Fecha</dt>
+            <dd class="col-sm-10">{{ carga.created_at|localtime if carga.created_at else '' }}</dd>
+        </dl>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST" action="{{ request.url }}">
+            {{ form.hidden_tag() }}
+            <div class="mb-3">
+                {{ form.sujeto_id.label(class="form-label") }}
+                {{ form.sujeto_id(class="form-select") }}
+            </div>
+            <button type="submit" class="btn btn-primary">Guardar</button>
+            <a href="{{ url_for('sabana_llamadas.cargas_list') }}" class="btn btn-secondary">Volver</a>
+        </form>
+    </div>
+</div>
+{% endblock %}
+

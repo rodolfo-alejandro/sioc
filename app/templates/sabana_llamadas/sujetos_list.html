@@ -1,0 +1,62 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Sujetos - Sabana de Llamadas{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center flex-wrap">
+    <div>
+        <h1><i class="bi bi-person"></i> Sujetos</h1>
+        <p class="text-muted">Personas de interés para vincular cargas GPRS/VOZ</p>
+    </div>
+    {% if current_user.has_permission('SABANA_LLAMADAS_UPLOAD') %}
+    <a href="{{ url_for('sabana_llamadas.sujetos_nuevo') }}" class="btn btn-primary"><i class="bi bi-plus"></i> Nuevo sujeto</a>
+    {% endif %}
+</div>
+
+<div class="card">
+    <div class="card-body">
+        {% if sujetos %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Foto</th>
+                        <th>Apodo / Nombre</th>
+                        <th>DNI</th>
+                        <th>Cargas</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in sujetos %}
+                    <tr>
+                        <td>
+                            {% if s.imagen %}
+                            <img src="{{ url_for('sabana_llamadas.sujetos_imagen', sujeto_id=s.id) }}" alt="" class="rounded" style="width:48px;height:48px;object-fit:cover">
+                            {% else %}
+                            <span class="text-muted"><i class="bi bi-person-circle" style="font-size:2rem"></i></span>
+                            {% endif %}
+                        </td>
+                        <td>{{ s.display_name() }}</td>
+                        <td>{{ s.dni or '—' }}</td>
+                        <td>{{ cargas_count.get(s.id, 0) }}</td>
+                        <td>
+                            <a href="{{ url_for('sabana_llamadas.sujetos_ver', sujeto_id=s.id) }}" class="btn btn-sm btn-outline-primary">Ver</a>
+                            {% if current_user.has_permission('SABANA_LLAMADAS_UPLOAD') and s.user_id == current_user.id %}
+                            <a href="{{ url_for('sabana_llamadas.sujetos_editar', sujeto_id=s.id) }}" class="btn btn-sm btn-outline-secondary">Editar</a>
+                            {% endif %}
+                            {% if s.user_id != current_user.id %}
+                            <span class="badge bg-warning text-dark ms-1">Compartido</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted mb-0">No hay sujetos. Cree uno para vincular importaciones.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

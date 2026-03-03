@@ -2,14 +2,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Instalar dependencias del sistema
-RUN apt-get update && apt-get install -y \
-    gcc \
-    default-libmysqlclient-dev \
-    pkg-config \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copiar requirements y instalar dependencias Python
+# PyMySQL es puro Python, no hace falta gcc ni libmysqlclient-dev
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 

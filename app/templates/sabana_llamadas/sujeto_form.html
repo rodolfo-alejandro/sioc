@@ -1,0 +1,63 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}{{ 'Editar sujeto' if sujeto else 'Nuevo sujeto' }} - Sabana de Llamadas{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-person"></i> {{ 'Editar sujeto' if sujeto else 'Nuevo sujeto' }}</h1>
+    <p class="text-muted">Vincule después las cargas GPRS/VOZ a este sujeto.</p>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body">
+                <form method="POST" action="{{ request.url }}" enctype="multipart/form-data">
+                    {{ form.hidden_tag() }}
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            {{ form.apodo.label(class="form-label") }}
+                            {{ form.apodo(class="form-control" + (" is-invalid" if form.apodo.errors else "")) }}
+                            {% if form.apodo.errors %}<div class="invalid-feedback">{% for e in form.apodo.errors %}{{ e }}{% endfor %}</div>{% endif %}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            {{ form.nombre.label(class="form-label") }}
+                            {{ form.nombre(class="form-control" + (" is-invalid" if form.nombre.errors else "")) }}
+                            {% if form.nombre.errors %}<div class="invalid-feedback">{% for e in form.nombre.errors %}{{ e }}{% endfor %}</div>{% endif %}
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        {{ form.dni.label(class="form-label") }}
+                        {{ form.dni(class="form-control" + (" is-invalid" if form.dni.errors else "")) }}
+                        {% if form.dni.errors %}<div class="invalid-feedback">{% for e in form.dni.errors %}{{ e }}{% endfor %}</div>{% endif %}
+                    </div>
+                    <div class="mb-3">
+                        {{ form.persona_id.label(class="form-label") }}
+                        {{ form.persona_id(class="form-select" + (" is-invalid" if form.persona_id.errors else "")) }}
+                        {% if form.persona_id.errors %}<div class="invalid-feedback">{% for e in form.persona_id.errors %}{{ e }}{% endfor %}</div>{% endif %}
+                    </div>
+                    <div class="mb-3">
+                        {{ form.observaciones.label(class="form-label") }}
+                        {{ form.observaciones(class="form-control", rows=3) }}
+                    </div>
+                    <div class="mb-3">
+                        {{ form.imagen.label(class="form-label") }}
+                        {{ form.imagen(class="form-control" + (" is-invalid" if form.imagen.errors else ""), accept=".jpg,.jpeg,.png,.gif,.webp") }}
+                        {% if form.imagen.errors %}<div class="invalid-feedback">{% for e in form.imagen.errors %}{{ e }}{% endfor %}</div>{% endif %}
+                        {% if sujeto and sujeto.imagen %}
+                        <small class="text-muted">Hay una foto cargada. Suba otra para reemplazar.</small>
+                        {% endif %}
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">Guardar</button>
+                        <a href="{{ url_for('sabana_llamadas.sujetos_list') }}" class="btn btn-secondary">Cancelar</a>
+                        {% if sujeto %}
+                        <a href="{{ url_for('sabana_llamadas.sujetos_ver', sujeto_id=sujeto.id) }}" class="btn btn-outline-secondary">Ver</a>
+                        {% endif %}
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

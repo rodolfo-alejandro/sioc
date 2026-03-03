@@ -1,0 +1,182 @@
+(function () {
+    'use strict';
+
+    var baseUrl = document.body.getAttribute('data-sabana-base') || '';
+    var modalEl = null;
+    var modal = null;
+    var currentType = null; // 'carga' | 'sujeto'
+    var currentId = null;
+    var searchTimer = null;
+    var usersQueryToken = 0;
+
+    function getCsrfToken() {
+        var meta = document.querySelector('meta[name="csrf-token"]');
+        return meta ? (meta.getAttribute('content') || '') : '';
+    }
+
+    function api(path, opts) {
+        opts = opts || {};
+        opts.headers = opts.headers || {};
+        opts.headers['Accept'] = 'application/json';
+        var token = getCsrfToken();
+        if (token) {
+            opts.headers['X-CSRFToken'] = token;
+            opts.headers['X-CSRF-Token'] = token;
+        }
+        return fetch(baseUrl + path, opts);
+    }
+
+    function setText(id, txt) {
+        var el = document.getElementById(id);
+        if (el) el.textContent = txt || '';
+    }
+
+    function renderCurrentShares(items) {
+        var box = document.getElementById('sabana-share-current');
+        if (!box) return;
+        var arr = Array.isArray(items) ? items : [];
+        if (!arr.length) {
+            box.innerHTML = '<div class="text-muted small">Sin compartidos.</div>';
+            return;
+        }
+        box.innerHTML = arr.map(function (u) {
+            var label = (u.username || ('Usuario ' + u.id)) + (u.email ? (' (' + u.email + ')') : '');
+            return (
+                '<div class="d-flex justify-content-between align-items-center border rounded px-2 py-1 mb-1">' +
+                '<div class="small">' + escapeHtml(label) + '</div>' +
+                '<button type="button" class="btn btn-sm btn-outline-danger" data-remove-user="' + u.id + '">Quitar</button>' +
+                '</div>'
+            );
+        }).join('');
+        box.querySelectorAll('[data-remove-user]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var uid = parseInt(this.getAttribute('data-remove-user'), 10);
+                if (!uid) return;
+                removeShare(uid);
+            });
+        });
+    }
+
+    function renderUserResults(items) {
+        var box = document.getElementById('sabana-share-results');
+        if (!box) return;
+        var arr = Array.isArray(items) ? items : [];
+        if (!arr.length) {
+            box.innerHTML = '<div class="text-muted small">Sin resultados.</div>';
+            return;
+        }
+        box.innerHTML = arr.map(function (u) {
+            var label = (u.username || ('Usuario ' + u.id)) + (u.email ? (' (' + u.email + ')') : '');
+            return (
+                '<div class="d-flex justify-content-between align-items-center border rounded px-2 py-1 mb-1">' +
+                '<div class="small">' + escapeHtml(label) + '</div>' +
+                '<button type="button" class="btn btn-sm btn-primary" data-add-user="' + u.id + '">Agregar</button>' +
+                '</div>'
+            );
+        }).join('');
+        box.querySelectorAll('[data-add-user]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var uid = parseInt(this.getAttribute('data-add-user'), 10);
+                if (!uid) return;
+                addShare(uid);
+            });
+        });
+    }
+
+    function escapeHtml(s) {
+        var div = document.createElement('div');
+        div.textContent = s == null ? '' : String(s);
+        return div.innerHTML;
+    }
+
+    function sharesPath() {
+        if (!currentType || !currentId) return null;
+        return '/sabana-llamadas/api/share/' + currentType + '/' + currentId;
+    }
+
+    function loadShares() {
+        var p = sharesPath();
+        if (!p) return;
+        api(p, { method: 'GET' })
+            .then(function (r) { return r.json(); })
+            .then(function (items) { renderCurrentShares(items); })
+            .catch(function () { renderCurrentShares([]); });
+    }
+
+    function addShare(userId) {
+        var p = sharesPath();
+        if (!p) return;
+        api(p, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: userId })
+        }).then(function () {
+            loadShares();
+        });
+    }
+
+    function removeShare(userId) {
+        var p = sharesPath();
+        if (!p) return;
+        api(p + '?user_id=' + encodeURIComponent(String(userId)), { method: 'DELETE' })
+            .then(function () { loadShares(); });
+    }
+
+    function searchUsers(q) {
+        var tok = ++usersQueryToken;
+        api('/sabana-llamadas/api/share/users?q=' + encodeURIComponent(q || ''), { method: 'GET' })
+            .then(function (r) { return r.json(); })
+            .then(function (items) {
+                if (tok !== usersQueryToken) return;
+                renderUserResults(items);
+            })
+            .catch(function () {
+                if (tok !== usersQueryToken) return;
+                renderUserResults([]);
+            });
+    }
+
+    function openShareModal(type, id, title) {
+        currentType = type;
+        currentId = id;
+        setText('sabana-share-title', title || 'Compartir');
+        var inp = document.getElementById('sabana-share-search');
+        if (inp) inp.value = '';
+        renderUserResults([]);
+        renderCurrentShares([]);
+        loadShares();
+        if (modal) modal.show();
+    }
+
+    function init() {
+        modalEl = document.getElementById('sabanaShareModal');
+        if (!modalEl) return;
+        modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+
+        document.querySelectorAll('[data-sabana-share]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var type = this.getAttribute('data-share-type');
+                var id = parseInt(this.getAttribute('data-share-id'), 10);
+                var title = this.getAttribute('data-share-title') || '';
+                if (!type || !id) return;
+                openShareModal(type, id, title);
+            });
+        });
+
+        var inp = document.getElementById('sabana-share-search');
+        if (inp) {
+            inp.addEventListener('input', function () {
+                var q = (this.value || '').trim();
+                if (searchTimer) clearTimeout(searchTimer);
+                searchTimer = setTimeout(function () { searchUsers(q); }, 250);
+            });
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();
+

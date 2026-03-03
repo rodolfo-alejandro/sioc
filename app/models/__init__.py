@@ -29,6 +29,9 @@ from app.models.entrevistas import (
 from app.models.grupos import GrupoIntervencion, PersonaGrupo
 from app.models.relaciones import RelacionPersona, OrganizacionCriminal, PersonaOrganizacion
 from app.models.operativos import TipoOperativo, OperativoActivo
+from app.models.sabana_llamadas import (
+    Sujeto, CargaLlamada, ResultadoTraficoGPRS, ResultadoTraficoVOZ, DatoTecnico
+)
 
 __all__ = [
     'User', 'Role', 'Permission', 'Unidad', 'AuditLog', 'Dataset', 'DenunciaWeb',
@@ -43,6 +46,7 @@ __all__ = [
     'EntrevistaPuertaPuerta', 'PersonaEntrevista', 'CodigoQR', 'RespuestaQR',
     'GrupoIntervencion', 'PersonaGrupo',
     'RelacionPersona', 'OrganizacionCriminal', 'PersonaOrganizacion',
-    'TipoOperativo', 'OperativoActivo'
+    'TipoOperativo', 'OperativoActivo',
+    'Sujeto', 'CargaLlamada', 'ResultadoTraficoGPRS', 'ResultadoTraficoVOZ', 'DatoTecnico'
 ]
 

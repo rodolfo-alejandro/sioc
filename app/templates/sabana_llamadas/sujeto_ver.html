@@ -1,0 +1,116 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}{{ sujeto.display_name() }} - Sabana de Llamadas{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center flex-wrap">
+    <div>
+        <h1><i class="bi bi-person"></i> {{ sujeto.display_name() }}</h1>
+        <p class="text-muted">Sujeto de interés</p>
+    </div>
+    <div class="d-flex gap-2">
+        {% if sujeto.user_id != current_user.id %}
+        <span class="badge bg-warning text-dark align-self-center">Compartido</span>
+        {% endif %}
+        {% if current_user.has_permission('SABANA_LLAMADAS_UPLOAD') and sujeto.user_id == current_user.id %}
+        <button type="button"
+                class="btn btn-outline-secondary"
+                data-sabana-share
+                data-share-type="sujeto"
+                data-share-id="{{ sujeto.id }}"
+                data-share-title="Compartir sujeto {{ sujeto.display_name() }}">
+            Compartir
+        </button>
+        <a href="{{ url_for('sabana_llamadas.sujetos_editar', sujeto_id=sujeto.id) }}" class="btn btn-primary">Editar</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body text-center">
+                {% if sujeto.imagen %}
+                <img src="{{ url_for('sabana_llamadas.sujetos_imagen', sujeto_id=sujeto.id) }}" alt="" class="img-fluid rounded" style="max-height:280px;object-fit:cover">
+                {% else %}
+                <i class="bi bi-person-circle text-muted" style="font-size:8rem"></i>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">Datos</div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-3">Apodo</dt>
+                    <dd class="col-sm-9">{{ sujeto.apodo or '—' }}</dd>
+                    <dt class="col-sm-3">Nombre</dt>
+                    <dd class="col-sm-9">{{ sujeto.nombre or '—' }}</dd>
+                    <dt class="col-sm-3">DNI</dt>
+                    <dd class="col-sm-9">{{ sujeto.dni or '—' }}</dd>
+                    <dt class="col-sm-3">Observaciones</dt>
+                    <dd class="col-sm-9">{{ sujeto.observaciones or '—' }}</dd>
+                </dl>
+            </div>
+        </div>
+        <div class="card mt-3">
+            <div class="card-header">Cargas vinculadas ({{ cargas|length }})</div>
+            <div class="card-body">
+                {% if cargas %}
+                <ul class="list-group list-group-flush">
+                    {% for c in cargas %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="badge bg-{{ 'success' if c.tipo == 'gprs' else 'info' }}">{{ c.tipo|upper }}</span>
+                            {{ c.nombre_archivo or 'Sin nombre' }}
+                            <small class="text-muted d-block">{{ c.created_at|localtime if c.created_at else '' }}</small>
+                        </div>
+                        {% if current_user.has_permission('SABANA_LLAMADAS_UPLOAD') and c.user_id == current_user.id %}
+                        <form method="POST" action="{{ url_for('sabana_llamadas.cargas_eliminar', carga_id=c.id) }}" onsubmit="return confirm('¿Eliminar definitivamente esta carga y todos sus registros?');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm btn-outline-danger">Eliminar</button>
+                        </form>
+                        {% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted mb-0">Sin cargas. Suba un archivo GPRS o VOZ y vincule a este sujeto.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Compartir -->
+<div class="modal fade" id="sabanaShareModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="sabana-share-title">Compartir</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <label class="form-label small mb-1">Buscar usuario</label>
+        <input type="text" class="form-control form-control-sm mb-2" id="sabana-share-search" placeholder="Buscar por usuario o email…">
+        <div class="mb-3">
+          <div class="small text-muted mb-1">Resultados</div>
+          <div id="sabana-share-results"></div>
+        </div>
+        <div>
+          <div class="small text-muted mb-1">Compartido con</div>
+          <div id="sabana-share-current"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/sabana_share.js') }}"></script>
+{% endblock %}

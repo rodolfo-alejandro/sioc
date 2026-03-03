@@ -69,6 +69,28 @@
                     </ul>
                 </li>
                 
+                <!-- Sabana de Llamadas -->
+                {% if current_user.has_permission('SABANA_LLAMADAS_VIEW') or current_user.has_permission('SABANA_LLAMADAS_UPLOAD') %}
+                <li class="nav-item">
+                    <a class="nav-link" href="#" data-bs-toggle="collapse" data-bs-target="#submenuSabana">
+                        <i class="bi bi-telephone"></i> Sabana de Llamadas
+                        <i class="bi bi-chevron-down ms-auto"></i>
+                    </a>
+                    <ul class="nav flex-column collapse" id="submenuSabana">
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('sabana_llamadas.index') }}"><i class="bi bi-house"></i> Inicio</a></li>
+                        {% if current_user.has_permission('SABANA_LLAMADAS_UPLOAD') %}
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('sabana_llamadas.sujetos_list') }}"><i class="bi bi-person"></i> Sujetos</a></li>
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('sabana_llamadas.cargas_list') }}"><i class="bi bi-file-earmark-spreadsheet"></i> Cargas</a></li>
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('sabana_llamadas.gprs_upload') }}"><i class="bi bi-cloud-upload"></i> Cargar GPRS</a></li>
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('sabana_llamadas.voz_upload') }}"><i class="bi bi-cloud-upload"></i> Cargar VOZ</a></li>
+                        {% endif %}
+                        {% if current_user.has_permission('SABANA_LLAMADAS_VIEW') %}
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('sabana_llamadas.mapa') }}"><i class="bi bi-geo-alt"></i> Mapa</a></li>
+                        {% endif %}
+                    </ul>
+                </li>
+                {% endif %}
+
                 <!-- DataLab -->
                 <li class="nav-item">
                     <a class="nav-link" href="#" data-bs-toggle="collapse" data-bs-target="#submenuDataLab">

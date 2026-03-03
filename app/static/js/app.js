@@ -13,18 +13,41 @@ function initSidebar() {
     const sidebarOverlay = document.getElementById('sidebarOverlay');
     
     if (!sidebar) return;
-    
-    // Toggle en desktop (colapsar/expandir)
-    if (window.innerWidth > 991) {
-        // Por ahora, siempre visible en desktop
-        // Se puede agregar un botón para colapsar si se desea
+
+    const STORAGE_KEY = 'sioc_sidebar_collapsed';
+
+    function isDesktop() {
+        return window.innerWidth > 991;
     }
+
+    function setDesktopCollapsed(collapsed) {
+        sidebar.classList.toggle('collapsed', !!collapsed);
+        try {
+            localStorage.setItem(STORAGE_KEY, collapsed ? '1' : '0');
+        } catch (e) {}
+    }
+
+    function restoreDesktopState() {
+        if (!isDesktop()) return;
+        let collapsed = false;
+        try {
+            collapsed = localStorage.getItem(STORAGE_KEY) === '1';
+        } catch (e) {}
+        sidebar.classList.toggle('collapsed', collapsed);
+    }
+
+    restoreDesktopState();
     
     // Toggle en mobile (offcanvas)
     if (sidebarToggle) {
         sidebarToggle.addEventListener('click', function() {
+            if (isDesktop()) {
+                setDesktopCollapsed(!sidebar.classList.contains('collapsed'));
+                return;
+            }
+
             sidebar.classList.toggle('show');
-            sidebarOverlay.classList.toggle('show');
+            if (sidebarOverlay) sidebarOverlay.classList.toggle('show');
         });
     }
     
@@ -41,6 +64,7 @@ function initSidebar() {
         if (window.innerWidth > 991) {
             sidebar.classList.remove('show');
             sidebarOverlay.classList.remove('show');
+            restoreDesktopState();
         }
     });
     

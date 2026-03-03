@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{% block title %}SIOC{% endblock %}</title>
     
     <!-- Bootstrap 5 CSS -->
@@ -16,7 +17,7 @@
     
     {% block extra_head %}{% endblock %}
 </head>
-<body>
+<body data-sabana-base="{{ request.script_root }}">
     {% if current_user.is_authenticated %}
         {% include 'layouts/partials_topbar.html' %}
         {% include 'layouts/partials_sidebar.html' %}

@@ -305,6 +305,22 @@ Los logs se almacenan en la tabla `audit_logs`.
 - **Buscador global**: Filtra elementos del menú en tiempo real
 - **Tema institucional**: Gris/azul suave, profesional
 
+## 📞 Módulo Sabana de Llamadas
+
+Módulo para análisis de tráfico GPRS y VOZ (sabanas de llamadas):
+
+- **Sujetos**: Personas de interés (apodo, nombre, DNI, imagen). Se pueden crear sin identificación previa y completar datos después.
+- **Cargas**: Importación de archivos Excel (.xls, .xlsx) GPRS o VOZ, con vinculación opcional a un sujeto.
+- **Mapa**: Visualización de geolocalización (lat/long) de datos técnicos, con **filtros de múltiple selección** (checkboxes por sujetos, cargas y tipo GPRS/VOZ).
+
+- **Mapa (vista impactos)**: Cada pin es una celda (antena). Al hacer clic se listan todos los registros de tráfico en esa celda; al elegir "Ver" en uno se muestra el detalle completo del registro.
+
+Permisos: `SABANA_LLAMADAS_VIEW`, `SABANA_LLAMADAS_UPLOAD`. Rutas bajo `/sabana-llamadas/`. HTML, JS y CSS en archivos separados (sin inline).
+
+Si la base de datos ya existía antes de añadir la vista de impactos, agregar la columna para enlazar celdas con tráfico:  
+`ALTER TABLE sabana_datos_tecnicos ADD COLUMN celda_id VARCHAR(100) NULL AFTER tipo;`  
+(opcional: `CREATE INDEX ix_sabana_datos_tecnicos_celda_id ON sabana_datos_tecnicos(celda_id);`). Las cargas nuevas rellenan `celda_id` automáticamente desde la hoja "Datos Tecnicos" (columna CeldaID).
+
 ## 🚧 Módulos Futuros (Placeholders)
 
 Los siguientes módulos están preparados en el menú pero aún no implementados:
@@ -337,6 +353,12 @@ docker compose stop mysql
 ```bash
 docker compose start mysql
 ```
+
+**Si la app demora mucho o sale "Lost connection to MySQL" (2013 / timed out):**
+- Comprobar que MySQL esté en marcha: `docker compose ps` (o Docker Desktop).
+- Si usas Flask local, levantar primero MySQL: `docker compose up -d mysql` y esperar unos segundos.
+- En `app/config.py` los timeouts están en 30 s (conexión) y 60 s (lectura/escritura); si sigue fallando, se pueden subir.
+- La API de ruta limita a 5000 puntos (si hay más, se muestrean de todo el recorrido). En el mapa se dibujan como máximo ~600 marcadores numerados para no saturar; la línea y el Play usan todos los puntos. La API de celdas limita a 1500.
 
 **Eliminar contenedor y datos (⚠️ CUIDADO):**
 ```bash

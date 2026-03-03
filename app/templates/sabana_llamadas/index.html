@@ -1,0 +1,99 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Sabana de Llamadas - SIOC{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-telephone"></i> Sabana de Llamadas</h1>
+    <p class="text-muted">Análisis de tráfico GPRS y VOZ. Importe archivos, vincule sujetos y visualice geolocalización.</p>
+</div>
+
+<div class="row">
+    {% if current_user.has_permission('SABANA_LLAMADAS_UPLOAD') %}
+    <div class="col-md-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-person display-4 text-primary"></i>
+                <h5 class="card-title mt-2">Sujetos</h5>
+                <p class="card-text text-muted">Personas de interés (apodo, nombre, DNI, imagen). Vincule cargas a cada uno.</p>
+                <a href="{{ url_for('sabana_llamadas.sujetos_list') }}" class="btn btn-outline-primary">Ver / Crear</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-cloud-upload display-4 text-success"></i>
+                <h5 class="card-title mt-2">Cargar GPRS</h5>
+                <p class="card-text text-muted">Importar archivo Excel de sabana GPRS (tráfico de datos).</p>
+                <a href="{{ url_for('sabana_llamadas.gprs_upload') }}" class="btn btn-outline-success">Subir archivo</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-cloud-upload display-4 text-info"></i>
+                <h5 class="card-title mt-2">Cargar VOZ</h5>
+                <p class="card-text text-muted">Importar archivo Excel de sabana VOZ (llamadas).</p>
+                <a href="{{ url_for('sabana_llamadas.voz_upload') }}" class="btn btn-outline-info">Subir archivo</a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    {% if current_user.has_permission('SABANA_LLAMADAS_VIEW') %}
+    <div class="col-md-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-geo-alt display-4 text-warning"></i>
+                <h5 class="card-title mt-2">Mapa</h5>
+                <p class="card-text text-muted">Geolocalización de celdas (lat/long) con filtros por sujeto, carga y tipo.</p>
+                <a href="{{ url_for('sabana_llamadas.mapa') }}" class="btn btn-outline-warning">Abrir mapa</a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    {% if cargas %}
+    <div class="col-12 mt-3">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-clock-history"></i> Cargas recientes</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle">
+                        <thead>
+                            <tr>
+                                <th>Tipo</th>
+                                <th>Archivo</th>
+                                <th>Sujeto</th>
+                                <th>Fecha</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for c in cargas %}
+                            <tr>
+                                <td><span class="badge bg-{{ 'success' if c.tipo == 'gprs' else 'info' }}">{{ c.tipo|upper }}</span></td>
+                                <td>{{ c.nombre_archivo or 'Sin nombre' }}</td>
+                                <td>
+                                    {% if c.sujeto %}
+                                        <a href="{{ url_for('sabana_llamadas.sujetos_ver', sujeto_id=c.sujeto.id) }}">{{ c.sujeto.display_name() }}</a>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Sin sujeto</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ c.created_at|localtime if c.created_at else '' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-2 text-end">
+                    <a href="{{ url_for('sabana_llamadas.cargas_list') }}" class="btn btn-sm btn-outline-secondary">Ver todas las cargas</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

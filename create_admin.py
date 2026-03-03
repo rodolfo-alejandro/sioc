@@ -101,6 +101,9 @@ def create_seed_data():
             # Permisos de Operativos
             ('OPERATIVOS_VIEW', 'Ver estado de operativos'),
             ('OPERATIVOS_CREATE', 'Iniciar y finalizar operativos'),
+            # Sabana de Llamadas
+            ('SABANA_LLAMADAS_VIEW', 'Ver Sabana de Llamadas (mapa, sujetos, cargas)'),
+            ('SABANA_LLAMADAS_UPLOAD', 'Subir archivos GPRS/VOZ y gestionar sujetos'),
         ]
         
         permisos_creados = {}
@@ -144,7 +147,8 @@ def create_seed_data():
                           'ENTREVISTAS_VIEW', 'ENTREVISTAS_CREATE',
                           'GRUPOS_VIEW', 'GRUPOS_CREATE',
                           'RELACIONES_VIEW',
-                          'OPERATIVOS_VIEW', 'OPERATIVOS_CREATE']
+                          'OPERATIVOS_VIEW', 'OPERATIVOS_CREATE',
+                          'SABANA_LLAMADAS_VIEW', 'SABANA_LLAMADAS_UPLOAD']
             for perm_code in admin_perms:
                 if perm_code in permisos_creados:
                     admin_role.permissions.append(permisos_creados[perm_code])
@@ -158,7 +162,7 @@ def create_seed_data():
         if not analista_role:
             analista_role = Role(name='ANALISTA', description='Analista de datos')
             db.session.add(analista_role)
-            analista_perms = ['CORE_VIEW', 'DATALAB_VIEW', 'DATALAB_UPLOAD']
+            analista_perms = ['CORE_VIEW', 'DATALAB_VIEW', 'DATALAB_UPLOAD', 'SABANA_LLAMADAS_VIEW', 'SABANA_LLAMADAS_UPLOAD']
             for perm_code in analista_perms:
                 if perm_code in permisos_creados:
                     analista_role.permissions.append(permisos_creados[perm_code])

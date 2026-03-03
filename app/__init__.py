@@ -64,7 +64,10 @@ def create_app(config_class=Config):
 
     from app.blueprints.operativos import bp as operativos_bp
     app.register_blueprint(operativos_bp, url_prefix='/operativos')
-    
+
+    from app.blueprints.sabana_llamadas import bp as sabana_llamadas_bp
+    app.register_blueprint(sabana_llamadas_bp)
+
     # Crear directorios necesarios
     upload_folder = app.config.get('UPLOAD_FOLDER', 'instance/uploads')
     os.makedirs(upload_folder, exist_ok=True)
@@ -76,6 +79,25 @@ def create_app(config_class=Config):
         try:
             return "{:,}".format(int(value))
         except (ValueError, TypeError):
+            return str(value)
+
+    @app.template_filter('localtime')
+    def localtime_filter(value, fmt='%d/%m/%Y %H:%M'):
+        """
+        Ajusta un datetime a la zona horaria local configurable.
+        Usa la variable de entorno TIMEZONE_OFFSET_HOURS (ej. -3 para Argentina).
+        """
+        from datetime import timedelta
+        if value is None:
+            return ''
+        try:
+            offset = int(os.environ.get('TIMEZONE_OFFSET_HOURS', '0'))
+        except (TypeError, ValueError):
+            offset = 0
+        try:
+            return (value + timedelta(hours=offset)).strftime(fmt)
+        except Exception:
+            # Si falla, devolver el valor original como string
             return str(value)
     
     # Agregar helper CSRF al contexto de templates
