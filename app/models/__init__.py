@@ -30,7 +30,12 @@ from app.models.grupos import GrupoIntervencion, PersonaGrupo
 from app.models.relaciones import RelacionPersona, OrganizacionCriminal, PersonaOrganizacion
 from app.models.operativos import TipoOperativo, OperativoActivo
 from app.models.sabana_llamadas import (
-    Sujeto, CargaLlamada, ResultadoTraficoGPRS, ResultadoTraficoVOZ, DatoTecnico
+    Sujeto,
+    CargaLlamada,
+    ResultadoTraficoGPRS,
+    ResultadoTraficoVOZ,
+    DatoTecnico,
+    SabanaImpactoNota,
 )
 
 __all__ = [
@@ -47,6 +52,7 @@ __all__ = [
     'GrupoIntervencion', 'PersonaGrupo',
     'RelacionPersona', 'OrganizacionCriminal', 'PersonaOrganizacion',
     'TipoOperativo', 'OperativoActivo',
-    'Sujeto', 'CargaLlamada', 'ResultadoTraficoGPRS', 'ResultadoTraficoVOZ', 'DatoTecnico'
+    'Sujeto', 'CargaLlamada', 'ResultadoTraficoGPRS', 'ResultadoTraficoVOZ', 'DatoTecnico',
+    'SabanaImpactoNota'
 ]
 

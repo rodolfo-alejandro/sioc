@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" crossorigin="">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" crossorigin="">
 <link href="{{ url_for('static', filename='css/sabana_mapa.css') }}" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" crossorigin="anonymous"></script>
 {% endblock %}
 
 {% block content %}
@@ -48,6 +49,9 @@
                     <button class="btn btn-outline-secondary" type="button" id="btn-goto-inicio" title="Ir al inicio (#1)">Inicio</button>
                 </div>
                 <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-limpiar-filtros">Limpiar</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-captura-informe" title="Guardar captura del mapa para el informe de Relaciones">
+                    <i class="bi bi-camera"></i> Captura informe
+                </button>
             </div>
         </div>
 
@@ -245,6 +249,12 @@
         <div class="sabana-panel-header">
             <div id="sabana-panel-title" class="sabana-panel-title"></div>
             <div class="d-flex gap-1">
+                <button type="button" class="btn btn-sm btn-success" id="sabana-panel-play" title="Play recorrido">
+                    <i class="bi bi-play-fill"></i>
+                </button>
+                <button type="button" class="btn btn-sm btn-secondary" id="sabana-panel-pause" title="Pausar recorrido">
+                    <i class="bi bi-pause-fill"></i>
+                </button>
                 <span class="small text-muted d-none align-self-center" id="sabana-panel-pos"></span>
                 <button type="button" class="btn btn-sm btn-outline-secondary d-none" id="sabana-panel-prev" title="Anterior">
                     <i class="bi bi-chevron-left"></i>

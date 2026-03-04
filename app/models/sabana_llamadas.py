@@ -210,3 +210,27 @@ class DatoTecnico(db.Model):
 
     def __repr__(self):
         return f'<DatoTecnico {self.id} {self.tipo}>'
+
+
+class SabanaImpactoNota(db.Model):
+    """
+    Nota del investigador sobre un impacto concreto (registro de tráfico).
+    Se identifica por (unidad, tipo, impacto_id, user).
+    """
+    __tablename__ = 'sabana_impacto_notas'
+
+    id = db.Column(db.Integer, primary_key=True)
+    unidad_id = db.Column(db.Integer, db.ForeignKey('unidades.id'), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    tipo = db.Column(db.String(10), nullable=False, index=True)  # 'gprs' / 'voz'
+    impacto_id = db.Column(db.Integer, nullable=False, index=True)
+    color = db.Column(db.String(20), nullable=True)  # ej. 'rojo', 'amarillo', 'verde', 'azul'
+    nota = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    unidad = db.relationship('Unidad', backref='sabana_impacto_notas')
+    user = db.relationship('User', backref='sabana_impacto_notas')
+
+    def __repr__(self):
+        return f'<SabanaImpactoNota {self.id} {self.tipo}#{self.impacto_id}>'

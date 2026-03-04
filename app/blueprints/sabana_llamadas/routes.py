@@ -33,6 +33,7 @@ from app.models.sabana_llamadas import (
     DatoTecnico,
     ResultadoTraficoGPRS,
     ResultadoTraficoVOZ,
+    SabanaImpactoNota,
 )
 from app.models.persona import Persona
 from app.models.user import User
@@ -339,7 +340,7 @@ def relaciones():
                     continue
                 if key not in sujetos_por_numero:
                     display = nombre or apodo or (f"DNI {dni}" if dni else f"Sujeto #{sid}")
-                    img_url = url_for('sabana_llamadas.sujetos_imagen', sujeto_id=sid) if imagen else None
+                    img_url = url_for('sabana_llamadas.sujetos_imagen', sujeto_id=sid, _external=True) if imagen else None
                     sujetos_por_numero[key] = {
                         'id': sid,
                         'display': display,
@@ -368,7 +369,7 @@ def relaciones():
                     key = str(num).strip()
                     if key and key not in sujetos_por_numero:
                         display = nombre or apodo or (f"DNI {dni}" if dni else f"Sujeto #{sid}")
-                        img_url = url_for('sabana_llamadas.sujetos_imagen', sujeto_id=sid) if imagen else None
+                        img_url = url_for('sabana_llamadas.sujetos_imagen', sujeto_id=sid, _external=True) if imagen else None
                         sujetos_por_numero[key] = {
                             'id': sid,
                             'display': display,
@@ -412,6 +413,143 @@ def relaciones():
         'sabana_llamadas/relaciones.html',
         sujetos=sujetos,
         cargas_voz=cargas_voz,
+        relaciones=relaciones_data,
+        filtros=filtros,
+    )
+
+
+@bp.route('/gprs/relaciones')
+def relaciones_gprs():
+    """Vista de relaciones GPRS (línea ↔ IP)."""
+    if not _permiso():
+        return redirect(url_for('core.dashboard'))
+
+    sujeto_id = request.args.get('sujeto_id', type=int)
+    carga_id = request.args.get('carga_id', type=int)
+    numero_raw = (request.args.get('numero') or '').strip()
+    fecha_desde_str = request.args.get('fecha_desde') or ''
+    fecha_hasta_str = request.args.get('fecha_hasta') or ''
+    hora_desde_str = request.args.get('hora_desde') or ''
+    hora_hasta_str = request.args.get('hora_hasta') or ''
+    limit = request.args.get('limit', type=int) or 200
+    if limit < 1:
+        limit = 1
+    if limit > 1000:
+        limit = 1000
+
+    fecha_desde = _parse_ymd(fecha_desde_str)
+    fecha_hasta = _parse_ymd(fecha_hasta_str)
+    hora_desde_hm = _normalize_hm(hora_desde_str)
+    hora_hasta_hm = _normalize_hm(hora_hasta_str)
+
+    rows = _query_relaciones_gprs(
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        hora_desde_hm=hora_desde_hm,
+        hora_hasta_hm=hora_hasta_hm,
+        sujeto_id=sujeto_id,
+        carga_id=carga_id,
+        numero_filtro=numero_raw or None,
+        max_rows=limit,
+    )
+
+    numero_set = set()
+    for r in rows:
+        if getattr(r, 'numero_a', None):
+            numero_set.add(str(r.numero_a).strip())
+
+    sujetos_por_numero = {}
+    if numero_set:
+        try:
+            exp_rows = db.session.query(
+                SujetoNumero.numero,
+                Sujeto.id,
+                Sujeto.apodo,
+                Sujeto.nombre,
+                Sujeto.dni,
+                Sujeto.imagen,
+            ).join(Sujeto, SujetoNumero.sujeto_id == Sujeto.id) \
+             .filter(
+                 SujetoNumero.unidad_id == current_user.unidad_id,
+                 SujetoNumero.numero.in_(list(numero_set)),
+             ).order_by(SujetoNumero.numero, Sujeto.id).all()
+
+            for num, sid, apodo, nombre, dni, imagen in exp_rows:
+                key = (str(num) or '').strip()
+                if not key:
+                    continue
+                if key not in sujetos_por_numero:
+                    display = nombre or apodo or (f"DNI {dni}" if dni else f"Sujeto #{sid}")
+                    img_url = url_for('sabana_llamadas.sujetos_imagen', sujeto_id=sid, _external=True) if imagen else None
+                    sujetos_por_numero[key] = {
+                        'id': sid,
+                        'display': display,
+                        'imagen_url': img_url,
+                    }
+
+            faltantes = [n for n in numero_set if n not in sujetos_por_numero]
+            if faltantes:
+                q_num_imp = db.session.query(
+                    ResultadoTraficoGPRS.numero,
+                    Sujeto.id,
+                    Sujeto.apodo,
+                    Sujeto.nombre,
+                    Sujeto.dni,
+                    Sujeto.imagen,
+                ).join(CargaLlamada, ResultadoTraficoGPRS.carga_id == CargaLlamada.id) \
+                 .join(Sujeto, CargaLlamada.sujeto_id == Sujeto.id) \
+                 .filter(
+                     CargaLlamada.unidad_id == current_user.unidad_id,
+                     _carga_access_predicate(),
+                     ResultadoTraficoGPRS.numero.in_(faltantes),
+                 ).order_by(ResultadoTraficoGPRS.numero, Sujeto.id)
+
+                for num, sid, apodo, nombre, dni, imagen in q_num_imp.all():
+                    key = str(num).strip()
+                    if key and key not in sujetos_por_numero:
+                        display = nombre or apodo or (f"DNI {dni}" if dni else f"Sujeto #{sid}")
+                        img_url = url_for('sabana_llamadas.sujetos_imagen', sujeto_id=sid, _external=True) if imagen else None
+                        sujetos_por_numero[key] = {
+                            'id': sid,
+                            'display': display,
+                            'imagen_url': img_url,
+                        }
+        except Exception:
+            sujetos_por_numero = {}
+
+    relaciones_data = []
+    for r in rows:
+        sa = sujetos_por_numero.get(str(r.numero_a).strip()) if getattr(r, 'numero_a', None) else None
+        relaciones_data.append({
+            'numero_a': r.numero_a,
+            'numero_b': r.numero_b,
+            'cantidad': int(r.cantidad or 0),
+            'primera_fecha': r.primera_fecha,
+            'ultima_fecha': r.ultima_fecha,
+            'sujeto_a': sa,
+            'sujeto_b': None,
+        })
+
+    sujetos = _sujetos_query_accessible().order_by(Sujeto.apodo, Sujeto.nombre, Sujeto.dni).all()
+    cargas_gprs = _cargas_query_accessible().filter(
+        CargaLlamada.tipo == 'gprs'
+    ).order_by(CargaLlamada.created_at.desc()).all()
+
+    filtros = {
+        'sujeto_id': sujeto_id,
+        'carga_id': carga_id,
+        'numero': numero_raw,
+        'fecha_desde': fecha_desde_str,
+        'fecha_hasta': fecha_hasta_str,
+        'hora_desde': hora_desde_str,
+        'hora_hasta': hora_hasta_str,
+        'limit': limit,
+    }
+
+    return render_template(
+        'sabana_llamadas/relaciones_gprs.html',
+        sujetos=sujetos,
+        cargas_gprs=cargas_gprs,
         relaciones=relaciones_data,
         filtros=filtros,
     )
@@ -924,6 +1062,63 @@ def _query_relaciones_voz(fecha_desde, fecha_hasta, hora_desde_hm, hora_hasta_hm
     return q.all()
 
 
+def _query_relaciones_gprs(fecha_desde, fecha_hasta, hora_desde_hm, hora_hasta_hm,
+                           sujeto_id=None, carga_id=None, numero_filtro=None, max_rows=500):
+    """
+    Relaciones GPRS basadas en accesos de datos: numero <-> IP (coalesce ip_wifi, ip_dual_stack, ip).
+    """
+    qc = _cargas_query_accessible().filter(
+        CargaLlamada.unidad_id == current_user.unidad_id,
+        CargaLlamada.tipo == 'gprs',
+    )
+    if sujeto_id:
+        qc = qc.filter(CargaLlamada.sujeto_id == sujeto_id)
+    if carga_id:
+        qc = qc.filter(CargaLlamada.id == carga_id)
+
+    carga_ids = [cid for (cid,) in qc.with_entities(CargaLlamada.id).all()]
+    if not carga_ids:
+        return []
+
+    # Normalizar IP tomando primero IP WiFi, luego dual_stack y por último IP,
+    # pero siempre descartando cadenas vacías.
+    ip_wifi_norm = func.nullif(func.trim(func.coalesce(ResultadoTraficoGPRS.ip_wifi, '')), '')
+    ip_ds_norm = func.nullif(func.trim(func.coalesce(ResultadoTraficoGPRS.ip_dual_stack, '')), '')
+    ip_norm = func.coalesce(
+        ip_wifi_norm,
+        ip_ds_norm,
+        func.nullif(func.trim(func.coalesce(ResultadoTraficoGPRS.ip, '')), ''),
+    )
+
+    q = db.session.query(
+        ResultadoTraficoGPRS.numero.label('numero_a'),
+        ip_norm.label('numero_b'),
+        func.count(ResultadoTraficoGPRS.id).label('cantidad'),
+        func.min(ResultadoTraficoGPRS.fecha).label('primera_fecha'),
+        func.max(ResultadoTraficoGPRS.fecha).label('ultima_fecha'),
+    ).filter(
+        ResultadoTraficoGPRS.carga_id.in_(carga_ids),
+        ResultadoTraficoGPRS.numero.isnot(None),
+        ResultadoTraficoGPRS.numero != '',
+        ip_norm.isnot(None),
+        ip_norm != '',
+    )
+
+    q = _apply_fecha_hora_filters(q, ResultadoTraficoGPRS, fecha_desde, fecha_hasta, hora_desde_hm, hora_hasta_hm)
+
+    if numero_filtro:
+        nf = numero_filtro.strip()
+        if nf:
+            q = q.filter(ResultadoTraficoGPRS.numero == nf)
+
+    q = q.group_by(ResultadoTraficoGPRS.numero, ip_norm) \
+        .order_by(func.count(ResultadoTraficoGPRS.id).desc())
+
+    if max_rows and max_rows > 0:
+        q = q.limit(int(max_rows))
+
+    return q.all()
+
 @bp.route('/api/relaciones')
 def api_relaciones():
     """
@@ -967,6 +1162,626 @@ def api_relaciones():
             'ultima_fecha': r.ultima_fecha.isoformat() if r.ultima_fecha else None,
         })
     return jsonify(out)
+
+
+def _informe_voz_impactos_por_numero(carga_ids, numeros, fecha_desde, fecha_hasta, hora_desde_hm, hora_hasta_hm):
+    """
+    Para cada número en `numeros`, agrupa impactos VOZ por celda (con lat/long y ubicación desde DatoTecnico).
+    Devuelve dict: numero -> [ { celda_id, lat, long, direccion, localidad, provincia, cantidad, primera_fecha, ultima_fecha }, ... ]
+    """
+    if not carga_ids or not numeros:
+        return {}
+    numeros = [str(n).strip() for n in numeros if n]
+    if not numeros:
+        return {}
+
+    # Agrupar impactos VOZ por (numero, carga_id, celda_norm): count, min/max fecha
+    q_agg = db.session.query(
+        ResultadoTraficoVOZ.numero,
+        ResultadoTraficoVOZ.carga_id,
+        _normalize_celda_id_sql(ResultadoTraficoVOZ.celda_id).label('celda_norm'),
+        func.count(ResultadoTraficoVOZ.id).label('cantidad'),
+        func.min(ResultadoTraficoVOZ.fecha).label('primera_fecha'),
+        func.max(ResultadoTraficoVOZ.fecha).label('ultima_fecha'),
+    ).filter(
+        ResultadoTraficoVOZ.carga_id.in_(carga_ids),
+        ResultadoTraficoVOZ.numero.in_(numeros),
+        ResultadoTraficoVOZ.celda_id.isnot(None),
+    )
+    q_agg = _apply_fecha_hora_filters(q_agg, ResultadoTraficoVOZ, fecha_desde, fecha_hasta, hora_desde_hm, hora_hasta_hm)
+    q_agg = q_agg.group_by(
+        ResultadoTraficoVOZ.numero,
+        ResultadoTraficoVOZ.carga_id,
+        _normalize_celda_id_sql(ResultadoTraficoVOZ.celda_id),
+    ).all()
+
+    # Por (carga_id, celda_norm) obtener un DatoTecnico con lat/long/ubicación (una sola query)
+    celdas_need = set()
+    for row in q_agg:
+        celdas_need.add((row.carga_id, row.celda_norm))
+
+    dt_by_key = {}
+    if celdas_need and carga_ids:
+        dt_rows = DatoTecnico.query.join(CargaLlamada).filter(
+            CargaLlamada.unidad_id == current_user.unidad_id,
+            _carga_access_predicate(),
+            DatoTecnico.tipo == 'voz',
+            DatoTecnico.carga_id.in_(carga_ids),
+            DatoTecnico.lat.isnot(None),
+            DatoTecnico.long.isnot(None),
+        ).all()
+        for dt in dt_rows:
+            cnorm = _normalize_celda_id_py(dt.celda_id) if dt.celda_id else None
+            if cnorm:
+                key = (dt.carga_id, cnorm)
+                if key in celdas_need and key not in dt_by_key:
+                    dt_by_key[key] = {
+                        'celda_id': cnorm,
+                        'lat': float(dt.lat),
+                        'long': float(dt.long),
+                        'direccion': (dt.celda_direccion or '').strip() or None,
+                        'localidad': (dt.celda_loc or '').strip() or None,
+                        'provincia': (dt.celda_prov or '').strip() or None,
+                    }
+
+    out = {}
+    for row in q_agg:
+        num = str(row.numero).strip()
+        if num not in out:
+            out[num] = []
+        loc = dt_by_key.get((row.carga_id, row.celda_norm)) or {
+            'celda_id': row.celda_norm,
+            'lat': None,
+            'long': None,
+            'direccion': None,
+            'localidad': None,
+            'provincia': None,
+        }
+        out[num].append({
+            **loc,
+            'cantidad': int(row.cantidad or 0),
+            'primera_fecha': row.primera_fecha.isoformat() if row.primera_fecha else None,
+            'ultima_fecha': row.ultima_fecha.isoformat() if row.ultima_fecha else None,
+        })
+    return out
+
+
+@bp.route('/api/informe-voz')
+def api_informe_voz():
+    """
+    Informe para fiscalía: relaciones VOZ + impactos por número con celdas, lat/long y ubicación.
+    Mismos filtros que la vista relaciones (sujeto_id, carga_id, numero, fecha_desde, fecha_hasta, hora_*, limit).
+    """
+    if not _permiso():
+        return jsonify({'error': 'forbidden'}), 403
+
+    sujeto_id = request.args.get('sujeto_id', type=int)
+    carga_id = request.args.get('carga_id', type=int)
+    numero_raw = (request.args.get('numero') or '').strip()
+    fecha_desde = _parse_ymd(request.args.get('fecha_desde') or '')
+    fecha_hasta = _parse_ymd(request.args.get('fecha_hasta') or '')
+    hora_desde_hm = _normalize_hm(request.args.get('hora_desde') or '')
+    hora_hasta_hm = _normalize_hm(request.args.get('hora_hasta') or '')
+    limit = request.args.get('limit', type=int) or 200
+    if limit < 1:
+        limit = 1
+    if limit > 1000:
+        limit = 1000
+
+    qc = _cargas_query_accessible().filter(
+        CargaLlamada.unidad_id == current_user.unidad_id,
+        CargaLlamada.tipo == 'voz',
+    )
+    if sujeto_id:
+        qc = qc.filter(CargaLlamada.sujeto_id == sujeto_id)
+    if carga_id:
+        qc = qc.filter(CargaLlamada.id == carga_id)
+    carga_ids = [c for (c,) in qc.with_entities(CargaLlamada.id).all()]
+    if not carga_ids:
+        return jsonify({
+            'relaciones': [],
+            'resumen': {'total_pares': 0, 'total_comunicaciones': 0, 'numeros_unicos': 0},
+            'sujetos_por_numero': {},
+            'impactos_por_numero': {},
+            'parrafo_informe': '',
+        })
+
+    rows = _query_relaciones_voz(
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        hora_desde_hm=hora_desde_hm,
+        hora_hasta_hm=hora_hasta_hm,
+        sujeto_id=sujeto_id,
+        carga_id=carga_id,
+        numero_filtro=numero_raw or None,
+        max_rows=limit,
+    )
+
+    numero_set = set()
+    for r in rows:
+        if getattr(r, 'numero_a', None):
+            numero_set.add(str(r.numero_a).strip())
+        if getattr(r, 'numero_b', None):
+            numero_set.add(str(r.numero_b).strip())
+
+    sujetos_por_numero = {}
+    if numero_set:
+        try:
+            exp_rows = db.session.query(
+                SujetoNumero.numero,
+                Sujeto.id,
+                Sujeto.apodo,
+                Sujeto.nombre,
+                Sujeto.dni,
+            ).join(Sujeto, SujetoNumero.sujeto_id == Sujeto.id).filter(
+                SujetoNumero.unidad_id == current_user.unidad_id,
+                SujetoNumero.numero.in_(list(numero_set)),
+            ).all()
+            for num, sid, apodo, nombre, dni in exp_rows:
+                key = str(num).strip()
+                if key and key not in sujetos_por_numero:
+                    sujetos_por_numero[key] = nombre or apodo or (f'DNI {dni}' if dni else f'Sujeto #{sid}')
+            faltantes = [n for n in numero_set if n not in sujetos_por_numero]
+            if faltantes:
+                imp_rows = db.session.query(
+                    ResultadoTraficoVOZ.numero,
+                    Sujeto.nombre,
+                    Sujeto.apodo,
+                    Sujeto.dni,
+                    Sujeto.id,
+                ).join(CargaLlamada, ResultadoTraficoVOZ.carga_id == CargaLlamada.id).join(
+                    Sujeto, CargaLlamada.sujeto_id == Sujeto.id
+                ).filter(
+                    CargaLlamada.unidad_id == current_user.unidad_id,
+                    _carga_access_predicate(),
+                    ResultadoTraficoVOZ.numero.in_(faltantes),
+                ).distinct().all()
+                for num, nombre, apodo, dni, sid in imp_rows:
+                    key = str(num).strip()
+                    if key and key not in sujetos_por_numero:
+                        sujetos_por_numero[key] = nombre or apodo or (f'DNI {dni}' if dni else f'Sujeto #{sid}')
+        except Exception:
+            pass
+
+    relaciones_data = []
+    total_comunicaciones = 0
+    for r in rows:
+        cant = int(r.cantidad or 0)
+        total_comunicaciones += cant
+        relaciones_data.append({
+            'numero_a': r.numero_a,
+            'numero_b': r.numero_b,
+            'cantidad': cant,
+            'primera_fecha': r.primera_fecha.isoformat() if r.primera_fecha else None,
+            'ultima_fecha': r.ultima_fecha.isoformat() if r.ultima_fecha else None,
+            'sujeto_a': sujetos_por_numero.get(str(r.numero_a).strip()),
+            'sujeto_b': sujetos_por_numero.get(str(r.numero_b).strip()),
+        })
+
+    impactos_por_numero = _informe_voz_impactos_por_numero(
+        carga_ids, list(numero_set), fecha_desde, fecha_hasta, hora_desde_hm, hora_hasta_hm,
+    )
+
+    # Párrafo tipo informe para fiscalía
+    partes = []
+    partes.append(
+        f'En el período analizado se registraron {total_comunicaciones} comunicaciones entre {len(numero_set)} números '
+        f'telefónicos, conformando {len(relaciones_data)} pares de interlocutores.'
+    )
+    for num in sorted(numero_set):
+        sujeto = sujetos_por_numero.get(num) or 'sin identificar'
+        celdas = impactos_por_numero.get(num) or []
+        total_imp = sum(c.get('cantidad', 0) for c in celdas)
+        if total_imp > 0:
+            partes.append(
+                f'Respecto a la línea del número {num} (sujeto: {sujeto}), se observan {total_imp} impactos en celdas. '
+            )
+            con_geo = [c for c in celdas if c.get('lat') is not None and c.get('long') is not None]
+            if con_geo:
+                ubicaciones = []
+                for c in con_geo[:15]:
+                    u = f"celda {c.get('celda_id')} (lat. {c['lat']:.5f}, long. {c['long']:.5f})"
+                    if c.get('direccion') or c.get('localidad') or c.get('provincia'):
+                        u += f" — {c.get('direccion') or ''} {c.get('localidad') or ''} {c.get('provincia') or ''}".strip()
+                    ubicaciones.append(u)
+                partes.append(
+                    'La persona se encontraba en las siguientes ubicaciones: ' +
+                    '; '.join(ubicaciones) + ('.' if len(con_geo) <= 15 else ' (entre otras).')
+                )
+            if len(con_geo) > 1:
+                provincias = set(c.get('provincia') for c in con_geo if c.get('provincia'))
+                if len(provincias) > 1:
+                    partes.append(f'Se observa un patrón de desplazamiento entre provincias: {", ".join(p for p in provincias if p)}.')
+                elif provincias:
+                    partes.append(f'Se observa un patrón de concentración en la provincia de {list(provincias)[0]}.')
+        else:
+            partes.append(f'La línea del número {num} (sujeto: {sujeto}) no presenta impactos geolocalizados en el período.')
+
+    parrafo_informe = '\n\n'.join(partes)
+
+    # Metadatos para el informe (usuario, unidad, filtros usados)
+    usuario_label = None
+    try:
+        usuario_label = getattr(current_user, 'username', None) or getattr(current_user, 'email', None)
+    except Exception:
+        usuario_label = None
+    if not usuario_label:
+        try:
+            usuario_label = f'Usuario #{current_user.id}'
+        except Exception:
+            usuario_label = 'Usuario desconocido'
+
+    unidad_nombre = None
+    try:
+        unidad = getattr(current_user, 'unidad', None)
+        if unidad is not None:
+            unidad_nombre = getattr(unidad, 'nombre', None) or str(unidad)
+    except Exception:
+        unidad_nombre = None
+
+    filtros_desc = {}
+    if sujeto_id:
+        sujeto_obj = Sujeto.query.get(sujeto_id)
+        if sujeto_obj:
+            filtros_desc['sujeto'] = sujeto_obj.display_name()
+    if carga_id:
+        carga_obj = CargaLlamada.query.get(carga_id)
+        if carga_obj:
+            filtros_desc['carga_voz'] = f"#{carga_obj.id} - {carga_obj.nombre_archivo or 'Sin nombre'}"
+    if numero_raw:
+        filtros_desc['numero'] = numero_raw
+    if fecha_desde:
+        filtros_desc['fecha_desde'] = fecha_desde.strftime('%d/%m/%Y')
+    if fecha_hasta:
+        filtros_desc['fecha_hasta'] = fecha_hasta.strftime('%d/%m/%Y')
+    if hora_desde_hm:
+        filtros_desc['hora_desde'] = hora_desde_hm
+    if hora_hasta_hm:
+        filtros_desc['hora_hasta'] = hora_hasta_hm
+    filtros_desc['limit'] = limit
+
+    metadatos = {
+        'usuario': usuario_label,
+        'unidad': unidad_nombre,
+        'generado_en_utc': datetime.utcnow().isoformat() + 'Z',
+        'filtros': filtros_desc,
+    }
+
+    return jsonify({
+        'relaciones': relaciones_data,
+        'resumen': {
+            'total_pares': len(relaciones_data),
+            'total_comunicaciones': total_comunicaciones,
+            'numeros_unicos': len(numero_set),
+        },
+        'sujetos_por_numero': sujetos_por_numero,
+        'impactos_por_numero': impactos_por_numero,
+        'parrafo_informe': parrafo_informe,
+        'metadatos': metadatos,
+    })
+
+
+def _informe_gprs_impactos_por_numero(carga_ids, numeros, fecha_desde, fecha_hasta, hora_desde_hm, hora_hasta_hm):
+    """
+    Para cada número en `numeros`, agrupa sesiones GPRS por celda (con lat/long y ubicación desde DatoTecnico).
+    Devuelve dict: numero -> [ { celda_id, lat, long, direccion, localidad, provincia, cantidad, primera_fecha, ultima_fecha }, ... ]
+    """
+    if not carga_ids or not numeros:
+        return {}
+    numeros = [str(n).strip() for n in numeros if n]
+    if not numeros:
+        return {}
+
+    q_agg = db.session.query(
+        ResultadoTraficoGPRS.numero,
+        ResultadoTraficoGPRS.carga_id,
+        _normalize_celda_id_sql(ResultadoTraficoGPRS.celda).label('celda_norm'),
+        func.count(ResultadoTraficoGPRS.id).label('cantidad'),
+        func.min(ResultadoTraficoGPRS.fecha).label('primera_fecha'),
+        func.max(ResultadoTraficoGPRS.fecha).label('ultima_fecha'),
+    ).filter(
+        ResultadoTraficoGPRS.carga_id.in_(carga_ids),
+        ResultadoTraficoGPRS.numero.in_(numeros),
+        ResultadoTraficoGPRS.celda.isnot(None),
+    )
+    q_agg = _apply_fecha_hora_filters(q_agg, ResultadoTraficoGPRS, fecha_desde, fecha_hasta, hora_desde_hm, hora_hasta_hm)
+    q_agg = q_agg.group_by(
+        ResultadoTraficoGPRS.numero,
+        ResultadoTraficoGPRS.carga_id,
+        _normalize_celda_id_sql(ResultadoTraficoGPRS.celda),
+    ).all()
+
+    celdas_need = set()
+    for row in q_agg:
+        celdas_need.add((row.carga_id, row.celda_norm))
+
+    dt_by_key = {}
+    if celdas_need and carga_ids:
+        dt_rows = DatoTecnico.query.join(CargaLlamada).filter(
+            CargaLlamada.unidad_id == current_user.unidad_id,
+            _carga_access_predicate(),
+            DatoTecnico.tipo == 'gprs',
+            DatoTecnico.carga_id.in_(carga_ids),
+            DatoTecnico.lat.isnot(None),
+            DatoTecnico.long.isnot(None),
+        ).all()
+        for dt in dt_rows:
+            cnorm = _normalize_celda_id_py(dt.celda_id) if dt.celda_id else None
+            if cnorm:
+                key = (dt.carga_id, cnorm)
+                if key in celdas_need and key not in dt_by_key:
+                    dt_by_key[key] = {
+                        'celda_id': cnorm,
+                        'lat': float(dt.lat),
+                        'long': float(dt.long),
+                        'direccion': (dt.celda_direccion or '').strip() or None,
+                        'localidad': (dt.celda_loc or '').strip() or None,
+                        'provincia': (dt.celda_prov or '').strip() or None,
+                    }
+
+    out = {}
+    for row in q_agg:
+        num = str(row.numero).strip()
+        if num not in out:
+            out[num] = []
+        loc = dt_by_key.get((row.carga_id, row.celda_norm)) or {
+            'celda_id': row.celda_norm,
+            'lat': None,
+            'long': None,
+            'direccion': None,
+            'localidad': None,
+            'provincia': None,
+        }
+        out[num].append({
+            **loc,
+            'cantidad': int(row.cantidad or 0),
+            'primera_fecha': row.primera_fecha.isoformat() if row.primera_fecha else None,
+            'ultima_fecha': row.ultima_fecha.isoformat() if row.ultima_fecha else None,
+        })
+    return out
+
+
+@bp.route('/api/informe-gprs')
+def api_informe_gprs():
+    """
+    Informe para fiscalía: relaciones GPRS (línea ↔ IP) + impactos por número con celdas, lat/long y ubicación.
+    Mismos filtros que la vista relaciones_gprs.
+    """
+    if not _permiso():
+        return jsonify({'error': 'forbidden'}), 403
+
+    sujeto_id = request.args.get('sujeto_id', type=int)
+    carga_id = request.args.get('carga_id', type=int)
+    numero_raw = (request.args.get('numero') or '').strip()
+    fecha_desde = _parse_ymd(request.args.get('fecha_desde') or '')
+    fecha_hasta = _parse_ymd(request.args.get('fecha_hasta') or '')
+    hora_desde_hm = _normalize_hm(request.args.get('hora_desde') or '')
+    hora_hasta_hm = _normalize_hm(request.args.get('hora_hasta') or '')
+    limit = request.args.get('limit', type=int) or 200
+    if limit < 1:
+        limit = 1
+    if limit > 1000:
+        limit = 1000
+
+    qc = _cargas_query_accessible().filter(
+        CargaLlamada.unidad_id == current_user.unidad_id,
+        CargaLlamada.tipo == 'gprs',
+    )
+    if sujeto_id:
+        qc = qc.filter(CargaLlamada.sujeto_id == sujeto_id)
+    if carga_id:
+        qc = qc.filter(CargaLlamada.id == carga_id)
+    carga_ids = [c for (c,) in qc.with_entities(CargaLlamada.id).all()]
+    if not carga_ids:
+        return jsonify({
+            'relaciones': [],
+            'resumen': {'total_pares': 0, 'total_comunicaciones': 0, 'numeros_unicos': 0},
+            'sujetos_por_numero': {},
+            'impactos_por_numero': {},
+            'parrafo_informe': '',
+            'metadatos': {},
+        })
+
+    rows = _query_relaciones_gprs(
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        hora_desde_hm=hora_desde_hm,
+        hora_hasta_hm=hora_hasta_hm,
+        sujeto_id=sujeto_id,
+        carga_id=carga_id,
+        numero_filtro=numero_raw or None,
+        max_rows=limit,
+    )
+
+    numero_set = set()
+    for r in rows:
+        if getattr(r, 'numero_a', None):
+            numero_set.add(str(r.numero_a).strip())
+
+    sujetos_por_numero = {}
+    if numero_set:
+        try:
+            exp_rows = db.session.query(
+                SujetoNumero.numero,
+                Sujeto.id,
+                Sujeto.apodo,
+                Sujeto.nombre,
+                Sujeto.dni,
+            ).join(Sujeto, SujetoNumero.sujeto_id == Sujeto.id).filter(
+                SujetoNumero.unidad_id == current_user.unidad_id,
+                SujetoNumero.numero.in_(list(numero_set)),
+            ).all()
+            for num, sid, apodo, nombre, dni in exp_rows:
+                key = str(num).strip()
+                if key and key not in sujetos_por_numero:
+                    sujetos_por_numero[key] = nombre or apodo or (f'DNI {dni}' if dni else f'Sujeto #{sid}')
+        except Exception:
+            pass
+
+    relaciones_data = []
+    total_sesiones = 0
+    for r in rows:
+        cant = int(r.cantidad or 0)
+        total_sesiones += cant
+        relaciones_data.append({
+            'numero_a': r.numero_a,
+            'numero_b': r.numero_b,
+            'cantidad': cant,
+            'primera_fecha': r.primera_fecha.isoformat() if r.primera_fecha else None,
+            'ultima_fecha': r.ultima_fecha.isoformat() if r.ultima_fecha else None,
+            'sujeto_a': sujetos_por_numero.get(str(r.numero_a).strip()),
+            'sujeto_b': None,
+        })
+
+    impactos_por_numero = _informe_gprs_impactos_por_numero(
+        carga_ids, list(numero_set), fecha_desde, fecha_hasta, hora_desde_hm, hora_hasta_hm,
+    )
+
+    partes = []
+    partes.append(
+        f'En el período analizado se registraron {total_sesiones} accesos de datos GPRS correspondientes a {len(numero_set)} líneas, '
+        f'conformando {len(relaciones_data)} pares línea–IP.'
+    )
+    for num in sorted(numero_set):
+        sujeto = sujetos_por_numero.get(num) or 'sin identificar'
+        celdas = impactos_por_numero.get(num) or []
+        total_imp = sum(c.get('cantidad', 0) for c in celdas)
+        if total_imp > 0:
+            partes.append(
+                f'Respecto a la línea del número {num} (sujeto: {sujeto}), se observan {total_imp} impactos de datos en celdas técnicas.'
+            )
+            con_geo = [c for c in celdas if c.get('lat') is not None and c.get('long') is not None]
+            if con_geo:
+                ubicaciones = []
+                for c in con_geo[:15]:
+                    u = f"celda {c.get('celda_id')} (lat. {c['lat']:.5f}, long. {c['long']:.5f})"
+                    if c.get('direccion') or c.get('localidad') or c.get('provincia'):
+                        u += f" — {c.get('direccion') or ''} {c.get('localidad') or ''} {c.get('provincia') or ''}".strip()
+                    ubicaciones.append(u)
+                partes.append(
+                    'La línea registra actividad de datos en las siguientes ubicaciones: ' +
+                    '; '.join(ubicaciones) + ('.' if len(con_geo) <= 15 else ' (entre otras).')
+                )
+        else:
+            partes.append(f'La línea del número {num} (sujeto: {sujeto}) no presenta impactos GPRS geolocalizados en el período.')
+
+    parrafo_informe = '\n\n'.join(partes)
+
+    usuario_label = None
+    try:
+        usuario_label = getattr(current_user, 'username', None) or getattr(current_user, 'email', None)
+    except Exception:
+        usuario_label = None
+    if not usuario_label:
+        try:
+            usuario_label = f'Usuario #{current_user.id}'
+        except Exception:
+            usuario_label = 'Usuario desconocido'
+
+    unidad_nombre = None
+    try:
+        unidad = getattr(current_user, 'unidad', None)
+        if unidad is not None:
+            unidad_nombre = getattr(unidad, 'nombre', None) or str(unidad)
+    except Exception:
+        unidad_nombre = None
+
+    filtros_desc = {}
+    if sujeto_id:
+        sujeto_obj = Sujeto.query.get(sujeto_id)
+        if sujeto_obj:
+            filtros_desc['sujeto'] = sujeto_obj.display_name()
+    if carga_id:
+        carga_obj = CargaLlamada.query.get(carga_id)
+        if carga_obj:
+            filtros_desc['carga_voz'] = f"#{carga_obj.id} - {carga_obj.nombre_archivo or 'Sin nombre'}"
+    if numero_raw:
+        filtros_desc['numero'] = numero_raw
+    if fecha_desde:
+        filtros_desc['fecha_desde'] = fecha_desde.strftime('%d/%m/%Y')
+    if fecha_hasta:
+        filtros_desc['fecha_hasta'] = fecha_hasta.strftime('%d/%m/%Y')
+    if hora_desde_hm:
+        filtros_desc['hora_desde'] = hora_desde_hm
+    if hora_hasta_hm:
+        filtros_desc['hora_hasta'] = hora_hasta_hm
+    filtros_desc['limit'] = limit
+
+    metadatos = {
+        'usuario': usuario_label,
+        'unidad': unidad_nombre,
+        'generado_en_utc': datetime.utcnow().isoformat() + 'Z',
+        'filtros': filtros_desc,
+    }
+
+    return jsonify({
+        'relaciones': relaciones_data,
+        'resumen': {
+            'total_pares': len(relaciones_data),
+            'total_comunicaciones': total_sesiones,
+            'numeros_unicos': len(numero_set),
+        },
+        'sujetos_por_numero': sujetos_por_numero,
+        'impactos_por_numero': impactos_por_numero,
+        'parrafo_informe': parrafo_informe,
+        'metadatos': metadatos,
+    })
+
+
+@bp.route('/api/mapa/impacto-nota', methods=['GET', 'POST'])
+def api_mapa_impacto_nota():
+    """
+    Permite guardar y recuperar una nota + color para un impacto concreto (registro de tráfico).
+    Clave: (unidad_id, tipo, impacto_id, user_id).
+    """
+    if not _permiso():
+        return jsonify({'error': 'forbidden'}), 403
+
+    if request.method == 'GET':
+        tipo = (request.args.get('tipo') or '').strip().lower()
+        impacto_id = request.args.get('impacto_id', type=int)
+        if not tipo or not impacto_id:
+            return jsonify({'nota': None, 'color': None})
+        nota = SabanaImpactoNota.query.filter_by(
+            unidad_id=current_user.unidad_id,
+            user_id=current_user.id,
+            tipo=tipo,
+            impacto_id=impacto_id,
+        ).first()
+        if not nota:
+            return jsonify({'nota': None, 'color': None})
+        return jsonify({'nota': nota.nota or '', 'color': nota.color or None})
+
+    data = request.get_json(silent=True) or {}
+    tipo = (data.get('tipo') or '').strip().lower()
+    impacto_id = data.get('impacto_id')
+    nota_txt = (data.get('nota') or '').strip()
+    color = (data.get('color') or '').strip() or None
+    try:
+        impacto_id = int(impacto_id)
+    except Exception:
+        impacto_id = None
+    if not tipo or impacto_id is None:
+        return jsonify({'error': 'missing_fields'}), 400
+
+    nota = SabanaImpactoNota.query.filter_by(
+        unidad_id=current_user.unidad_id,
+        user_id=current_user.id,
+        tipo=tipo,
+        impacto_id=impacto_id,
+    ).first()
+    if not nota:
+        nota = SabanaImpactoNota(
+            unidad_id=current_user.unidad_id,
+            user_id=current_user.id,
+            tipo=tipo,
+            impacto_id=impacto_id,
+        )
+        db.session.add(nota)
+    nota.nota = nota_txt or None
+    nota.color = color
+    db.session.commit()
+    return jsonify({'ok': True, 'nota': nota.nota or '', 'color': nota.color or None})
 
 
 @bp.route('/api/mapa/puntos')

@@ -18,6 +18,7 @@
     var trazadoStartMs = 0;
     var trazadoPauseAccumMs = 0;
     var trazadoLastDetailIdx = -1;
+    var trazadoFrameFn = null;        // función frame actual para poder reanudar
     var trazadoCache = new Map(); // key: "tipo|impacto_id" -> impacto payload (con _ord)
     var azimuthLayer = null;
     var animacionInterval = null;
@@ -84,6 +85,42 @@
         setTimeout(function () {
             try { map.invalidateSize(true); } catch (e) {}
         }, d);
+    }
+
+    function captureMapForInforme(showAlerts) {
+        try {
+            if (!window.html2canvas) return;
+            // En el template el contenedor principal es .sabana-mapa-wrap y el mapa Leaflet tiene id="mapa-sabana"
+            var container = document.querySelector('.sabana-mapa-wrap') || document.getElementById('mapa-sabana');
+            if (!container) {
+                if (showAlerts) {
+                    alert('No se encontró el contenedor del mapa para capturar.');
+                }
+                return;
+            }
+            html2canvas(container, {
+                useCORS: true,
+                backgroundColor: '#ffffff',
+                scale: 2
+            }).then(function (canvas) {
+                try {
+                    var dataUrl = canvas.toDataURL('image/png');
+                    localStorage.setItem('sabana_mapa_ultima_captura', dataUrl);
+                    if (showAlerts) {
+                        alert('Captura del mapa guardada. Se incluirá en el informe de Relaciones (VOZ).');
+                    }
+                } catch (e) {
+                    console.warn('No se pudo guardar la captura del mapa para el informe:', e);
+                    if (showAlerts) alert('No se pudo guardar la captura del mapa.');
+                }
+            }).catch(function (err) {
+                console.warn('Error al capturar mapa para informe:', err);
+                if (showAlerts) alert('No se pudo capturar el mapa.');
+            });
+        } catch (e) {
+            console.warn('Captura mapa informe no disponible:', e);
+            if (showAlerts) alert('Captura de mapa no disponible en este navegador.');
+        }
     }
 
     function isNativeFullscreen() {
@@ -1171,10 +1208,136 @@
                     '</div>';
             }
 
-            body.innerHTML = geo + '<table class="table table-sm"><tbody>' + rows.join('') + '</tbody></table>';
+            var notaHtml =
+                '<hr class="my-2">' +
+                '<div class="d-flex justify-content-between align-items-center mb-1">' +
+                '<span class="small fw-bold">Nota del investigador</span>' +
+                '<div class="btn-group btn-group-sm" role="group" aria-label="Color de marca">' +
+                '<button type="button" class="btn btn-outline-secondary sabana-nota-color" data-color="">' +
+                'Sin color' +
+                '</button>' +
+                '<button type="button" class="btn btn-outline-danger sabana-nota-color" data-color="rojo">Rojo</button>' +
+                '<button type="button" class="btn btn-outline-warning sabana-nota-color" data-color="amarillo">Amarillo</button>' +
+                '<button type="button" class="btn btn-outline-success sabana-nota-color" data-color="verde">Verde</button>' +
+                '<button type="button" class="btn btn-outline-primary sabana-nota-color" data-color="azul">Azul</button>' +
+                '</div>' +
+                '</div>' +
+                '<textarea class="form-control form-control-sm mb-2" rows="3" id="sabana-nota-texto" placeholder="Escriba aquí una observación sobre este punto..."></textarea>' +
+                '<div class="d-flex justify-content-between align-items-center">' +
+                '<small class="text-muted" id="sabana-nota-status"></small>' +
+                '<button type="button" class="btn btn-sm btn-outline-primary" id="sabana-nota-guardar">Guardar nota</button>' +
+                '</div>';
+
+            body.innerHTML =
+                geo +
+                '<table class="table table-sm mb-2"><tbody>' +
+                rows.join('') +
+                '</tbody></table>' +
+                '<div id="sabana-nota-container" class="mt-1">' +
+                notaHtml +
+                '</div>';
+
+            inicializarNotaImpacto(imp);
         }
         showPanel();
         updatePanelNav();
+    }
+
+    function inicializarNotaImpacto(imp) {
+        try {
+            if (!imp || imp.id == null || !imp.tipo) return;
+            var tipo = String(imp.tipo || '').toLowerCase();
+            var impactoId = String(imp.id);
+            var baseUrl = document.body.getAttribute('data-sabana-base') || '';
+            var url = baseUrl + '/sabana-llamadas/api/mapa/impacto-nota?tipo=' +
+                encodeURIComponent(tipo) + '&impacto_id=' + encodeURIComponent(impactoId);
+
+            var txt = document.getElementById('sabana-nota-texto');
+            var status = document.getElementById('sabana-nota-status');
+            var btnGuardar = document.getElementById('sabana-nota-guardar');
+            var colorButtons = Array.prototype.slice.call(document.querySelectorAll('.sabana-nota-color'));
+
+            function setActiveColor(color) {
+                colorButtons.forEach(function (btn) {
+                    var c = btn.getAttribute('data-color') || '';
+                    if (c === (color || '')) btn.classList.add('active');
+                    else btn.classList.remove('active');
+                });
+            }
+
+            var currentColor = '';
+
+            colorButtons.forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    currentColor = this.getAttribute('data-color') || '';
+                    setActiveColor(currentColor);
+                });
+            });
+
+            if (btnGuardar) {
+                btnGuardar.addEventListener('click', function () {
+                    if (!txt) return;
+                    var payload = {
+                        tipo: tipo,
+                        impacto_id: impactoId,
+                        nota: txt.value || '',
+                        color: currentColor || ''
+                    };
+                    status.textContent = 'Guardando...';
+                    var token = getCsrfToken();
+                    var headers = {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    };
+                    if (token) {
+                        headers['X-CSRFToken'] = token;
+                        headers['X-CSRF-Token'] = token;
+                    }
+                    fetch(baseUrl + '/sabana-llamadas/api/mapa/impacto-nota', {
+                        method: 'POST',
+                        headers: headers,
+                        body: JSON.stringify(payload),
+                        credentials: 'same-origin'
+                    })
+                        .then(function (r) { return r.json(); })
+                        .then(function (data) {
+                            if (data && data.ok) {
+                                currentColor = data.color || '';
+                                setActiveColor(currentColor);
+                                status.textContent = 'Nota guardada.';
+                                setTimeout(function () { status.textContent = ''; }, 2500);
+                            } else {
+                                status.textContent = 'No se pudo guardar.';
+                            }
+                        })
+                        .catch(function () {
+                            status.textContent = 'Error al guardar.';
+                        });
+                });
+            }
+
+            // Cargar nota existente
+            if (txt) {
+                status.textContent = 'Cargando nota...';
+                fetch(url, { credentials: 'same-origin' })
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        if (!data) {
+                            status.textContent = '';
+                            return;
+                        }
+                        txt.value = data.nota || '';
+                        currentColor = data.color || '';
+                        setActiveColor(currentColor);
+                        status.textContent = '';
+                    })
+                    .catch(function () {
+                        status.textContent = '';
+                    });
+            }
+        } catch (e) {
+            // Silencioso: las notas no deben romper el panel
+        }
     }
 
     function updatePanelNav() {
@@ -1677,11 +1840,21 @@
             trazadoAnimacionFrameId = requestAnimationFrame(frame);
         }
 
+        // Guardamos referencia para poder reanudar tras un "pausa"
+        trazadoFrameFn = frame;
         trazadoAnimacionFrameId = requestAnimationFrame(frame);
     }
 
     function playTrazadoAnimacion() {
         if (!map) return;
+
+        // Si la animación está pausada pero ya existe un frame y puntos, simplemente reanudar.
+        if (!trazadoIsPlaying && trazadoFrameFn && trazadoPuntos && trazadoPuntos.length >= 2) {
+            trazadoIsPlaying = true;
+            trazadoAnimacionFrameId = requestAnimationFrame(trazadoFrameFn);
+            return;
+        }
+
         // Si no tenemos puntos cargados (por ej. Trazado estaba apagado al aplicar filtros),
         // cargar primero desde el backend con los últimos filtros y recién después animar.
         if (!trazadoPuntos || trazadoPuntos.length < 2) {
@@ -1695,12 +1868,16 @@
             }).catch(function () { });
             return;
         }
+
+        // Si ya se está reproduciendo, no hacer nada más.
+        if (trazadoIsPlaying) return;
+
         _playTrazadoAnimacionCore();
     }
 
     function pauseTrazadoAnimacion() {
-        stopTrazadoAnimacion();
-        closePanel();
+        // Pausar sin destruir el estado, para poder reanudar luego.
+        trazadoIsPlaying = false;
         updateTrazadoTiempoLabel('Pausado');
     }
 
@@ -2621,6 +2798,18 @@
             numeros: getSelectedNumeros(),
             imeis: getSelectedImeis()
         };
+        // Para evitar que se carguen "todos los archivos" al entrar como SUPERADMIN
+        // o sin filtros, sólo aplicamos si hay al menos una carga, sujeto, número o IMEI seleccionado.
+        var hasFiltroBasico = (sujetoIds && sujetoIds.length) ||
+            (cargaIds && cargaIds.length) ||
+            (params.numeros && params.numeros.length) ||
+            (params.imeis && params.imeis.length);
+        if (!hasFiltroBasico) {
+            lastAppliedParams = null;
+            clearMarkers();
+            clearRuta();
+            return;
+        }
         lastAppliedParams = params;
         resetColoring(params);
 
@@ -2668,6 +2857,8 @@
                 fetchImpactos(params).then(function (puntos) {
                     if (token !== lastRequestToken) return;
                     addMarkers(puntos);
+                    // Guardar captura del mapa para el informe (Relaciones)
+                    setTimeout(captureMapForInforme, 800);
                     // Trazado cronológico encima de “Celdas” (si está activado)
                     try {
                         if (isTrazadoEnabled()) {
@@ -3191,6 +3382,12 @@
         if (btnPlay) btnPlay.addEventListener('click', playAnimacion);
         if (btnPause) btnPause.addEventListener('click', pauseAnimacion);
         if (btnReset) btnReset.addEventListener('click', resetAnimacion);
+
+        // Controles de Play/Pausa también en el panel de detalle (para el trazado global)
+        var panelPlay = document.getElementById('sabana-panel-play');
+        var panelPause = document.getElementById('sabana-panel-pause');
+        if (panelPlay) panelPlay.addEventListener('click', playTrazadoAnimacion);
+        if (panelPause) panelPause.addEventListener('click', pauseTrazadoAnimacion);
         var cbLinea = document.getElementById('ver-linea-completa');
         if (cbLinea) {
             cbLinea.addEventListener('change', function () {
@@ -3271,6 +3468,15 @@
                 if (nativeFs) document.body.classList.remove('sabana-mapa-fullscreen');
                 setExpandBtnState(btnExpand, nativeFs || document.body.classList.contains('sabana-mapa-fullscreen'));
                 refreshMapSize(200);
+            });
+        }
+
+        var btnCaptura = document.getElementById('btn-captura-informe');
+        if (btnCaptura && window.html2canvas) {
+            btnCaptura.addEventListener('click', function () {
+                btnCaptura.disabled = true;
+                captureMapForInforme(true);
+                setTimeout(function () { btnCaptura.disabled = false; }, 1500);
             });
         }
 
