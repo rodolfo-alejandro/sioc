@@ -86,6 +86,8 @@
                         {% endif %}
                         {% if current_user.has_permission('SABANA_LLAMADAS_VIEW') %}
                         <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('sabana_llamadas.mapa') }}"><i class="bi bi-geo-alt"></i> Mapa</a></li>
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('sabana_llamadas.relaciones') }}"><i class="bi bi-diagram-3"></i> Relaciones (VOZ)</a></li>
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('sabana_llamadas.relaciones_gprs') }}"><i class="bi bi-diagram-3"></i> Relaciones (GPRS)</a></li>
                         {% endif %}
                     </ul>
                 </li>
