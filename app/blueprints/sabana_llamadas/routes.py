@@ -698,8 +698,15 @@ def sujetos_editar(sujeto_id):
         sujeto.dni = form.dni.data or None
         sujeto.observaciones = form.observaciones.data or None
         sujeto.persona_id = form.persona_id.data or None
-        if form.imagen.data and form.imagen.data.filename:
-            ruta, err = guardar_imagen_sujeto(form.imagen.data, current_user.unidad_id, sujeto.id)
+        # En algunos entornos, form.imagen.data puede ser string vacío en vez de FileStorage;
+        # comprobamos de forma segura antes de acceder a .filename.
+        img_data = form.imagen.data
+        try:
+            has_file = bool(img_data) and hasattr(img_data, 'filename') and bool(img_data.filename)
+        except Exception:
+            has_file = False
+        if has_file:
+            ruta, err = guardar_imagen_sujeto(img_data, current_user.unidad_id, sujeto.id)
             if not err and ruta:
                 sujeto.imagen = ruta
         db.session.commit()
