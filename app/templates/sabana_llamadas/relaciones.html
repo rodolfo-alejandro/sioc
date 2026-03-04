@@ -285,7 +285,7 @@
 </div>
 
 <script id="relaciones-data" type="application/json">{{ relaciones|tojson }}</script>
-<script id="relaciones-meta" type="application/json">{{ informe_meta|tojson }}</script>
+<script id="relaciones-meta" type="application/json">{{ informe_meta|default({})|tojson }}</script>
 <script src="{{ url_for('static', filename='js/sabana_relaciones.js') }}"></script>
 {% endblock %}
 
