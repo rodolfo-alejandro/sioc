@@ -60,6 +60,36 @@ HEADER_ROW_TRAFICO = 3
 HEADER_ROW_DATOS_TECNICOS = 3
 
 
+def _find_datos_tecnicos_sheet_index(path, default_index=1):
+    """
+    Intenta localizar la hoja de 'Datos Técnicos' por nombre en el libro.
+    Esto permite manejar archivos donde la hoja no está siempre en el índice 1
+    (por ejemplo, cuando existe una hoja intermedia de 'Titulares').
+    """
+    try:
+        ext = os.path.splitext(path)[1].lower()
+        names = []
+        if ext == '.xls':
+            import xlrd
+            try:
+                book = xlrd.open_workbook(path, on_demand=True, ignore_workbook_corruption=True)
+            except TypeError:
+                book = xlrd.open_workbook(path, on_demand=True)
+            names = [str(n or '').strip() for n in book.sheet_names()]
+        else:
+            # xlsx/xlsm
+            xls = pd.ExcelFile(path)
+            names = [str(n or '').strip() for n in xls.sheet_names]
+
+        for idx, name in enumerate(names):
+            nl = name.lower()
+            if 'datos' in nl and 'tecnic' in nl:
+                return idx
+    except Exception:
+        pass
+    return default_index
+
+
 def _read_excel_sheet(path, sheet_index, header_row, keywords=None):
     """
     Lee una hoja de Excel devolviendo un DataFrame.
@@ -470,8 +500,9 @@ def procesar_archivo_gprs(file, unidad_id, user_id, sujeto_id=None):
             db.session.add(r)
             count_trafico += 1
 
-        # Datos técnicos: buscar encabezados por columnas Lat/Long
-        df_tec = _read_excel_sheet(file_path, sheet_index=1, header_row=HEADER_ROW_DATOS_TECNICOS, keywords=['lat', 'long'])
+        # Datos técnicos: localizar hoja por nombre (por si hay hoja intermedia "Titulares")
+        idx_tec = _find_datos_tecnicos_sheet_index(file_path, default_index=1)
+        df_tec = _read_excel_sheet(file_path, sheet_index=idx_tec, header_row=HEADER_ROW_DATOS_TECNICOS, keywords=['lat', 'long'])
         cols_tec = {_normalize_col_name(c): i for i, c in enumerate(df_tec.columns)}
 
         def get_tec(row, names):
@@ -612,7 +643,8 @@ def procesar_archivo_voz(file, unidad_id, user_id, sujeto_id=None):
             db.session.add(r)
             count_trafico += 1
 
-        df_tec = _read_excel_sheet(file_path, sheet_index=1, header_row=HEADER_ROW_DATOS_TECNICOS, keywords=['lat', 'long'])
+        idx_tec = _find_datos_tecnicos_sheet_index(file_path, default_index=1)
+        df_tec = _read_excel_sheet(file_path, sheet_index=idx_tec, header_row=HEADER_ROW_DATOS_TECNICOS, keywords=['lat', 'long'])
         cols_tec = {_normalize_col_name(c): i for i, c in enumerate(df_tec.columns)}
 
         def get_tec(row, names):
