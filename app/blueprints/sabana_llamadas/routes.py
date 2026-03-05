@@ -320,6 +320,9 @@ def relaciones():
     sujetos_por_numero = {}
     if numero_set:
         try:
+            # Solo usar sujetos accesibles para el usuario actual
+            accesibles_ids = [sid for (sid,) in _sujetos_query_accessible().with_entities(Sujeto.id).all()]
+
             # 1) Mapeos explícitos
             exp_rows = db.session.query(
                 SujetoNumero.numero,
@@ -332,6 +335,7 @@ def relaciones():
              .filter(
                  SujetoNumero.unidad_id == current_user.unidad_id,
                  SujetoNumero.numero.in_(list(numero_set)),
+                 SujetoNumero.sujeto_id.in_(accesibles_ids) if accesibles_ids else text("0=1"),
              ).order_by(SujetoNumero.numero, Sujeto.id).all()
 
             for num, sid, apodo, nombre, dni, imagen in exp_rows:
@@ -363,6 +367,7 @@ def relaciones():
                      CargaLlamada.unidad_id == current_user.unidad_id,
                      _carga_access_predicate(),
                      ResultadoTraficoVOZ.numero.in_(faltantes),
+                     Sujeto.id.in_(accesibles_ids) if accesibles_ids else text("0=1"),
                  ).order_by(ResultadoTraficoVOZ.numero, Sujeto.id)
 
                 for num, sid, apodo, nombre, dni, imagen in q_num_imp.all():
@@ -461,6 +466,8 @@ def relaciones_gprs():
     sujetos_por_numero = {}
     if numero_set:
         try:
+            accesibles_ids = [sid for (sid,) in _sujetos_query_accessible().with_entities(Sujeto.id).all()]
+
             exp_rows = db.session.query(
                 SujetoNumero.numero,
                 Sujeto.id,
@@ -472,6 +479,7 @@ def relaciones_gprs():
              .filter(
                  SujetoNumero.unidad_id == current_user.unidad_id,
                  SujetoNumero.numero.in_(list(numero_set)),
+                 SujetoNumero.sujeto_id.in_(accesibles_ids) if accesibles_ids else text("0=1"),
              ).order_by(SujetoNumero.numero, Sujeto.id).all()
 
             for num, sid, apodo, nombre, dni, imagen in exp_rows:
@@ -1314,6 +1322,8 @@ def api_informe_voz():
     sujetos_por_numero = {}
     if numero_set:
         try:
+            accesibles_ids = [sid for (sid,) in _sujetos_query_accessible().with_entities(Sujeto.id).all()]
+
             exp_rows = db.session.query(
                 SujetoNumero.numero,
                 Sujeto.id,
@@ -1323,6 +1333,7 @@ def api_informe_voz():
             ).join(Sujeto, SujetoNumero.sujeto_id == Sujeto.id).filter(
                 SujetoNumero.unidad_id == current_user.unidad_id,
                 SujetoNumero.numero.in_(list(numero_set)),
+                SujetoNumero.sujeto_id.in_(accesibles_ids) if accesibles_ids else text("0=1"),
             ).all()
             for num, sid, apodo, nombre, dni in exp_rows:
                 key = str(num).strip()
@@ -1342,6 +1353,7 @@ def api_informe_voz():
                     CargaLlamada.unidad_id == current_user.unidad_id,
                     _carga_access_predicate(),
                     ResultadoTraficoVOZ.numero.in_(faltantes),
+                    Sujeto.id.in_(accesibles_ids) if accesibles_ids else text("0=1"),
                 ).distinct().all()
                 for num, nombre, apodo, dni, sid in imp_rows:
                     key = str(num).strip()
@@ -1608,6 +1620,8 @@ def api_informe_gprs():
     sujetos_por_numero = {}
     if numero_set:
         try:
+            accesibles_ids = [sid for (sid,) in _sujetos_query_accessible().with_entities(Sujeto.id).all()]
+
             exp_rows = db.session.query(
                 SujetoNumero.numero,
                 Sujeto.id,
@@ -1617,6 +1631,7 @@ def api_informe_gprs():
             ).join(Sujeto, SujetoNumero.sujeto_id == Sujeto.id).filter(
                 SujetoNumero.unidad_id == current_user.unidad_id,
                 SujetoNumero.numero.in_(list(numero_set)),
+                SujetoNumero.sujeto_id.in_(accesibles_ids) if accesibles_ids else text("0=1"),
             ).all()
             for num, sid, apodo, nombre, dni in exp_rows:
                 key = str(num).strip()
