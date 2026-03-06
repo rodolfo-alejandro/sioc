@@ -113,13 +113,23 @@
 {% block extra_scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    function getCsrfToken() {
+        const meta = document.querySelector('meta[name="csrf-token"]');
+        return meta ? (meta.getAttribute('content') || '') : '';
+    }
+    const csrfToken = getCsrfToken();
+
     // Toggle activo/inactivo
     document.querySelectorAll('.toggle-active').forEach(btn => {
         btn.addEventListener('click', function() {
             const userId = this.dataset.userId;
             fetch(`/admin/users/${userId}/toggle-active`, {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'}
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken,
+                    'X-CSRF-Token': csrfToken
+                }
             })
             .then(r => r.json())
             .then(data => {
@@ -137,7 +147,11 @@ document.addEventListener('DOMContentLoaded', function() {
             const userId = this.dataset.userId;
             fetch(`/admin/users/${userId}/reset-password`, {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'}
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken,
+                    'X-CSRF-Token': csrfToken
+                }
             })
             .then(r => r.json())
             .then(data => {
