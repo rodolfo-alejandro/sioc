@@ -103,24 +103,28 @@ def update_user(user_id, username=None, email=None, unidad_id=None, role_id=None
 def reset_user_password(user_id, new_password=None):
     """
     Resetea la contraseña de un usuario.
-    
+
+    Si new_password es None, se genera una contraseña temporal aleatoria.
+
     Returns:
-        tuple: (user, error_message)
+        tuple: (user, temp_password, error_message)
     """
     user = User.query.get(user_id)
     if not user:
-        return None, "Usuario no encontrado"
-    
-    if new_password:
-        user.set_password(new_password)
-    else:
-        # Contraseña por defecto
-        user.set_password('TempPass123!')
-    
+        return None, None, "Usuario no encontrado"
+
+    if not new_password:
+        # Generar contraseña temporal aleatoria (12 caracteres fuertes)
+        import secrets
+        import string
+        alphabet = string.ascii_letters + string.digits
+        new_password = ''.join(secrets.choice(alphabet) for _ in range(12))
+
+    user.set_password(new_password)
     user.must_change_password = True
     db.session.commit()
     
     audit_log('PASSWORD_RESET', f'Contraseña de usuario {user.username} reseteada')
     
-    return user, None
+    return user, new_password, None
 

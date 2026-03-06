@@ -165,11 +165,11 @@ def user_reset_password(user_id):
     if not current_user.has_role('SUPERADMIN') and user.unidad_id != current_user.unidad_id:
         return jsonify({'success': False, 'message': 'Sin permisos'}), 403
     
-    user, error = reset_user_password(user_id)
-    
+    user, temp_password, error = reset_user_password(user_id)
+
     if user:
         flash(f'Contraseña de {user.username} reseteada. Debe cambiar al iniciar sesión.', 'success')
-        return jsonify({'success': True})
+        return jsonify({'success': True, 'password': temp_password})
     else:
         return jsonify({'success': False, 'message': error}), 400
 

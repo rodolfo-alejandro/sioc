@@ -156,6 +156,12 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(r => r.json())
             .then(data => {
                 if (data.success) {
+                    const pwd = data.password || '';
+                    if (pwd) {
+                        alert('Nueva contraseña temporal:\n\n' + pwd + '\n\nRecuerde indicarle al usuario que deberá cambiarla al iniciar sesión.');
+                    } else {
+                        alert('Contraseña reseteada correctamente. El usuario deberá cambiarla al iniciar sesión.');
+                    }
                     location.reload();
                 } else {
                     alert(data.message || 'Error al resetear contraseña');
