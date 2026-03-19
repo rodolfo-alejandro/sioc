@@ -343,6 +343,24 @@ body.sabana-mapa-fullscreen .sabana-mapa {
         justify-content: flex-start;
         flex-wrap: wrap;
     }
+
+    /* Ajustar el “Ir a #” (input-group) que tiene ancho fijo en el template */
+    .sabana-filtros-bar-right .input-group {
+        width: 100% !important;
+        max-width: 100%;
+    }
+    .sabana-filtros-bar-right .input-group .form-control {
+        min-width: 0;
+    }
+
+    /* Modal detalle “en el punto” en móvil pequeño */
+    #modal-impacto-detalle.sabana-detalle-en-punto .modal-dialog {
+        left: 8px;
+        right: 8px;
+        top: calc(var(--topbar-height, 60px) + 8px);
+        max-width: none;
+        width: auto;
+    }
 }
 
 .sabana-filtro-checkboxes .form-check {
