@@ -135,6 +135,101 @@
         if (icon) icon.className = expanded ? 'bi bi-fullscreen-exit' : 'bi bi-arrows-fullscreen';
     }
 
+    function setCheckedValues(containerId, valuesSet) {
+        if (!valuesSet) return;
+        var container = document.getElementById(containerId);
+        if (!container) return;
+        var set = valuesSet;
+        container.querySelectorAll('input[type="checkbox"]').forEach(function (cb) {
+            var v = String(cb.value || '').trim();
+            cb.checked = set.has(v);
+        });
+    }
+
+    function refreshProvinciasOptions() {
+        // Nota: provincias/localidades no consideran fecha/hora en el backend (solo sujeto/carga/tipo).
+        var prevProvs = new Set(getSelectedStrings('filtro-provincias').map(function (x) { return String(x); }));
+        var sujetoIds = getSelectedIds('filtro-sujetos');
+        var cargaIds = getSelectedIds('filtro-cargas');
+        var tipos = getSelectedTipos();
+
+        return fetchProvincias('', { sujeto_ids: sujetoIds, carga_ids: cargaIds, tipos: tipos }).then(function (items) {
+            renderSimpleCheckboxList('filtro-provincias', Array.isArray(items) ? items : [], 'prov');
+            setCheckedValues('filtro-provincias', prevProvs);
+            updateDdCount('dd-provincias', 'filtro-provincias', 'Seleccionar…');
+        }).catch(function () {});
+    }
+
+    function refreshLocalidadesOptions() {
+        var prevLocs = new Set(getSelectedStrings('filtro-localidades').map(function (x) { return String(x); }));
+        var sujetoIds = getSelectedIds('filtro-sujetos');
+        var cargaIds = getSelectedIds('filtro-cargas');
+        var tipos = getSelectedTipos();
+        var provincias = getSelectedStrings('filtro-provincias');
+
+        return fetchLocalidades('', { sujeto_ids: sujetoIds, carga_ids: cargaIds, tipos: tipos, provincias: provincias }).then(function (items) {
+            renderSimpleCheckboxList('filtro-localidades', Array.isArray(items) ? items : [], 'loc');
+            setCheckedValues('filtro-localidades', prevLocs);
+            updateDdCount('dd-localidades', 'filtro-localidades', 'Seleccionar…');
+        }).catch(function () {});
+    }
+
+    function refreshDropdownOptionsCascade() {
+        // Cascada completa para los selects: provincias -> localidades -> números -> IMEIs.
+        // El objetivo es que el usuario vea opciones coherentes con lo que ya seleccionó,
+        // y que recién después el mapa se aplique cuando presiona “Aplicar filtros”.
+        var sujetoIds = getSelectedIds('filtro-sujetos');
+        var cargaIds = getSelectedIds('filtro-cargas');
+        var tipos = getSelectedTipos();
+
+        // 1) Provincias
+        return fetchProvincias('', { sujeto_ids: sujetoIds, carga_ids: cargaIds, tipos: tipos })
+            .then(function (items) {
+                var prevProvs = new Set(getSelectedStrings('filtro-provincias').map(function (x) { return String(x); }));
+                renderSimpleCheckboxList('filtro-provincias', Array.isArray(items) ? items : [], 'prov');
+                setCheckedValues('filtro-provincias', prevProvs);
+                updateDdCount('dd-provincias', 'filtro-provincias', 'Seleccionar…');
+
+                // 2) Localidades (en base a provincias actuales ya recargadas)
+                var provincias = getSelectedStrings('filtro-provincias');
+                var prevLocs = new Set(getSelectedStrings('filtro-localidades').map(function (x) { return String(x); }));
+                return fetchLocalidades('', { sujeto_ids: sujetoIds, carga_ids: cargaIds, tipos: tipos, provincias: provincias }).then(function (locItems) {
+                    renderSimpleCheckboxList('filtro-localidades', Array.isArray(locItems) ? locItems : [], 'loc');
+                    setCheckedValues('filtro-localidades', prevLocs);
+                    updateDdCount('dd-localidades', 'filtro-localidades', 'Seleccionar…');
+
+                    // 3) Números/IMEIs (incluyen fecha/hora en endpoints)
+                    var fecha_desde = getValue('filtro-fecha-desde') || null;
+                    var fecha_hasta = getValue('filtro-fecha-hasta') || null;
+                    var hora_desde = getValue('filtro-hora-desde') || null;
+                    var hora_hasta = getValue('filtro-hora-hasta') || null;
+                    var finalProvs = getSelectedStrings('filtro-provincias');
+                    var finalLocs = getSelectedStrings('filtro-localidades');
+
+                    var base = {
+                        sujeto_ids: sujetoIds,
+                        carga_ids: cargaIds,
+                        tipos: tipos,
+                        provincias: finalProvs,
+                        localidades: finalLocs,
+                        fecha_desde: fecha_desde,
+                        fecha_hasta: fecha_hasta,
+                        hora_desde: hora_desde,
+                        hora_hasta: hora_hasta
+                    };
+
+                    return Promise.all([
+                        fetchNumeros('', base).then(function (nums) {
+                            renderNumerosResultados(Array.isArray(nums) ? nums : []);
+                        }).catch(function () {}),
+                        fetchImeis('', base).then(function (imeis) {
+                            renderImeisResultados(Array.isArray(imeis) ? imeis : []);
+                        }).catch(function () {})
+                    ]);
+                });
+            });
+    }
+
     function getCsrfToken() {
         var meta = document.querySelector('meta[name="csrf-token"]');
         if (meta) return meta.getAttribute('content');
@@ -615,6 +710,7 @@
         if (qTxt) q.append('q', qTxt);
         (params.sujeto_ids || []).forEach(function (id) { q.append('sujeto_ids[]', id); });
         (params.carga_ids || []).forEach(function (id) { q.append('carga_ids[]', id); });
+        (params.tipos || []).forEach(function (t) { q.append('tipos[]', t); });
         (params.provincias || []).forEach(function (p) { q.append('provincias[]', p); });
         (params.localidades || []).forEach(function (l) { q.append('localidades[]', l); });
         if (params.fecha_desde) q.append('fecha_desde', params.fecha_desde);
@@ -3173,6 +3269,21 @@
             updateDdCount('dd-localidades', 'filtro-localidades', 'Seleccionar…');
         }).catch(function () {});
 
+        // Cascada: cuando abrimos el dropdown de provincias/localidades,
+        // recargamos las opciones basadas en los filtros ya seleccionados (sin aplicar aún el mapa).
+        var ddProvsEl = document.getElementById('dd-provincias');
+        if (ddProvsEl) {
+            ddProvsEl.addEventListener('shown.bs.dropdown', function () {
+                refreshProvinciasOptions();
+            });
+        }
+        var ddLocEl = document.getElementById('dd-localidades');
+        if (ddLocEl) {
+            ddLocEl.addEventListener('shown.bs.dropdown', function () {
+                refreshLocalidadesOptions();
+            });
+        }
+
         // Recalcular labels al tildar/destildar
         var sujetosEl = document.getElementById('filtro-sujetos');
         if (sujetosEl) sujetosEl.addEventListener('change', function () { updateDdCount('dd-sujetos', 'filtro-sujetos', 'Seleccionar…'); });
@@ -3362,6 +3473,27 @@
                 refreshMapSize(50);
             });
         }
+
+        // Botón explícito: recargar listas en cascada y recién ahí aplicar al mapa
+        var btnAplicar = document.getElementById('btn-aplicar-filtros');
+        if (btnAplicar) {
+            btnAplicar.addEventListener('click', function () {
+                var prevDisabled = btnAplicar.disabled;
+                if (prevDisabled) return;
+                btnAplicar.disabled = true;
+                // Recargar opciones dependientes (para que el usuario vea cascada coherente)
+                refreshDropdownOptionsCascade().then(function () {
+                    aplicarFiltros();
+                    refreshMapSize(50);
+                }).catch(function () {
+                    // Aunque falle la cascada, igual aplicamos al mapa con lo seleccionado.
+                    aplicarFiltros();
+                    refreshMapSize(50);
+                }).finally(function () {
+                    btnAplicar.disabled = false;
+                });
+            });
+        }
         var vistaCeldas = document.getElementById('vista-celdas');
         var vistaRuta = document.getElementById('vista-ruta');
         if (vistaCeldas) vistaCeldas.addEventListener('change', function () {
@@ -3405,9 +3537,9 @@
         ['filtro-fecha-desde', 'filtro-fecha-hasta', 'filtro-hora-desde', 'filtro-hora-hasta'].forEach(function (id) {
             var el = document.getElementById(id);
             if (!el) return;
-            // En móvil/input puede disparar muchas veces mientras el usuario ajusta.
-            // Usamos solo `change` para aplicar una vez.
-            el.addEventListener('change', function () { scheduleAutoApply(500); });
+            // En este modo, el mapa se aplica SOLO con el botón “Aplicar filtros”.
+            // Los endpoints para números/IMEIs ya leen fecha/hora cuando se abre el dropdown.
+            el.addEventListener('change', function () {});
         });
 
         // Nota: no aplicamos al cambiar checkboxes del dropdown.
@@ -3417,7 +3549,7 @@
         ['dd-provincias', 'dd-localidades', 'dd-sujetos', 'dd-cargas', 'dd-tipos', 'dd-numeros', 'dd-imeis'].forEach(function (bid) {
             var b = document.getElementById(bid);
             if (!b) return;
-            b.addEventListener('hidden.bs.dropdown', function () { scheduleAutoApply(0); });
+            b.addEventListener('hidden.bs.dropdown', function () {});
         });
 
         // Si se colapsan/expanden filtros, Leaflet necesita recalcular tamaño
