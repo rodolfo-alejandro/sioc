@@ -1414,7 +1414,8 @@
             cb.addEventListener('change', function () {
                 if (this.checked) selectedNumeros.add(v); else selectedNumeros.delete(v);
                 renderNumerosSelected();
-                scheduleAutoApply(400);
+                // No aplicar aún: esperamos a que el usuario termine y cierre el dropdown
+                // (hidden.bs.dropdown) para evitar múltiples recargas pesadas.
             });
             container.appendChild(div);
         });
@@ -1436,7 +1437,8 @@
             cb.addEventListener('change', function () {
                 if (this.checked) selectedImeis.add(v); else selectedImeis.delete(v);
                 renderImeisSelected();
-                scheduleAutoApply(400);
+                // No aplicar aún: esperamos a que el usuario termine y cierre el dropdown
+                // (hidden.bs.dropdown) para evitar múltiples recargas pesadas.
             });
             container.appendChild(div);
         });
@@ -3403,16 +3405,13 @@
         ['filtro-fecha-desde', 'filtro-fecha-hasta', 'filtro-hora-desde', 'filtro-hora-hasta'].forEach(function (id) {
             var el = document.getElementById(id);
             if (!el) return;
+            // En móvil/input puede disparar muchas veces mientras el usuario ajusta.
+            // Usamos solo `change` para aplicar una vez.
             el.addEventListener('change', function () { scheduleAutoApply(500); });
-            el.addEventListener('input', function () { scheduleAutoApply(700); });
         });
 
-        // Auto-aplicar cuando cambian checkboxes en dropdowns
-        ['filtro-sujetos', 'filtro-cargas', 'filtro-provincias', 'filtro-localidades', 'filtro-tipos'].forEach(function (cid) {
-            var c = document.getElementById(cid);
-            if (!c) return;
-            c.addEventListener('change', function () { scheduleAutoApply(500); });
-        });
+        // Nota: no aplicamos al cambiar checkboxes del dropdown.
+        // El apply ocurre al cerrar el dropdown (hidden.bs.dropdown), que evita ráfagas de requests.
 
         // Auto-aplicar al cerrar dropdowns (multi-selección)
         ['dd-provincias', 'dd-localidades', 'dd-sujetos', 'dd-cargas', 'dd-tipos', 'dd-numeros', 'dd-imeis'].forEach(function (bid) {
