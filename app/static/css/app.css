@@ -405,6 +405,11 @@ body {
 }
 
 @media (max-width: 576px) {
+    :root {
+        /* En móvil el buscador global ocupa más alto y el contenido quedaba tapado */
+        --topbar-height: 110px;
+    }
+
     .main-content {
         padding: 0.5rem;
     }

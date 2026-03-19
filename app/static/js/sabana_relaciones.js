@@ -343,14 +343,40 @@
         svg.addEventListener('pointerdown', function (ev) {
             if (!ev) return;
             var g = ev.target.closest('.rel-node');
-            if (!g) return;
+
+            var nodeId = null;
+            if (g) {
+                nodeId = g.getAttribute('data-id');
+            } else {
+                // Permitir arrastrar iniciando desde una línea o etiqueta de arista:
+                // si el usuario toca una línea (visible aunque el nodo esté parcialmente fuera),
+                // movemos el nodo más cercano a ese punto.
+                var elEp = ev.target.closest('[data-source][data-target]');
+                if (elEp && elEp.getAttribute('data-source') && elEp.getAttribute('data-target')) {
+                    var aId = elEp.getAttribute('data-source');
+                    var bId = elEp.getAttribute('data-target');
+                    var rect = svg.getBoundingClientRect();
+                    var localX = ev.clientX - rect.left;
+                    var localY = ev.clientY - rect.top;
+                    var aNode = graphState.nodesMap[aId];
+                    var bNode = graphState.nodesMap[bId];
+                    if (aNode && bNode) {
+                        var da = Math.hypot(localX - aNode.x, localY - aNode.y);
+                        var db = Math.hypot(localX - bNode.x, localY - bNode.y);
+                        nodeId = da <= db ? aId : bId;
+                    } else {
+                        nodeId = graphState.nodesMap[aId] ? aId : (graphState.nodesMap[bId] ? bId : null);
+                    }
+                }
+            }
+
+            if (!nodeId) return;
             ev.preventDefault();
 
-            var id = g.getAttribute('data-id');
-            if (!id || !graphState || !graphState.nodesMap[id]) return;
+            if (!graphState || !graphState.nodesMap[nodeId]) return;
 
             drag.active = true;
-            drag.nodeId = id;
+            drag.nodeId = nodeId;
             drag.pointerId = ev.pointerId;
             drag.moved = false;
             drag.startX = ev.clientX;
