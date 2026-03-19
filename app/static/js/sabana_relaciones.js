@@ -44,9 +44,10 @@
         if (!container) return;
 
         var width = container.clientWidth || 800;
-        // Altura responsive: evita SVG demasiado alto en móvil y demasiado bajo en desktop.
-        var height = Math.max(260, Math.min(480, Math.round(width * 0.62)));
-        var padding = 40;
+        // Altura responsive basada en el contenedor real (evita recortes con overflow:hidden)
+        var height = container.clientHeight || Math.max(260, Math.min(480, Math.round(width * 0.62)));
+        height = Math.max(260, Math.min(560, height));
+        var padding = 36;
 
         // Construir nodos y links a partir de relaciones
         var nodesMap = Object.create(null);
@@ -74,23 +75,29 @@
             return;
         }
 
-        // Disposición simple en círculo
+        // Disposición simple en círculo (ajuste de radio para que TODOS los nodos entren)
         var cx = width / 2;
         var cy = height / 2;
-        var radius = Math.max(120, Math.min(width, height) / 2 - padding);
-        nodes.forEach(function (n, idx) {
-            var angle = (2 * Math.PI * idx) / nodes.length;
-            n.x = cx + radius * Math.cos(angle);
-            n.y = cy + radius * Math.sin(angle);
-        });
-
-        // Calcular radios de nodos según grado
+        // Calcular radios de nodos según grado (esto define el margen real para que no se corte)
         var maxDegree = nodes.reduce(function (m, n) { return Math.max(m, n.degree || 0); }, 0);
 
         function nodeRadius(deg) {
             if (maxDegree <= 0) return 8;
             return 8 + (deg / maxDegree) * 10;
         }
+
+        // Radio disponible descontando padding y el tamaño máximo de nodo (incluye avatares)
+        var maxNodeR = (nodeRadius(maxDegree) + (avatarSizeBonus || 0)) * nodeScale;
+        var margin = padding + maxNodeR + 6;
+        var radius = Math.max(80, Math.min(width, height) / 2 - margin);
+        // Si por algún motivo queda demasiado pequeño, forzar un mínimo para que el grafo no colapse
+        if (!isFinite(radius) || radius < 10) radius = 120;
+
+        nodes.forEach(function (n, idx) {
+            var angle = (2 * Math.PI * idx) / nodes.length;
+            n.x = cx + radius * Math.cos(angle);
+            n.y = cy + radius * Math.sin(angle);
+        });
 
         function linkWidth(cant) {
             if (maxCantidad <= 0) return 1;
