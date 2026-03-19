@@ -14,7 +14,7 @@
 
     .relaciones-graph-fullscreen {
         position: fixed !important;
-        inset: 56px 0 0 0; /* debajo del navbar */
+        inset: var(--topbar-height, 56px) 0 0 0; /* debajo del navbar */
         z-index: 1050;
         background: #ffffff;
         border-radius: 0;
@@ -23,6 +23,12 @@
     .relaciones-graph-fullscreen svg {
         width: 100% !important;
         height: 100% !important;
+    }
+
+    @media (max-width: 575.98px) {
+        .relaciones-graph-fullscreen {
+            inset: var(--topbar-height, 56px) 0 0 0;
+        }
     }
 </style>
 <div class="page-header">
@@ -93,7 +99,7 @@
     </div>
 </div>
 
-<ul class="nav nav-tabs mb-3" role="tablist">
+<ul class="nav nav-tabs mb-3 flex-nowrap overflow-auto" role="tablist">
     <li class="nav-item" role="presentation">
         <button class="nav-link active" id="tab-tabla" data-bs-toggle="tab" data-bs-target="#panel-tabla" type="button" role="tab" aria-controls="panel-tabla" aria-selected="true">
             <i class="bi bi-table"></i> Tabla
@@ -181,19 +187,19 @@
             <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
                 <h5 class="mb-0"><i class="bi bi-diagram-3"></i> Grafo de relaciones GPRS</h5>
                 <div class="d-flex align-items-center gap-3 flex-wrap">
-                    <div class="d-flex align-items-center gap-2">
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
                         <label class="small mb-0 text-nowrap" for="relaciones-node-scale" title="Escala de todos los nodos">Tamaño nodos</label>
-                        <input type="range" id="relaciones-node-scale" min="80" max="150" value="100" class="form-range" style="width: 80px;">
+                        <input type="range" id="relaciones-node-scale" min="80" max="150" value="100" class="form-range" style="width: 70px;">
                         <span class="small text-muted" id="relaciones-node-scale-val">100%</span>
                     </div>
-                    <div class="d-flex align-items-center gap-2">
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
                         <label class="small mb-0 text-nowrap" for="relaciones-avatar-size" title="Tamaño extra de avatares (nodos con sujeto)">Tamaño avatares</label>
-                        <input type="range" id="relaciones-avatar-size" min="0" max="20" value="6" class="form-range" style="width: 90px;">
+                        <input type="range" id="relaciones-avatar-size" min="0" max="20" value="6" class="form-range" style="width: 70px;">
                         <span class="small text-muted" id="relaciones-avatar-size-val">6</span>
                     </div>
-                    <div class="d-flex align-items-center gap-2">
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
                         <label class="small mb-0 text-nowrap" for="relaciones-edge-label-size" title="Tamaño del número en las líneas (cantidad de accesos)">Nº en líneas</label>
-                        <input type="range" id="relaciones-edge-label-size" min="8" max="24" value="10" class="form-range" style="width: 70px;">
+                        <input type="range" id="relaciones-edge-label-size" min="8" max="24" value="10" class="form-range" style="width: 65px;">
                         <span class="small text-muted" id="relaciones-edge-label-size-val">10</span>
                     </div>
                     <div class="form-check form-switch mb-0">

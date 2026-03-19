@@ -44,7 +44,8 @@
         if (!container) return;
 
         var width = container.clientWidth || 800;
-        var height = 480;
+        // Altura responsive: evita SVG demasiado alto en móvil y demasiado bajo en desktop.
+        var height = Math.max(260, Math.min(480, Math.round(width * 0.62)));
         var padding = 40;
 
         // Construir nodos y links a partir de relaciones
@@ -298,42 +299,85 @@
             applyNodeScale(graphState.svg, n, next);
         });
 
-        // Soporte de arrastre simple de nodos
-        var drag = { active: false, nodeId: null, offsetX: 0, offsetY: 0 };
+        // Doble tap en touch (equivalente a dblclick, pero confiable en móviles)
+        var lastTap = { time: 0, nodeId: null };
+        container.addEventListener('pointerup', function (ev) {
+            if (!ev || ev.pointerType !== 'touch') return;
+            var g = ev.target.closest('.rel-node');
+            if (!g || !graphState || !graphState.nodesMap) return;
+            var id = g.getAttribute('data-id');
+            if (!id) return;
 
-        svg.addEventListener('mousedown', function (ev) {
+            // No escalar si el drag se movió (para no chocar con el arrastre)
+            if (drag && drag.active && drag.moved) return;
+
+            var now = Date.now();
+            var dt = now - (lastTap.time || 0);
+            if (lastTap.nodeId === id && dt > 0 && dt < 320) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                var n = graphState.nodesMap[id];
+                if (!n) return;
+                var scales = [1, 1.5, 2];
+                var current = graphState.nodeScaleByNode[id] || 1;
+                var idx = scales.indexOf(current);
+                if (idx === -1) idx = 0;
+                var next = scales[(idx + 1) % scales.length];
+                graphState.nodeScaleByNode[id] = next;
+                applyNodeScale(graphState.svg, n, next);
+            }
+            lastTap = { time: now, nodeId: id };
+        });
+
+        // Soporte de arrastre simple de nodos
+        var drag = { active: false, nodeId: null, pointerId: null, startX: 0, startY: 0, moved: false };
+        try { svg.style.touchAction = 'none'; } catch (eTA) {}
+
+        svg.addEventListener('pointerdown', function (ev) {
+            if (!ev) return;
             var g = ev.target.closest('.rel-node');
             if (!g) return;
             ev.preventDefault();
+
             var id = g.getAttribute('data-id');
             if (!id || !graphState || !graphState.nodesMap[id]) return;
+
             drag.active = true;
             drag.nodeId = id;
+            drag.pointerId = ev.pointerId;
+            drag.moved = false;
             drag.startX = ev.clientX;
             drag.startY = ev.clientY;
+
+            try { svg.setPointerCapture(ev.pointerId); } catch (eCap) {}
         });
 
-        svg.addEventListener('mousemove', function (ev) {
+        svg.addEventListener('pointermove', function (ev) {
+            if (!ev) return;
             if (!drag.active || !graphState || !graphState.nodesMap[drag.nodeId]) return;
+            if (drag.pointerId != null && ev.pointerId !== drag.pointerId) return;
             ev.preventDefault();
+
             var n = graphState.nodesMap[drag.nodeId];
             var dx = ev.clientX - drag.startX;
             var dy = ev.clientY - drag.startY;
+            if (Math.abs(dx) > 3 || Math.abs(dy) > 3) drag.moved = true;
+
             n.x = n.x + dx;
             n.y = n.y + dy;
             drag.startX = ev.clientX;
             drag.startY = ev.clientY;
+
             // Mover todo el grupo (nodo + etiqueta) con transform
             svg.querySelectorAll('.rel-node').forEach(function (g) {
                 if (g.getAttribute('data-id') !== drag.nodeId) return;
                 g.setAttribute('transform', 'translate(' + n.x + ',' + n.y + ')');
             });
+
             // Líneas y etiquetas de arista
             svg.querySelectorAll('line').forEach(function (l) {
                 var aId = l.getAttribute('data-source');
                 var bId = l.getAttribute('data-target');
-                var a = graphState.nodesMap[aId];
-                var b = graphState.nodesMap[bId];
                 if (aId === drag.nodeId) {
                     l.setAttribute('x1', n.x);
                     l.setAttribute('y1', n.y);
@@ -354,14 +398,15 @@
             });
         });
 
-        svg.addEventListener('mouseup', function () {
+        function endDrag(ev) {
+            if (drag.pointerId != null && ev && ev.pointerId !== drag.pointerId) return;
             drag.active = false;
             drag.nodeId = null;
-        });
-        svg.addEventListener('mouseleave', function () {
-            drag.active = false;
-            drag.nodeId = null;
-        });
+            drag.pointerId = null;
+        }
+        svg.addEventListener('pointerup', endDrag);
+        svg.addEventListener('pointercancel', endDrag);
+        svg.addEventListener('pointerleave', endDrag);
     }
 
     function createTitle(svgNS, text) {
@@ -1037,6 +1082,15 @@
         if (relaciones && relaciones.length) {
             buildGraph(relaciones, getGraphOpts());
         }
+
+        var resizeTimer = null;
+        window.addEventListener('resize', function () {
+            if (!relaciones || !relaciones.length) return;
+            if (resizeTimer) clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(function () {
+                buildGraph(relaciones, getGraphOpts());
+            }, 180);
+        });
     });
 })();
 
