@@ -520,3 +520,16 @@ body.sabana-mapa-fullscreen .sabana-mapa {
 #modal-impacto-detalle.sabana-detalle-en-punto .modal-body .table td {
     padding: 0.2rem 0.35rem;
 }
+
+/* Ayuda, alerta de validación y resumen de filtros aplicados */
+.sabana-filtros-ayuda {
+    line-height: 1.35;
+}
+.sabana-filtros-resumen {
+    font-size: 0.875rem;
+}
+@media (max-width: 575.98px) {
+    .sabana-filtros-ayuda {
+        font-size: 0.8rem;
+    }
+}

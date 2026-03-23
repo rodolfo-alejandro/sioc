@@ -26,6 +26,12 @@
     </div>
     <div class="collapse show" id="sabana-filtros-collapse">
         <div class="card-body p-2">
+        <p class="small text-muted mb-2 sabana-filtros-ayuda">
+            <i class="bi bi-info-circle"></i>
+            Elija al menos <strong>sujeto</strong>, <strong>carga</strong>, <strong>número</strong> o <strong>IMEI</strong> y pulse <strong>Aplicar filtros</strong>.
+            Provincia y localidad dependen de sujeto/carga/tipo (no de fecha/hora); el mapa y la búsqueda de números/IMEI sí usan fecha y hora.
+        </p>
+        <div id="sabana-filtros-alerta" class="alert alert-warning py-2 px-3 small mb-2 d-none" role="alert"></div>
         <div class="sabana-filtros-bar">
             <div class="sabana-filtros-bar-left">
                 <div class="input-group input-group-sm sabana-ig">
@@ -49,9 +55,9 @@
                     <button class="btn btn-outline-secondary" type="button" id="btn-goto-inicio" title="Ir al inicio (#1)">Inicio</button>
                 </div>
                 <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-limpiar-filtros">Limpiar</button>
-                    <button type="button" class="btn btn-sm btn-primary" id="btn-aplicar-filtros" title="Aplicar filtros al mapa">
-                        <i class="bi bi-funnel"></i> Aplicar filtros
-                    </button>
+                <button type="button" class="btn btn-sm btn-primary" id="btn-aplicar-filtros" title="Aplicar filtros al mapa">
+                    <i class="bi bi-funnel"></i> Aplicar filtros
+                </button>
                 <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-captura-informe" title="Guardar captura del mapa para el informe de Relaciones">
                     <i class="bi bi-camera"></i> Captura informe
                 </button>
@@ -240,6 +246,8 @@
         </div>
     </div>
 </div>
+
+<div id="sabana-filtros-resumen" class="alert alert-secondary border py-2 px-3 small mb-2 d-none sabana-filtros-resumen" role="status" aria-live="polite"></div>
 
 <div class="sabana-mapa-wrap">
     <div id="mapa-sabana" class="sabana-mapa"></div>

@@ -2876,14 +2876,13 @@
         }
     }
 
-    function aplicarFiltros() {
-        var token = ++lastRequestToken;
+    function getFilterParamsSnapshot() {
         var sujetoIds = getSelectedIds('filtro-sujetos');
         var cargaIds = getSelectedIds('filtro-cargas');
         var tipos = getSelectedTipos();
         var provincias = getSelectedStrings('filtro-provincias');
         var localidades = getSelectedStrings('filtro-localidades');
-        var params = {
+        return {
             sujeto_ids: sujetoIds,
             carga_ids: cargaIds,
             tipos: tipos,
@@ -2896,16 +2895,102 @@
             numeros: getSelectedNumeros(),
             imeis: getSelectedImeis()
         };
-        // Para evitar que se carguen "todos los archivos" al entrar como SUPERADMIN
-        // o sin filtros, sólo aplicamos si hay al menos una carga, sujeto, número o IMEI seleccionado.
-        var hasFiltroBasico = (sujetoIds && sujetoIds.length) ||
-            (cargaIds && cargaIds.length) ||
+    }
+
+    function hasFiltroBasicoParams(params) {
+        if (!params) return false;
+        return (params.sujeto_ids && params.sujeto_ids.length) ||
+            (params.carga_ids && params.carga_ids.length) ||
             (params.numeros && params.numeros.length) ||
             (params.imeis && params.imeis.length);
-        if (!hasFiltroBasico) {
+    }
+
+    function showFiltrosAlerta(texto) {
+        var el = document.getElementById('sabana-filtros-alerta');
+        if (!el) return;
+        if (texto) {
+            el.textContent = texto;
+            el.classList.remove('d-none');
+        } else {
+            el.textContent = '';
+            el.classList.add('d-none');
+        }
+    }
+
+    function getCheckedLabelTexts(containerId) {
+        var c = document.getElementById(containerId);
+        if (!c) return [];
+        var out = [];
+        c.querySelectorAll('input[type="checkbox"]:checked').forEach(function (cb) {
+            var id = cb.id;
+            var lab = id ? c.querySelector('label[for="' + id + '"]') : null;
+            var t = (lab && lab.textContent) ? String(lab.textContent).trim() : String(cb.value || '').trim();
+            if (t) out.push(t);
+        });
+        return out;
+    }
+
+    function updateFiltrosResumenUI(params) {
+        var el = document.getElementById('sabana-filtros-resumen');
+        if (!el) return;
+        if (!params || !hasFiltroBasicoParams(params)) {
+            el.textContent = '';
+            el.classList.add('d-none');
+            return;
+        }
+        var parts = [];
+        var ns = params.numeros ? params.numeros.length : 0;
+        var ni = params.imeis ? params.imeis.length : 0;
+        var nSuj = params.sujeto_ids ? params.sujeto_ids.length : 0;
+        var nCar = params.carga_ids ? params.carga_ids.length : 0;
+
+        if (nSuj) {
+            var labs = getCheckedLabelTexts('filtro-sujetos');
+            if (labs.length <= 2) parts.push('Sujetos: ' + labs.join(', '));
+            else parts.push('Sujetos: ' + nSuj + ' seleccionado(s)');
+        }
+        if (nCar) {
+            var clabs = getCheckedLabelTexts('filtro-cargas');
+            if (clabs.length <= 1) parts.push('Cargas: ' + clabs.join(', '));
+            else parts.push('Cargas: ' + nCar + ' seleccionada(s)');
+        }
+        if (params.tipos && params.tipos.length) {
+            parts.push('Tipo: ' + params.tipos.map(function (t) { return String(t).toUpperCase(); }).join(' + '));
+        }
+        if (params.fecha_desde || params.fecha_hasta) {
+            parts.push('Fecha: ' + (params.fecha_desde || '…') + ' → ' + (params.fecha_hasta || '…'));
+        }
+        if (params.hora_desde || params.hora_hasta) {
+            parts.push('Hora: ' + (params.hora_desde || '…') + ' → ' + (params.hora_hasta || '…'));
+        }
+        var np = params.provincias ? params.provincias.length : 0;
+        var nl = params.localidades ? params.localidades.length : 0;
+        if (np) parts.push('Prov.: ' + np);
+        if (nl) parts.push('Loc.: ' + nl);
+        if (ns) parts.push('Nº: ' + ns);
+        if (ni) parts.push('IMEI: ' + ni);
+
+        el.textContent = 'Filtros activos en el mapa: ' + parts.join(' · ');
+        el.classList.remove('d-none');
+    }
+
+    function aplicarFiltros(opts) {
+        opts = opts || {};
+        var onComplete = opts.onComplete;
+        function fireComplete() {
+            if (typeof onComplete !== 'function') return;
+            try { onComplete(); } catch (eCb) {}
+        }
+        var token = ++lastRequestToken;
+        var params = getFilterParamsSnapshot();
+        // Para evitar que se carguen "todos los archivos" al entrar como SUPERADMIN
+        // o sin filtros, sólo aplicamos si hay al menos una carga, sujeto, número o IMEI seleccionado.
+        if (!hasFiltroBasicoParams(params)) {
             lastAppliedParams = null;
             clearMarkers();
             clearRuta();
+            updateFiltrosResumenUI(null);
+            fireComplete();
             return;
         }
         lastAppliedParams = params;
@@ -2921,6 +3006,10 @@
             }).catch(function () {
                 if (token !== lastRequestToken) return;
                 drawRuta([], null);
+            }).finally(function () {
+                if (token !== lastRequestToken) return;
+                updateFiltrosResumenUI(lastAppliedParams);
+                fireComplete();
             });
             clearMarkers();
         } else {
@@ -2982,11 +3071,19 @@
                             }
                         } catch (eKey) {}
                     }
+                    updateFiltrosResumenUI(lastAppliedParams);
+                    fireComplete();
                 }).catch(function () {
                     if (token !== lastRequestToken) return;
                     addMarkers([]);
                     clearTrazado();
+                    updateFiltrosResumenUI(lastAppliedParams);
+                    fireComplete();
                 });
+            }).catch(function () {
+                if (token !== lastRequestToken) return;
+                updateFiltrosResumenUI(lastAppliedParams);
+                fireComplete();
             });
         }
     }
@@ -3474,23 +3571,36 @@
             });
         }
 
-        // Botón explícito: recargar listas en cascada y recién ahí aplicar al mapa
+        // Botón explícito: validar → cascada → aplicar mapa (con feedback y resumen)
         var btnAplicar = document.getElementById('btn-aplicar-filtros');
         if (btnAplicar) {
+            var btnAplicarHtmlOriginal = btnAplicar.innerHTML;
             btnAplicar.addEventListener('click', function () {
-                var prevDisabled = btnAplicar.disabled;
-                if (prevDisabled) return;
+                if (btnAplicar.disabled) return;
+                var snap = getFilterParamsSnapshot();
+                if (!hasFiltroBasicoParams(snap)) {
+                    showFiltrosAlerta('Seleccione al menos un sujeto, una carga, un número o un IMEI y pulse Aplicar filtros.');
+                    return;
+                }
+                showFiltrosAlerta('');
                 btnAplicar.disabled = true;
-                // Recargar opciones dependientes (para que el usuario vea cascada coherente)
+                btnAplicar.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Aplicando…';
                 refreshDropdownOptionsCascade().then(function () {
-                    aplicarFiltros();
-                    refreshMapSize(50);
+                    aplicarFiltros({
+                        onComplete: function () {
+                            refreshMapSize(50);
+                            btnAplicar.disabled = false;
+                            btnAplicar.innerHTML = btnAplicarHtmlOriginal;
+                        }
+                    });
                 }).catch(function () {
-                    // Aunque falle la cascada, igual aplicamos al mapa con lo seleccionado.
-                    aplicarFiltros();
-                    refreshMapSize(50);
-                }).finally(function () {
-                    btnAplicar.disabled = false;
+                    aplicarFiltros({
+                        onComplete: function () {
+                            refreshMapSize(50);
+                            btnAplicar.disabled = false;
+                            btnAplicar.innerHTML = btnAplicarHtmlOriginal;
+                        }
+                    });
                 });
             });
         }
