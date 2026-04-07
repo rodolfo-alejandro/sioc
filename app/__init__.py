@@ -68,6 +68,9 @@ def create_app(config_class=Config):
     from app.blueprints.sabana_llamadas import bp as sabana_llamadas_bp
     app.register_blueprint(sabana_llamadas_bp)
 
+    from app.blueprints.analisis_puntos import bp as analisis_puntos_bp
+    app.register_blueprint(analisis_puntos_bp)
+
     # Crear directorios necesarios
     upload_folder = app.config.get('UPLOAD_FOLDER', 'instance/uploads')
     os.makedirs(upload_folder, exist_ok=True)

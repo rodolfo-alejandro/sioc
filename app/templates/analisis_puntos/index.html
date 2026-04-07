@@ -1,0 +1,106 @@
+{% extends "layouts/base.html" %}
+{% block title %}Análisis de Puntos{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0">Análisis de Puntos</h4>
+    <span class="badge bg-primary">Módulo independiente de Sabana</span>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-lg-4">
+      <div class="card">
+        <div class="card-header">Crear Caso</div>
+        <div class="card-body">
+          <form method="post" action="{{ url_for('analisis_puntos.crear_caso') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="mb-2">
+              <label class="form-label">Título</label>
+              <input type="text" class="form-control" name="titulo" placeholder="Ej: Homicidio zona X - madrugada">
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Descripción</label>
+              <textarea class="form-control" name="descripcion" rows="3"></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary w-100">Crear caso</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-8">
+      <div class="card">
+        <div class="card-header">Casos Recientes</div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-sm table-striped mb-0">
+              <thead>
+                <tr>
+                  <th>Código</th>
+                  <th>Título</th>
+                  <th>Estado</th>
+                  <th>Creado</th>
+                  <th>Mapa</th>
+                  <th>Subir archivo</th>
+                  <th>Fuentes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for c in casos %}
+                <tr>
+                  <td>{{ c.codigo }}</td>
+                  <td>{{ c.titulo }}</td>
+                  <td>{{ c.estado }}</td>
+                  <td>{{ c.created_at|localtime('%d/%m/%Y %H:%M') }}</td>
+                  <td>
+                    <a href="{{ url_for('analisis_puntos.mapa_caso', caso_id=c.id) }}" class="btn btn-sm btn-outline-primary">Abrir</a>
+                  </td>
+                  <td>
+                    <form method="post" action="{{ url_for('analisis_puntos.upload_archivo', caso_id=c.id) }}" enctype="multipart/form-data" class="d-flex gap-1">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <select class="form-select form-select-sm" name="source_type" style="max-width: 90px;">
+                        <option value="VOZ">VOZ</option>
+                        <option value="GPRS">GPRS</option>
+                      </select>
+                      <input type="file" class="form-control form-control-sm" name="archivo" accept=".xlsx,.xls,.csv">
+                      <button class="btn btn-sm btn-success" type="submit">Subir</button>
+                    </form>
+                  </td>
+                  <td>
+                    {% if c.fuentes %}
+                      <div class="small">
+                      {% for f in c.fuentes %}
+                        <div class="mb-1 border rounded p-1">
+                          <div><strong>{{ f.source_type }}</strong> - {{ f.nombre_archivo }}</div>
+                          <div>Estado: <span class="badge {% if f.upload_status == 'PROCESSED' %}bg-success{% elif f.upload_status == 'ERROR' %}bg-danger{% else %}bg-secondary{% endif %}">{{ f.upload_status }}</span></div>
+                          <form method="post" action="{{ url_for('analisis_puntos.procesar_fuente', fuente_id=f.id) }}" class="mt-1">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button class="btn btn-sm btn-outline-primary" type="submit">Procesar</button>
+                          </form>
+                        </div>
+                      {% endfor %}
+                      </div>
+                    {% else %}
+                      <span class="text-muted small">Sin fuentes</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% else %}
+                <tr>
+                  <td colspan="7" class="text-center text-muted py-3">Sin casos todavía.</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="alert alert-info mt-3 mb-0">
+    Siguiente implementación: parser VOZ/GPRS, mapa de celdas/radios, filtro por distancia en metros, grafo e informe PDF.
+  </div>
+</div>
+{% endblock %}

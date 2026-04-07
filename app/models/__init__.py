@@ -37,6 +37,13 @@ from app.models.sabana_llamadas import (
     DatoTecnico,
     SabanaImpactoNota,
 )
+from app.models.analisis_puntos import (
+    AnalisisPuntoCaso,
+    AnalisisPuntoFuente,
+    AnalisisPuntoCelda,
+    AnalisisPuntoEvento,
+    AnalisisPuntoTitular,
+)
 
 __all__ = [
     'User', 'Role', 'Permission', 'Unidad', 'AuditLog', 'Dataset', 'DenunciaWeb',
@@ -53,6 +60,8 @@ __all__ = [
     'RelacionPersona', 'OrganizacionCriminal', 'PersonaOrganizacion',
     'TipoOperativo', 'OperativoActivo',
     'Sujeto', 'CargaLlamada', 'ResultadoTraficoGPRS', 'ResultadoTraficoVOZ', 'DatoTecnico',
-    'SabanaImpactoNota'
+    'SabanaImpactoNota',
+    'AnalisisPuntoCaso', 'AnalisisPuntoFuente', 'AnalisisPuntoCelda', 'AnalisisPuntoEvento',
+    'AnalisisPuntoTitular'
 ]
 

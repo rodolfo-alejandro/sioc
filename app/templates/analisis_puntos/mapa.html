@@ -1,0 +1,81 @@
+{% extends "layouts/base.html" %}
+{% block title %}Mapa de Caso - Análisis de Puntos{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<style>
+  #ap-mapa { height: 70vh; min-height: 480px; border-radius: .4rem; }
+  .ap-toolbar { gap: .5rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <div>
+      <h5 class="mb-0">Mapa del caso</h5>
+      <div class="small text-muted">{{ caso.codigo }} - {{ caso.titulo }}</div>
+    </div>
+    <a href="{{ url_for('analisis_puntos.index') }}" class="btn btn-sm btn-outline-secondary">Volver</a>
+  </div>
+
+  <div class="card mb-2">
+    <div class="card-body d-flex flex-wrap align-items-end ap-toolbar">
+      <div>
+        <label class="form-label small mb-1">Fuente</label>
+        <select id="ap-source-type" class="form-select form-select-sm">
+          <option value="">Todas</option>
+          <option value="VOZ">VOZ</option>
+          <option value="GPRS">GPRS</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label small mb-1">Distancia máxima (m)</label>
+        <select id="ap-max-m" class="form-select form-select-sm">
+          <option value="">Radio completo</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+          <option value="200">200</option>
+          <option value="500">500</option>
+          <option value="1000">1000</option>
+        </select>
+      </div>
+      <div class="pt-1">
+        <button id="ap-btn-cargar" class="btn btn-sm btn-primary">Aplicar</button>
+      </div>
+      <div class="ms-auto small text-muted" id="ap-summary">Sin datos</div>
+    </div>
+  </div>
+
+  <div id="ap-mapa"></div>
+
+  <div class="card mt-2">
+    <div class="card-header py-2">Eventos (muestra)</div>
+    <div class="table-responsive">
+      <table class="table table-sm table-striped mb-0">
+        <thead>
+          <tr>
+            <th>Fecha/Hora</th>
+            <th>Origen</th>
+            <th>Destino</th>
+            <th>Tipo</th>
+            <th>Dur(s)</th>
+            <th>Celda</th>
+          </tr>
+        </thead>
+        <tbody id="ap-events-body">
+          <tr><td colspan="6" class="text-center text-muted py-2">Cargando…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script>
+  window.AP_CASO_ID = {{ caso.id }};
+</script>
+<script src="{{ url_for('static', filename='js/analisis_puntos_mapa.js') }}"></script>
+{% endblock %}
