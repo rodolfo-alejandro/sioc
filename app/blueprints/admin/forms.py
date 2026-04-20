@@ -25,10 +25,19 @@ class UserForm(FlaskForm):
     
     def __init__(self, *args, **kwargs):
         super(UserForm, self).__init__(*args, **kwargs)
-        # Cargar opciones de unidades
-        self.unidad_id.choices = [(u.id, u.nombre) for u in Unidad.query.filter_by(activo=True).order_by(Unidad.nombre).all()]
+        # Cargar opciones de unidades (incluye inactivas para evitar errores al editar usuarios existentes)
+        self.unidad_id.choices = [
+            (u.id, f"{u.nombre}{'' if u.activo else ' (inactiva)'}")
+            for u in Unidad.query.order_by(Unidad.nombre).all()
+        ]
         # Cargar opciones de roles
         self.role_id.choices = [(r.id, r.name) for r in Role.query.order_by(Role.name).all()]
         # Cargar opciones de permisos adicionales
         self.permissions.choices = [(p.id, p.code) for p in Permission.query.order_by(Permission.code).all()]
+
+
+class UnidadForm(FlaskForm):
+    """Formulario para crear/editar dependencias (unidades)."""
+    nombre = StringField('Nombre', validators=[DataRequired(), Length(min=2, max=200)])
+    activo = BooleanField('Activa', default=True)
 
