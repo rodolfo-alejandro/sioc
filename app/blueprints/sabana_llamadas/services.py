@@ -4,6 +4,7 @@ Servicios del módulo Sabana de Llamadas: procesamiento de archivos GPRS/VOZ y a
 import os
 import re
 import json
+import hashlib
 import pandas as pd
 from datetime import datetime, date
 from werkzeug.utils import secure_filename
@@ -12,6 +13,25 @@ from app.extensions import db
 from app.models.sabana_llamadas import (
     CargaLlamada, ResultadoTraficoGPRS, ResultadoTraficoVOZ, DatoTecnico
 )
+
+
+def _ensure_caso_sujeto_link(caso_id, sujeto_id, unidad_id, user_id):
+    """Si hay caso y sujeto en una sábana, asegura fila en ap_caso_sujetos (sin duplicar)."""
+    if not caso_id or not sujeto_id:
+        return
+    from app.models.analisis_puntos import AnalisisPuntoCasoSujeto
+    ex = AnalisisPuntoCasoSujeto.query.filter_by(caso_id=caso_id, sujeto_id=sujeto_id).first()
+    if ex:
+        return
+    db.session.add(
+        AnalisisPuntoCasoSujeto(
+            caso_id=caso_id,
+            sujeto_id=sujeto_id,
+            unidad_id=unidad_id,
+            user_id=user_id,
+            nota=None,
+        )
+    )
 from app.services.audit import audit_log
 from app.services.utils import get_safe_filename
 
@@ -427,7 +447,7 @@ def _parse_float(val):
         return None
 
 
-def procesar_archivo_gprs(file, unidad_id, user_id, sujeto_id=None):
+def procesar_archivo_gprs(file, unidad_id, user_id, sujeto_id=None, operadora=None, caso_id=None):
     """
     Procesa un archivo .xls/.xlsx de sabana GPRS.
     Retorna (carga, cantidad_trafico, cantidad_datos_tecnicos, error_msg).
@@ -437,12 +457,21 @@ def procesar_archivo_gprs(file, unidad_id, user_id, sujeto_id=None):
     except Exception as e:
         return None, 0, 0, str(e)
 
+    sha256 = hashlib.sha256()
+    with open(file_path, 'rb') as rf:
+        for chunk in iter(lambda: rf.read(8192), b''):
+            sha256.update(chunk)
+
     carga = CargaLlamada(
         unidad_id=unidad_id,
         user_id=user_id,
         sujeto_id=sujeto_id or None,
+        caso_id=caso_id or None,
         tipo='gprs',
-        nombre_archivo=safe_name
+        operadora=(str(operadora).strip().upper() if operadora else None),
+        nombre_archivo=safe_name,
+        sha256=sha256.hexdigest(),
+        size_bytes=os.path.getsize(file_path),
     )
     db.session.add(carga)
     db.session.flush()
@@ -452,6 +481,8 @@ def procesar_archivo_gprs(file, unidad_id, user_id, sujeto_id=None):
     carga.rango_hasta = rh
     carga.criterio_busqueda = _read_criterio_busqueda_text(file_path, sheet_index=2)
 
+    total_filas_trafico = 0
+    skipped_trafico_empty = 0
     count_trafico = 0
     count_tecnicos = 0
 
@@ -468,9 +499,11 @@ def procesar_archivo_gprs(file, unidad_id, user_id, sujeto_id=None):
             return default
 
         for idx, row in df_trafico.iterrows():
+            total_filas_trafico += 1
             extras = _row_extras(row)
             # Saltar filas totalmente vacías (pero no filtrar por IMEI; queremos guardar todo)
             if not any(v is not None for v in extras.values()):
+                skipped_trafico_empty += 1
                 continue
             r = ResultadoTraficoGPRS(carga_id=carga.id)
             r.imei = _valor_str(get(row, ['IMEI', 'imei']), 50)
@@ -556,6 +589,15 @@ def procesar_archivo_gprs(file, unidad_id, user_id, sujeto_id=None):
             db.session.add(dt)
             count_tecnicos += 1
 
+        carga.processing_detail = json.dumps({
+            'source_type': 'GPRS',
+            'filas_trafico_leidas': int(total_filas_trafico),
+            'eventos_importados': int(count_trafico),
+            'filas_omitidas_vacias': int(skipped_trafico_empty),
+            'filas_omitidas_total': int(skipped_trafico_empty),
+            'datos_tecnicos_importados': int(count_tecnicos),
+        }, ensure_ascii=False)
+        _ensure_caso_sujeto_link(caso_id, sujeto_id, unidad_id, user_id)
         db.session.commit()
         audit_log('SABANA_GPRS_UPLOAD', f'Carga GPRS {carga.id}: {count_trafico} tráfico, {count_tecnicos} datos técnicos', user_id=user_id)
         return carga, count_trafico, count_tecnicos, None
@@ -569,7 +611,7 @@ def procesar_archivo_gprs(file, unidad_id, user_id, sujeto_id=None):
         return None, 0, 0, str(e)
 
 
-def procesar_archivo_voz(file, unidad_id, user_id, sujeto_id=None):
+def procesar_archivo_voz(file, unidad_id, user_id, sujeto_id=None, operadora=None, caso_id=None):
     """
     Procesa un archivo .xls/.xlsx de sabana VOZ.
     Retorna (carga, cantidad_trafico, cantidad_datos_tecnicos, error_msg).
@@ -579,12 +621,21 @@ def procesar_archivo_voz(file, unidad_id, user_id, sujeto_id=None):
     except Exception as e:
         return None, 0, 0, str(e)
 
+    sha256 = hashlib.sha256()
+    with open(file_path, 'rb') as rf:
+        for chunk in iter(lambda: rf.read(8192), b''):
+            sha256.update(chunk)
+
     carga = CargaLlamada(
         unidad_id=unidad_id,
         user_id=user_id,
         sujeto_id=sujeto_id or None,
+        caso_id=caso_id or None,
         tipo='voz',
-        nombre_archivo=safe_name
+        operadora=(str(operadora).strip().upper() if operadora else None),
+        nombre_archivo=safe_name,
+        sha256=sha256.hexdigest(),
+        size_bytes=os.path.getsize(file_path),
     )
     db.session.add(carga)
     db.session.flush()
@@ -593,6 +644,8 @@ def procesar_archivo_voz(file, unidad_id, user_id, sujeto_id=None):
     carga.rango_hasta = rh
     carga.criterio_busqueda = _read_criterio_busqueda_text(file_path, sheet_index=2)
 
+    total_filas_trafico = 0
+    skipped_trafico_empty = 0
     count_trafico = 0
     count_tecnicos = 0
 
@@ -608,8 +661,10 @@ def procesar_archivo_voz(file, unidad_id, user_id, sujeto_id=None):
             return None
 
         for idx, row in df_trafico.iterrows():
+            total_filas_trafico += 1
             extras = _row_extras(row)
             if not any(v is not None for v in extras.values()):
+                skipped_trafico_empty += 1
                 continue
             r = ResultadoTraficoVOZ(carga_id=carga.id)
             r.imei = _valor_str(get(row, ['IMEI', 'imei']), 50)
@@ -693,6 +748,15 @@ def procesar_archivo_voz(file, unidad_id, user_id, sujeto_id=None):
             db.session.add(dt)
             count_tecnicos += 1
 
+        carga.processing_detail = json.dumps({
+            'source_type': 'VOZ',
+            'filas_trafico_leidas': int(total_filas_trafico),
+            'eventos_importados': int(count_trafico),
+            'filas_omitidas_vacias': int(skipped_trafico_empty),
+            'filas_omitidas_total': int(skipped_trafico_empty),
+            'datos_tecnicos_importados': int(count_tecnicos),
+        }, ensure_ascii=False)
+        _ensure_caso_sujeto_link(caso_id, sujeto_id, unidad_id, user_id)
         db.session.commit()
         audit_log('SABANA_VOZ_UPLOAD', f'Carga VOZ {carga.id}: {count_trafico} tráfico, {count_tecnicos} datos técnicos', user_id=user_id)
         return carga, count_trafico, count_tecnicos, None

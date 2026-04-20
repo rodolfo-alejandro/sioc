@@ -2,67 +2,427 @@
 
 {% block title %}Cargas - Sabana de Llamadas{% endblock %}
 
+{% block extra_head %}
+<style>
+  .cargas-vista .cargas-hero {
+    background: linear-gradient(135deg, #f8f9fc 0%, #eef2f9 45%, #f0fff4 100%);
+    border: 1px solid rgba(25, 135, 84, 0.15);
+    border-radius: 0.75rem;
+    padding: 1.25rem 1.5rem;
+  }
+  .cargas-vista .btn-nueva-carga {
+    padding: 0.6rem 1.35rem;
+    font-weight: 600;
+    border-radius: 0.5rem;
+    box-shadow: 0 2px 8px rgba(25, 135, 84, 0.2);
+  }
+  .cargas-vista .table-cargas-wrap {
+    border-radius: 0.5rem;
+    overflow-x: auto;
+    overflow-y: visible;
+    max-height: none;
+  }
+  .cargas-vista .table-cargas thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    font-size: 0.7rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #6c757d;
+    background: #f8f9fa !important;
+    border-bottom: 2px solid #dee2e6;
+    white-space: nowrap;
+  }
+  #modalNuevaCarga .modal-dialog {
+    max-height: calc(100vh - 1.25rem);
+    margin: 0.625rem auto;
+  }
+  #modalNuevaCarga .modal-content {
+    border: none;
+    border-radius: 0.75rem;
+    box-shadow: 0 0.5rem 2rem rgba(0, 0, 0, 0.18);
+    overflow: hidden;
+    max-height: calc(100vh - 1.25rem);
+  }
+  #modalNuevaCarga .modal-carga-form {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 1.25rem);
+    min-height: 0;
+    background: #fff;
+  }
+  #modalNuevaCarga .modal-header {
+    flex-shrink: 0;
+    background: linear-gradient(135deg, #198754 0%, #146c43 100%);
+    color: #fff;
+    border-bottom: none;
+  }
+  #modalNuevaCarga .modal-header .btn-close {
+    filter: invert(1);
+  }
+  #modalNuevaCarga .modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+  }
+  #modalNuevaCarga .modal-footer {
+    flex-shrink: 0;
+    background: #f8f9fa !important;
+    border-top: 1px solid #dee2e6;
+  }
+  /* Nombre de archivo largo: elipsis + tooltip nativo con title */
+  .cargas-vista .carga-col-archivo {
+    max-width: 14rem;
+    min-width: 0;
+  }
+  @media (min-width: 1200px) {
+    .cargas-vista .carga-col-archivo {
+      max-width: 20rem;
+    }
+  }
+  .cargas-vista .carga-nombre-archivo {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+    cursor: help;
+  }
+  .cargas-vista .carga-col-acciones {
+    min-width: 4.5rem;
+    vertical-align: middle;
+  }
+  .cargas-vista .acciones-dropdown-menu {
+    min-width: 12rem;
+  }
+  .cargas-vista .acciones-dropdown-menu .dropdown-item {
+    font-size: 0.9rem;
+    padding: 0.45rem 0.75rem;
+  }
+  .cargas-vista .acciones-dropdown-menu .bi {
+    font-size: 0.9rem;
+  }
+  @media (max-width: 768px) {
+    .cargas-vista .acciones-dropdown-menu {
+      min-width: 10.75rem;
+    }
+    .cargas-vista .acciones-dropdown-menu .dropdown-item {
+      font-size: 0.82rem;
+      padding: 0.35rem 0.6rem;
+    }
+    .cargas-vista .acciones-dropdown-menu .bi {
+      font-size: 0.82rem;
+    }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="page-header d-flex justify-content-between align-items-center flex-wrap">
-    <div>
-        <h1><i class="bi bi-file-earmark-spreadsheet"></i> Cargas</h1>
-        <p class="text-muted">Archivos GPRS/VOZ subidos, vinculados o no a sujetos.</p>
+<div class="cargas-vista container-fluid py-3 px-2 px-md-3">
+  <div class="cargas-hero mb-3">
+    <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-lg-between gap-3">
+      <div>
+        <h1 class="h4 mb-1 d-flex align-items-center gap-2">
+          <span class="d-inline-flex align-items-center justify-content-center rounded-3 bg-success text-white" style="width:2.5rem;height:2.5rem;">
+            <i class="bi bi-cloud-upload"></i>
+          </span>
+          Cargas
+        </h1>
+        <p class="text-muted small mb-0">
+          Historial de archivos subidos. Cada carga va a un <strong>caso</strong> (sábanas GPRS/VOZ o record para mapa y eventos).
+        </p>
+      </div>
+      {% if puede_cargar %}
+      <button type="button" class="btn btn-success btn-nueva-carga" data-bs-toggle="modal" data-bs-target="#modalNuevaCarga">
+        <i class="bi bi-plus-lg"></i> Nueva carga
+      </button>
+      {% endif %}
     </div>
+    <div class="d-flex flex-wrap gap-2 mt-3 pt-3 border-top border-white border-opacity-50">
+      <a href="{{ url_for('analisis_puntos.index') }}" class="btn btn-sm btn-outline-secondary rounded-pill"><i class="bi bi-briefcase"></i> Casos</a>
+      <a href="{{ url_for('sabana_llamadas.sujetos_list') }}" class="btn btn-sm btn-outline-secondary rounded-pill"><i class="bi bi-person"></i> Sujetos</a>
+      <a href="{{ url_for('sabana_llamadas.mapa') }}" class="btn btn-sm btn-outline-secondary rounded-pill"><i class="bi bi-geo-alt"></i> Mapa</a>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm">
+    <div class="card-header bg-white py-3 d-flex flex-wrap justify-content-between align-items-center gap-2 border-bottom">
+      <div>
+        <span class="fw-semibold">Historial de cargas</span>
+        <span class="text-muted small ms-1">Sábanas y records VOZ/GPRS en la misma lista</span>
+      </div>
+      <span class="badge rounded-pill bg-success bg-opacity-10 text-success px-3 py-2">{{ cargas_historial|length }} carga{% if cargas_historial|length != 1 %}s{% endif %}</span>
+    </div>
+    <div class="card-body p-0">
+      {% if cargas_historial %}
+      <div class="table-cargas-wrap">
+        <table class="table table-cargas table-hover align-middle mb-0">
+          <thead>
+            <tr>
+              <th class="ps-3">Tipo</th>
+              <th>Caso</th>
+              <th>Operadora</th>
+              <th class="carga-col-archivo">Archivo</th>
+              <th>Sujeto</th>
+              <th>Fecha</th>
+              <th class="text-end pe-3">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in cargas_historial %}
+            {% if row.kind == 'sabana' %}
+            {% set c = row.carga %}
+            <tr>
+              <td class="ps-3">
+                <span class="badge bg-{{ 'success' if c.tipo == 'gprs' else 'info' }}">{{ c.tipo|upper }}</span>
+              </td>
+              <td>
+                {% if c.caso %}
+                  <a href="{{ url_for('analisis_puntos.caso_relaciones', caso_id=c.caso.id) }}" class="small">{{ c.caso.codigo }}</a>
+                {% else %}
+                  <span class="text-muted small">—</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if c.operadora %}
+                  <span class="badge bg-light text-dark border">{{ c.operadora }}</span>
+                {% else %}
+                  <span class="text-muted small">-</span>
+                {% endif %}
+              </td>
+              <td class="carga-col-archivo">
+                {% set nom = c.nombre_archivo or 'Sin nombre' %}
+                <span class="carga-nombre-archivo" title="{{ nom|e }}">{{ nom }}</span>
+              </td>
+              <td>
+                {% if c.sujeto %}
+                  <a href="{{ url_for('sabana_llamadas.sujetos_ver', sujeto_id=c.sujeto.id) }}">{{ c.sujeto.display_name() }}</a>
+                {% else %}
+                  <span class="badge bg-secondary">Sin sujeto</span>
+                {% endif %}
+              </td>
+              <td>{{ c.created_at|localtime if c.created_at else '' }}</td>
+              <td class="text-end pe-3 carga-col-acciones align-middle">
+                <div class="dropdown dropstart">
+                  <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Acciones">
+                    <i class="bi bi-three-dots-vertical"></i>
+                  </button>
+                  <ul class="dropdown-menu dropdown-menu-end acciones-dropdown-menu">
+                    <li><a class="dropdown-item" href="{{ url_for('sabana_llamadas.cargas_detalle', carga_id=c.id) }}"><i class="bi bi-eye me-2"></i>Detalle</a></li>
+                    {% if c.caso %}
+                    <li><a class="dropdown-item" href="{{ url_for('analisis_puntos.caso_relaciones', caso_id=c.caso.id) }}"><i class="bi bi-briefcase me-2"></i>Caso</a></li>
+                    <li>
+                      <button type="button" class="dropdown-item"
+                              data-sabana-share data-share-type="caso" data-share-id="{{ c.caso.id }}"
+                              data-share-title="Compartir caso {{ c.caso.codigo }}">
+                        <i class="bi bi-share me-2"></i>Compartir caso
+                      </button>
+                    </li>
+                    {% endif %}
+                    {% if current_user.has_permission('SABANA_LLAMADAS_UPLOAD') and c.user_id == current_user.id %}
+                    <li><a class="dropdown-item" href="{{ url_for('sabana_llamadas.cargas_vincular', carga_id=c.id) }}"><i class="bi bi-link-45deg me-2"></i>Vincular</a></li>
+                    <li>
+                      <button type="button" class="dropdown-item"
+                              data-sabana-share data-share-type="carga" data-share-id="{{ c.id }}"
+                              data-share-title="Compartir carga {{ c.nombre_archivo or ('#' ~ c.id) }}">
+                        <i class="bi bi-share me-2"></i>Compartir carga
+                      </button>
+                    </li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                      <button type="button"
+                              class="dropdown-item text-danger"
+                              data-bs-toggle="modal"
+                              data-bs-target="#modalEliminarCarga"
+                              data-eliminar-url="{{ url_for('sabana_llamadas.cargas_eliminar', carga_id=c.id) }}"
+                              data-eliminar-label="{{ (c.nombre_archivo or ('Carga #' ~ c.id))|e }}">
+                        <i class="bi bi-trash me-2"></i>Eliminar
+                      </button>
+                    </li>
+                    {% endif %}
+                  </ul>
+                </div>
+              </td>
+            </tr>
+            {% else %}
+            {% set f = row.fuente %}
+            <tr>
+              <td class="ps-3">
+                <span class="badge bg-primary">Record {{ f.source_type }}</span>
+              </td>
+              <td>
+                {% if f.caso %}
+                  <a href="{{ url_for('analisis_puntos.caso_relaciones', caso_id=f.caso.id) }}" class="small">{{ f.caso.codigo }}</a>
+                {% else %}
+                  <span class="text-muted small">—</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if f.operadora %}
+                  <span class="badge bg-light text-dark border">{{ f.operadora }}</span>
+                {% else %}
+                  <span class="text-muted small">-</span>
+                {% endif %}
+              </td>
+              <td class="carga-col-archivo">
+                {% set nomr = f.nombre_archivo or 'Sin nombre' %}
+                <span class="carga-nombre-archivo" title="{{ nomr|e }}">{{ nomr }}</span>
+              </td>
+              <td><span class="badge bg-secondary">Sin sujeto</span></td>
+              <td>{{ f.created_at|localtime if f.created_at else '' }}</td>
+              <td class="text-end pe-3 carga-col-acciones align-middle">
+                <div class="dropdown dropstart">
+                  <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Acciones">
+                    <i class="bi bi-three-dots-vertical"></i>
+                  </button>
+                  <ul class="dropdown-menu dropdown-menu-end acciones-dropdown-menu">
+                    <li><a class="dropdown-item" href="{{ url_for('analisis_puntos.fuente_detalle', fuente_id=f.id) }}"><i class="bi bi-eye me-2"></i>Detalle</a></li>
+                    {% if f.caso %}
+                    <li><a class="dropdown-item" href="{{ url_for('analisis_puntos.caso_relaciones', caso_id=f.caso.id) }}"><i class="bi bi-link-45deg me-2"></i>Vincular</a></li>
+                    <li><a class="dropdown-item" href="{{ url_for('analisis_puntos.caso_relaciones', caso_id=f.caso.id) }}"><i class="bi bi-briefcase me-2"></i>Caso</a></li>
+                    <li>
+                      <button type="button" class="dropdown-item"
+                              data-sabana-share data-share-type="caso" data-share-id="{{ f.caso.id }}"
+                              data-share-title="Compartir caso {{ f.caso.codigo }}">
+                        <i class="bi bi-share me-2"></i>Compartir caso
+                      </button>
+                    </li>
+                    {% endif %}
+                    {% if current_user.has_permission('SABANA_LLAMADAS_UPLOAD') and f.user_id == current_user.id %}
+                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                      <form method="post" action="{{ url_for('analisis_puntos.fuente_eliminar', fuente_id=f.id) }}" onsubmit="return confirm('¿Eliminar definitivamente este record y todos sus eventos/titulares asociados?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="dropdown-item text-danger">
+                          <i class="bi bi-trash me-2"></i>Eliminar
+                        </button>
+                      </form>
+                    </li>
+                    {% endif %}
+                  </ul>
+                </div>
+              </td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="text-center py-5 px-3">
+        <div class="text-muted mb-3"><i class="bi bi-inbox" style="font-size:2.5rem;opacity:.35;"></i></div>
+        <p class="fw-medium text-secondary mb-2">No hay cargas registradas</p>
+        <p class="small text-muted mb-3">Subí archivos desde "Nueva carga" para verlos acá (sábana o record).</p>
+        {% if puede_cargar %}
+        <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalNuevaCarga">
+          <i class="bi bi-cloud-upload"></i> Nueva carga
+        </button>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
 </div>
 
-<div class="card">
-    <div class="card-body">
-        {% if cargas %}
-        <div class="table-responsive">
-            <table class="table table-hover">
-                <thead>
-                    <tr>
-                        <th>Tipo</th>
-                        <th>Archivo</th>
-                        <th>Sujeto</th>
-                        <th>Fecha</th>
-                        <th class="text-end">Acciones</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for c in cargas %}
-                    <tr>
-                        <td>
-                            <span class="badge bg-{{ 'success' if c.tipo == 'gprs' else 'info' }}">{{ c.tipo|upper }}</span>
-                        </td>
-                        <td>{{ c.nombre_archivo or 'Sin nombre' }}</td>
-                        <td>
-                            {% if c.sujeto %}
-                                <a href="{{ url_for('sabana_llamadas.sujetos_ver', sujeto_id=c.sujeto.id) }}">{{ c.sujeto.display_name() }}</a>
-                            {% else %}
-                                <span class="badge bg-secondary">Sin sujeto</span>
-                            {% endif %}
-                        </td>
-                        <td>{{ c.created_at|localtime if c.created_at else '' }}</td>
-                        <td class="text-end">
-                            {% if current_user.has_permission('SABANA_LLAMADAS_UPLOAD') and c.user_id == current_user.id %}
-                            <a href="{{ url_for('sabana_llamadas.cargas_vincular', carga_id=c.id) }}" class="btn btn-sm btn-outline-primary">Vincular</a>
-                            <button type="button"
-                                    class="btn btn-sm btn-outline-secondary"
-                                    data-sabana-share
-                                    data-share-type="carga"
-                                    data-share-id="{{ c.id }}"
-                                    data-share-title="Compartir carga {{ c.nombre_archivo or ('#' ~ c.id) }}">
-                                Compartir
-                            </button>
-                            {% elif c.user_id != current_user.id %}
-                            <span class="badge bg-warning text-dark">Compartido</span>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+{% if puede_cargar %}
+<div class="modal fade" id="modalNuevaCarga" tabindex="-1" aria-labelledby="modalNuevaCargaLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <form class="modal-carga-form" method="post" action="{{ url_for('sabana_llamadas.cargas_upload_unificado') }}" enctype="multipart/form-data" id="form-carga-unificada">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-header">
+          <h2 class="modal-title h5 mb-0" id="modalNuevaCargaLabel"><i class="bi bi-cloud-upload me-2"></i>Nueva carga</h2>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
         </div>
-        {% else %}
-        <p class="text-muted mb-0">No hay cargas registradas aún.</p>
-        {% endif %}
+        <div class="modal-body">
+          <p class="small text-muted mb-3">
+            Orden: <strong>Caso</strong> → (sujeto opcional solo para sábanas) → archivo. Sin caso no se puede cargar.
+          </p>
+          {% if not casos_modal %}
+          <div class="alert alert-warning py-2 small mb-3">
+            No hay casos en su unidad. Cree uno en <a href="{{ url_for('analisis_puntos.index') }}" class="alert-link">Casos</a>.
+          </div>
+          {% endif %}
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label">Operadora</label>
+              <select class="form-select" name="operadora" id="operadora" required>
+                <option value="">Seleccionar…</option>
+                <option value="PERSONAL">PERSONAL</option>
+                <option value="MOVISTAR">MOVISTAR</option>
+                <option value="CLARO">CLARO</option>
+                <option value="OTRA">OTRA</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Tipo de archivo</label>
+              <select class="form-select" name="tipo_carga" id="tipo_carga" required>
+                <option value="">Seleccionar…</option>
+                <option value="sabana_gprs">Sábana GPRS</option>
+                <option value="sabana_voz">Sábana VOZ</option>
+                <option value="record_voz">Record VOZ</option>
+                <option value="record_gprs">Record GPRS</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Archivo</label>
+              <input type="file" class="form-control" name="file" accept=".xlsx,.xls,.xlsm,.csv" required>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Caso investigativo <span class="text-danger">*</span></label>
+              <select class="form-select" name="caso_id" id="caso_id" required>
+                <option value="">Seleccionar caso…</option>
+                {% for c in casos_modal %}
+                <option value="{{ c.id }}">{{ c.codigo }} — {{ c.titulo }}</option>
+                {% endfor %}
+              </select>
+              <div class="form-text">¿No hay casos? <a href="{{ url_for('analisis_puntos.index') }}">Crear en Casos</a>.</div>
+            </div>
+            <div class="col-md-8" id="wrap-sujeto" style="display:none;">
+              <label class="form-label">Sujeto (sábana, opcional)</label>
+              <select class="form-select" name="sujeto_id" id="sujeto_id">
+                <option value="">— Sin vincular —</option>
+                {% for s in sujetos_modal %}
+                <option value="{{ s.id }}">{{ s.display_name() }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-success px-4" {% if not casos_modal %}disabled{% endif %}>
+            <i class="bi bi-upload"></i> Cargar archivo
+          </button>
+        </div>
+      </form>
     </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Confirmar eliminar carga -->
+<div class="modal fade" id="modalEliminarCarga" tabindex="-1" aria-labelledby="modalEliminarCargaLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-danger">
+      <div class="modal-header border-danger bg-danger text-white">
+        <h5 class="modal-title" id="modalEliminarCargaLabel"><i class="bi bi-exclamation-triangle-fill me-2"></i>Eliminar carga</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-2">¿Eliminar definitivamente esta carga y <strong>todos</strong> sus registros de tráfico y datos técnicos asociados?</p>
+        <p class="small text-muted mb-0 font-monospace" id="modalEliminarCargaNombre"></p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <form method="post" id="formEliminarCarga" class="d-inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-danger"><i class="bi bi-trash"></i> Sí, eliminar</button>
+        </form>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- Modal Compartir -->
@@ -95,5 +455,62 @@
 
 {% block extra_scripts %}
 <script src="{{ url_for('static', filename='js/sabana_share.js') }}"></script>
-{% endblock %}
+<script>
+(function () {
+  var modalEl = document.getElementById('modalEliminarCarga');
+  var formEl = document.getElementById('formEliminarCarga');
+  var nombreEl = document.getElementById('modalEliminarCargaNombre');
+  if (!modalEl || !formEl || !window.bootstrap) return;
+  modalEl.addEventListener('show.bs.modal', function (ev) {
+    var btn = ev.relatedTarget;
+    if (!btn || !formEl) return;
+    var url = btn.getAttribute('data-eliminar-url');
+    var label = btn.getAttribute('data-eliminar-label') || '';
+    if (url) formEl.setAttribute('action', url);
+    if (nombreEl) nombreEl.textContent = label;
+  });
+})();
+</script>
+{% if puede_cargar %}
+<script>
+(function () {
+  var tipo = document.getElementById('tipo_carga');
+  var wrapS = document.getElementById('wrap-sujeto');
+  function sync() {
+    if (!tipo || !wrapS) return;
+    var t = (tipo.value || '').toLowerCase();
+    var isSabana = t.indexOf('sabana_') === 0;
+    wrapS.style.display = isSabana ? '' : 'none';
+  }
+  if (tipo) tipo.addEventListener('change', sync);
 
+  function openIfNeeded() {
+    var el = document.getElementById('modalNuevaCarga');
+    if (!el || !window.bootstrap) return;
+    var open = false;
+    try {
+      var sp = new URLSearchParams(window.location.search || '');
+      if (sp.get('nuevo') === '1') open = true;
+    } catch (e) {}
+    if (open) {
+      var m = bootstrap.Modal.getOrCreateInstance(el);
+      m.show();
+      try {
+        if (window.history && window.history.replaceState) {
+          var u = new URL(window.location.href);
+          u.searchParams.delete('nuevo');
+          window.history.replaceState({}, '', u.pathname + u.search + u.hash);
+        }
+      } catch (e2) {}
+    }
+  }
+  sync();
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', openIfNeeded);
+  } else {
+    openIfNeeded();
+  }
+})();
+</script>
+{% endif %}
+{% endblock %}

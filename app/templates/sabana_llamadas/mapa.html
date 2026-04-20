@@ -26,11 +26,79 @@
     </div>
     <div class="collapse show" id="sabana-filtros-collapse">
         <div class="card-body p-2">
-        <p class="small text-muted mb-2 sabana-filtros-ayuda">
+        <p id="sabana-filtros-ayuda-sabana" class="small text-muted mb-2 sabana-filtros-ayuda">
             <i class="bi bi-info-circle"></i>
-            Elija al menos <strong>sujeto</strong>, <strong>carga</strong>, <strong>número</strong> o <strong>IMEI</strong> y pulse <strong>Aplicar filtros</strong>.
-            Provincia y localidad dependen de sujeto/carga/tipo (no de fecha/hora); el mapa y la búsqueda de números/IMEI sí usan fecha y hora.
+            Elija un <strong>caso</strong> para acotar las cargas de sábana del expediente, o use <strong>sujeto / carga / número / IMEI</strong> sin caso. Pulse <strong>Aplicar filtros</strong>.
+            Provincia y localidad dependen de sujeto/carga/tipo; fecha y hora filtran el tráfico en el mapa.
+            <strong>Punto de referencia</strong> guarda domicilio u otros lugares en el caso elegido.
         </p>
+        <p id="sabana-filtros-ayuda-record" class="small text-muted mb-2 d-none sabana-filtros-ayuda">
+            <i class="bi bi-info-circle"></i>
+            <strong>Record / combinado:</strong> el <strong>caso</strong> define el expediente. Opcional: <strong>radio máximo</strong> por celda, <strong>archivo</strong>, <strong>punto + perímetro</strong> para acotar geográficamente.
+            En <strong>Sábana + Record</strong> se superponen ambas capas en el mismo mapa (Orden/Trazado desactivados en esa vista).
+        </p>
+        <div class="d-flex flex-wrap align-items-end gap-2 mb-2 pb-2 border-bottom sabana-caso-ref-toolbar">
+            <div style="min-width: 18rem;">
+                <label class="form-label fw-bold mb-0 small" for="dd-mapa-caso-btn">Caso</label>
+                <select id="mapa-caso-principal" class="d-none" tabindex="-1" aria-hidden="true" aria-label="Caso investigativo (valor)">
+                    <option value="">— Sin caso (filtros manuales) —</option>
+                    {% for c in casos_record %}
+                    <option value="{{ c.id }}">{{ c.titulo }} ({{ c.codigo }})</option>
+                    {% endfor %}
+                </select>
+                <div class="dropdown w-100">
+                    <button class="btn btn-outline-secondary btn-sm w-100 sabana-dd-btn text-start text-truncate" type="button" id="dd-mapa-caso-btn" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" aria-label="Elegir caso">— Sin caso —</button>
+                    <div class="dropdown-menu p-2 sabana-dd-menu w-100" aria-labelledby="dd-mapa-caso-btn" style="min-width: 19rem;">
+                        <input type="text" class="form-control form-control-sm mb-1" id="mapa-caso-search" placeholder="Buscar caso…" autocomplete="off" aria-label="Buscar caso">
+                        <div id="mapa-caso-principal-list" class="sabana-dd-list" style="max-height: 260px; overflow-y: auto;">
+                            <button type="button" class="btn btn-sm btn-light w-100 text-start mapa-toolbar-opt mb-1" data-value="">— Sin caso (filtros manuales) —</button>
+                            {% for c in casos_record %}
+                            <button type="button" class="btn btn-sm btn-light w-100 text-start mapa-toolbar-opt mb-1 text-truncate" data-value="{{ c.id }}" title="{{ c.titulo }} ({{ c.codigo }})">{{ c.titulo }} ({{ c.codigo }})</button>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div style="min-width: 12rem;">
+                <label class="form-label fw-bold mb-0 small" for="dd-mapa-modo-btn">Origen de datos</label>
+                <select id="mapa-datos-modo" class="d-none" tabindex="-1" aria-hidden="true" aria-label="Origen de datos (valor)">
+                    <option value="sabana" selected>Sábana</option>
+                    <option value="record">Record</option>
+                    <option value="ambos">Sábana + Record</option>
+                </select>
+                <div class="dropdown w-100">
+                    <button class="btn btn-outline-secondary btn-sm w-100 sabana-dd-btn text-start text-truncate" type="button" id="dd-mapa-modo-btn" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" aria-label="Elegir origen de datos">Sábana</button>
+                    <div class="dropdown-menu p-2 sabana-dd-menu w-100" aria-labelledby="dd-mapa-modo-btn">
+                        <input type="text" class="form-control form-control-sm mb-1" id="mapa-modo-search" placeholder="Buscar…" autocomplete="off" aria-label="Buscar origen">
+                        <div id="mapa-datos-modo-list" class="sabana-dd-list">
+                            <button type="button" class="btn btn-sm btn-light w-100 text-start mapa-toolbar-opt mb-1" data-value="sabana" data-label="Sábana">Sábana</button>
+                            <button type="button" class="btn btn-sm btn-light w-100 text-start mapa-toolbar-opt mb-1" data-value="record" data-label="Record">Record</button>
+                            <button type="button" class="btn btn-sm btn-light w-100 text-start mapa-toolbar-opt mb-1" data-value="ambos" data-label="Sábana + Record">Sábana + Record</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="d-flex flex-wrap align-items-end gap-2 flex-grow-1 justify-content-lg-end sabana-toolbar-primera-fila">
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="btn-caso-ref-pick" title="Con un caso elegido, clic en el mapa para ubicar">
+                        <i class="bi bi-geo-alt-fill"></i> Punto de referencia
+                    </button>
+                    <span class="d-none" id="mapa-caso-ref-hint" aria-hidden="true"></span>
+                </div>
+                <div class="d-flex flex-wrap align-items-center gap-1">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-limpiar-filtros">Limpiar</button>
+                    <button type="button" class="btn btn-sm btn-primary" id="btn-aplicar-filtros" title="Aplicar filtros al mapa">
+                        <i class="bi bi-funnel"></i> Aplicar filtros
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-captura-informe" title="Guardar captura del mapa para el informe de Relaciones">
+                        <i class="bi bi-camera"></i> Captura informe
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-success" id="btn-exportar-kmz" title="Descargar KMZ con las celdas visibles según filtros actuales (Google Earth)">
+                        <i class="bi bi-globe2"></i> Exportar KMZ
+                    </button>
+                </div>
+            </div>
+        </div>
         <div id="sabana-filtros-alerta" class="alert alert-warning py-2 px-3 small mb-2 d-none" role="alert"></div>
         <div class="sabana-filtros-bar">
             <div class="sabana-filtros-bar-left">
@@ -46,21 +114,25 @@
                     <span class="input-group-text">a</span>
                     <input type="time" class="form-control" id="filtro-hora-hasta" aria-label="Hora hasta">
                 </div>
-            </div>
-            <div class="sabana-filtros-bar-right">
-                <div class="input-group input-group-sm" style="width: 190px;">
-                    <span class="input-group-text">Ir a #</span>
-                    <input type="number" min="1" class="form-control" id="goto-orden" placeholder="orden">
-                    <button class="btn btn-outline-primary" type="button" id="btn-goto-orden">Ir</button>
-                    <button class="btn btn-outline-secondary" type="button" id="btn-goto-inicio" title="Ir al inicio (#1)">Inicio</button>
+                <div class="d-flex align-items-end gap-1 flex-wrap sabana-goto-orden-wrap">
+                    <div class="dropdown" style="min-width: 12rem; max-width: 100%;">
+                        <button class="btn btn-outline-secondary btn-sm w-100 sabana-dd-btn sabana-dd-goto-orden text-start text-truncate" type="button" id="dd-goto-orden-btn" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" aria-label="Elegir órdenes cronológicos">Ir a orden…</button>
+                        <div class="dropdown-menu p-2 sabana-dd-menu sabana-goto-orden-menu" aria-labelledby="dd-goto-orden-btn">
+                            <input type="text" class="form-control form-control-sm mb-1" id="goto-orden-search" placeholder="Buscar en la lista…" autocomplete="off" aria-label="Filtrar lista de órdenes">
+                            <p class="small text-muted mb-1 d-none" id="goto-orden-filter-hint" title="La lista se arma solo con los impactos que ya pasaron los filtros (AND): localidad, fechas, etc."></p>
+                            <div class="d-flex gap-1 mb-1 flex-wrap">
+                                <button type="button" class="btn btn-sm btn-light" id="goto-orden-sel-todas">Todas</button>
+                                <button type="button" class="btn btn-sm btn-light" id="goto-orden-sel-ninguna">Ninguna</button>
+                            </div>
+                            <div id="goto-orden-list" class="sabana-filtro-checkboxes sabana-dd-list sabana-goto-orden-list"></div>
+                            <p class="small text-muted mb-0 mt-1" id="goto-orden-empty-hint">Aplique filtros con datos en el mapa para listar impactos en orden cronológico.</p>
+                            <p class="small text-primary mb-0 mt-1 px-1 d-none" id="goto-orden-solo-active"></p>
+                            <button type="button" class="btn btn-sm btn-outline-secondary w-100 mt-1 d-none" id="btn-goto-orden-quitar-solo">Mostrar todos los puntos en el mapa</button>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="btn-goto-orden" title="Filtra el mapa a los órdenes marcados. Si marca varios y hay azimut, se dibujan todos los sectores a la vez para comparar / triangulación.">Ir</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-goto-inicio" title="Ir al inicio (#1)">Inicio</button>
                 </div>
-                <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-limpiar-filtros">Limpiar</button>
-                <button type="button" class="btn btn-sm btn-primary" id="btn-aplicar-filtros" title="Aplicar filtros al mapa">
-                    <i class="bi bi-funnel"></i> Aplicar filtros
-                </button>
-                <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-captura-informe" title="Guardar captura del mapa para el informe de Relaciones">
-                    <i class="bi bi-camera"></i> Captura informe
-                </button>
             </div>
         </div>
 
@@ -105,8 +177,8 @@
                     </div>
                 </div>
 
-                <div class="col-12 col-md-6 col-lg-2">
-                    <label class="form-label fw-bold mb-0 small">Cargas</label>
+                <div class="col-12 col-md-6 col-lg-2" id="mapa-cargas-wrap">
+                    <label class="form-label fw-bold mb-0 small">Archivo / Carga</label>
                     <div class="dropdown w-100">
                         <button class="btn btn-outline-secondary btn-sm w-100 sabana-dd-btn" type="button" id="dd-cargas" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
                             Seleccionar…
@@ -125,10 +197,7 @@
                             Seleccionar…
                         </button>
                         <div class="dropdown-menu p-2 sabana-dd-menu w-100" aria-labelledby="dd-tipos">
-                            <div id="filtro-tipos" class="sabana-filtro-checkboxes sabana-dd-list">
-                                <div class="form-check"><input class="form-check-input" type="checkbox" id="tipo-gprs" value="gprs"><label class="form-check-label" for="tipo-gprs">GPRS</label></div>
-                                <div class="form-check"><input class="form-check-input" type="checkbox" id="tipo-voz" value="voz"><label class="form-check-label" for="tipo-voz">VOZ</label></div>
-                            </div>
+                            <div id="filtro-tipos" class="sabana-filtro-checkboxes sabana-dd-list"></div>
                         </div>
                     </div>
                 </div>
@@ -160,13 +229,74 @@
                         </div>
                     </div>
                 </div>
+
+                <div class="col-12 d-none" id="mapa-record-filtros-wrap">
+                    <div class="row g-1 align-items-end mt-1">
+                        <div class="col-12 col-md-4 col-lg-2">
+                            <label class="form-label fw-bold mb-0 small" for="mapa-record-radio-m" title="Vacío: al activar «Ver radio (celdas)» se dibuja el radio de cobertura completo de cada celda (datos en BD). Con valor: el círculo no supera ese mámetro (min con el radio de la celda).">Radio máx. (m)</label>
+                            <input type="number" min="1" step="1" class="form-control form-control-sm" id="mapa-record-radio-m" placeholder="Vacío = completo" aria-label="Radio máximo en metros">
+                        </div>
+                        <div class="col-12 col-md-8 col-lg-4">
+                            <label class="form-label fw-bold mb-0 small" for="dd-record-ref-punto">Punto de referencia</label>
+                            <div class="dropdown w-100">
+                                <button class="btn btn-outline-secondary btn-sm w-100 sabana-dd-btn text-start text-truncate" type="button" id="dd-record-ref-punto" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" aria-label="Puntos de referencia del caso">Sin punto seleccionado</button>
+                                <div class="dropdown-menu p-2 sabana-dd-menu w-100" aria-labelledby="dd-record-ref-punto">
+                                    <input type="text" class="form-control form-control-sm mb-1 sabana-dd-search" placeholder="Buscar punto…" data-target="filtro-record-ref-puntos" autocomplete="off" aria-label="Buscar punto de referencia">
+                                    <div id="filtro-record-ref-puntos" class="sabana-filtro-checkboxes sabana-dd-list" style="max-height: 220px; overflow-y: auto;"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-4 col-lg-2">
+                            <label class="form-label fw-bold mb-0 small" for="mapa-record-perimetro-m">Perímetro (m)</label>
+                            <input type="number" min="1" step="1" class="form-control form-control-sm" id="mapa-record-perimetro-m" placeholder="Ej: 500" aria-label="Perímetro en metros">
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
         <div class="mt-2 d-flex flex-wrap align-items-center gap-2" id="sabana-controles-orden">
-            <div class="form-check form-switch" id="cluster-toggle-wrap">
+            <div class="form-check form-switch" id="cluster-toggle-wrap" title="Desactivado: cada celda es un pin azul propio (puede haber varios en pantalla). Activado: Leaflet agrupa puntos cercanos en iconos amarillos con la suma de impactos.">
                 <input class="form-check-input" type="checkbox" role="switch" id="toggle-cluster" checked>
                 <label class="form-check-label small" for="toggle-cluster">Cluster</label>
+            </div>
+
+            <div class="form-check form-switch" title="Sectores de azimut según filtros del mapa. Si en «Ir a orden» marcás uno o varios #, solo se dibujan esos; si no marcás ninguno, se dibujan todos los visibles. El botón «Ir» sigue siendo el que deja solo esos puntos en el mapa.">
+                <input class="form-check-input" type="checkbox" role="switch" id="toggle-azimuth-all-viz">
+                <label class="form-check-label small" for="toggle-azimuth-all-viz">Ver azimuts (todos)</label>
+            </div>
+
+            <div class="d-flex flex-wrap align-items-center gap-3 ms-1 d-none" id="record-viz-wrap" title="Las capas de radio y perímetro no se dibujan solas: actívelas cuando quiera verlas">
+                <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox" role="switch" id="toggle-record-radio-viz">
+                    <label class="form-check-label small" for="toggle-record-radio-viz" title="Círculos cian: radio de cobertura por celda (Record, coverage_radius_m). Los sectores de azimut al abrir un impacto o Ir a orden son naranjas / otros colores, no confundir con este radio.">Ver radio (celdas)</label>
+                </div>
+                <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox" role="switch" id="toggle-record-perimetro-viz">
+                    <label class="form-check-label small" for="toggle-record-perimetro-viz" title="Muestra los puntos de referencia del caso y el perímetro en metros (filtro Punto de referencia + Perímetro), cuando estén configurados.">Ver perímetro (ref.)</label>
+                </div>
+                <div class="d-flex flex-wrap align-items-center gap-2 border-start border-secondary ps-2 ms-1">
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" role="switch" id="toggle-ref-numeros-click">
+                        <label class="form-check-label small" for="toggle-ref-numeros-click" title="Al hacer clic en un punto de referencia del mapa, lista números (MSISDN) con tráfico en celdas cercanas a ese punto, según filtros actuales del mapa.">Clic ref → números cercanos</label>
+                    </div>
+                    <div class="d-flex align-items-center gap-1 mb-0">
+                        <label class="small mb-0 text-nowrap" for="ref-numeros-geo-mode">Criterio</label>
+                        <select class="form-select form-select-sm" id="ref-numeros-geo-mode" style="width:auto;max-width:14rem;" title="Cómo se decide si el punto de referencia «cae» en la celda">
+                            <option value="centro">Distancia al centro (antena)</option>
+                            <option value="disco">Disco de cobertura (radio BD)</option>
+                            <option value="sector">Disco + sector (azimut)</option>
+                        </select>
+                    </div>
+                    <div class="d-flex align-items-center gap-1 mb-0">
+                        <label class="small mb-0 text-nowrap" for="ref-numeros-buscar-radio-m">Radio (m)</label>
+                        <input type="number" class="form-control form-control-sm" id="ref-numeros-buscar-radio-m" min="50" max="500000" step="50" value="2000" style="width:5.5rem;" title="Distancia máxima desde el punto de referencia al centro de la celda para incluir números">
+                    </div>
+                    <div class="d-flex align-items-center gap-1 mb-0">
+                        <label class="small mb-0 text-nowrap" for="ref-numeros-limit">Máx. números</label>
+                        <input type="number" class="form-control form-control-sm" id="ref-numeros-limit" min="1" max="500" value="50" style="width:4.5rem;" title="Cantidad máxima de números distintos a listar (orden: más cercanos primero)">
+                    </div>
+                </div>
             </div>
 
             <div class="form-check form-switch" id="orden-toggle-wrap">
@@ -278,6 +408,59 @@
             </div>
         </div>
         <div id="sabana-panel-body" class="sabana-panel-body"></div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalCasoMapaPunto" tabindex="-1" aria-labelledby="modalCasoMapaPuntoLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h5 class="modal-title h6" id="modalCasoMapaPuntoLabel">Punto de referencia del caso</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted mb-2 mb-0">Se guarda en el <strong>caso</strong> seleccionado y será visible en Sábana y Record.</p>
+                <p class="small mb-2"><span class="text-muted">Ubicación:</span> <span id="modal-caso-ref-coord-label"></span></p>
+                <input type="hidden" id="modal-caso-ref-id" value="">
+                <input type="hidden" id="modal-caso-ref-lat" value="">
+                <input type="hidden" id="modal-caso-ref-lng" value="">
+                <div class="mb-2">
+                    <label class="form-label small mb-0" for="modal-caso-ref-tipo">Tipo</label>
+                    <select id="modal-caso-ref-tipo" class="form-select form-select-sm">
+                        <option value="domicilio">Domicilio</option>
+                        <option value="encuentro">Punto de encuentro</option>
+                        <option value="hecho">Lugar del hecho</option>
+                        <option value="otro">Otro</option>
+                    </select>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small mb-0">Icono en el mapa</label>
+                    <input type="hidden" id="modal-caso-ref-icono" value="pin" autocomplete="off">
+                    <div id="modal-caso-ref-icono-group" class="d-flex flex-wrap gap-1 sabana-caso-ref-icono-group" role="group" aria-label="Icono del punto">
+                        <button type="button" class="btn btn-sm btn-outline-secondary sabana-caso-ref-icono-btn active" data-caso-ref-icon="pin" title="Pin">📍</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary sabana-caso-ref-icono-btn" data-caso-ref-icon="casa" title="Casa">🏠</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary sabana-caso-ref-icono-btn" data-caso-ref-icon="hecho" title="Hecho / alerta">⚠️</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary sabana-caso-ref-icono-btn" data-caso-ref-icon="encuentro" title="Encuentro">🤝</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary sabana-caso-ref-icono-btn" data-caso-ref-icon="auto" title="Vehículo">🚗</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary sabana-caso-ref-icono-btn" data-caso-ref-icon="tienda" title="Comercio">🏪</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary sabana-caso-ref-icono-btn" data-caso-ref-icon="cruz" title="Salud / cruz">➕</button>
+                    </div>
+                    <p class="small text-muted mb-0 mt-1">El mismo icono se usa en la capa de puntos del caso y al mostrar el perímetro de referencia.</p>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small mb-0" for="modal-caso-ref-etiqueta">Nombre o etiqueta (opcional)</label>
+                    <input type="text" class="form-control form-control-sm" id="modal-caso-ref-etiqueta" maxlength="120" placeholder="Ej. domicilio declarado" autocomplete="off">
+                </div>
+                <div class="mb-0">
+                    <label class="form-label small mb-0" for="modal-caso-ref-nota">Nota (opcional)</label>
+                    <textarea class="form-control form-control-sm" id="modal-caso-ref-nota" rows="2" placeholder="Detalle para el equipo"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-sm btn-primary" id="modal-caso-ref-guardar">Guardar</button>
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}

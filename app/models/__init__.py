@@ -39,10 +39,15 @@ from app.models.sabana_llamadas import (
 )
 from app.models.analisis_puntos import (
     AnalisisPuntoCaso,
+    AnalisisPuntoCasoCompartido,
     AnalisisPuntoFuente,
     AnalisisPuntoCelda,
     AnalisisPuntoEvento,
     AnalisisPuntoTitular,
+    AnalisisPuntoCasoSujeto,
+    AnalisisPuntoCasoFuente,
+    AnalisisPuntoCasoNumero,
+    AnalisisPuntoCasoMapaPunto,
 )
 
 __all__ = [
@@ -61,7 +66,8 @@ __all__ = [
     'TipoOperativo', 'OperativoActivo',
     'Sujeto', 'CargaLlamada', 'ResultadoTraficoGPRS', 'ResultadoTraficoVOZ', 'DatoTecnico',
     'SabanaImpactoNota',
-    'AnalisisPuntoCaso', 'AnalisisPuntoFuente', 'AnalisisPuntoCelda', 'AnalisisPuntoEvento',
-    'AnalisisPuntoTitular'
+    'AnalisisPuntoCaso', 'AnalisisPuntoCasoCompartido', 'AnalisisPuntoFuente', 'AnalisisPuntoCelda', 'AnalisisPuntoEvento',
+    'AnalisisPuntoTitular', 'AnalisisPuntoCasoSujeto', 'AnalisisPuntoCasoFuente', 'AnalisisPuntoCasoNumero',
+    'AnalisisPuntoCasoMapaPunto',
 ]
 

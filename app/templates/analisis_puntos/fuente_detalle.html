@@ -1,0 +1,139 @@
+{% extends "layouts/base.html" %}
+{% block title %}Detalle de carga - Record{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-3">
+      <li class="breadcrumb-item"><a href="{{ url_for('analisis_puntos.index') }}">Casos</a></li>
+      <li class="breadcrumb-item active" aria-current="page">Fuente #{{ fuente.id }}</li>
+    </ol>
+  </nav>
+
+  <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+    <div>
+      <h4 class="mb-1"><i class="bi bi-file-earmark-text"></i> Detalle de procesamiento (Record)</h4>
+      <p class="text-muted small mb-0">{{ fuente.nombre_archivo }}</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      <span class="badge {% if fuente.upload_status == 'PROCESSED' %}bg-success{% elif fuente.upload_status == 'ERROR' %}bg-danger{% else %}bg-secondary{% endif %} fs-6">{{ fuente.upload_status }}</span>
+      <span class="badge bg-light text-dark border">{{ fuente.source_type }}</span>
+      {% if fuente.operadora %}<span class="badge bg-light text-dark border">{{ fuente.operadora }}</span>{% endif %}
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-lg-6">
+      <div class="card h-100">
+        <div class="card-header">Metadata de la carga</div>
+        <div class="card-body small">
+          <dl class="row mb-0">
+            <dt class="col-sm-4">Caso</dt>
+            <dd class="col-sm-8">
+              {% if fuente.caso %}
+                <strong>{{ fuente.caso.codigo }}</strong> — {{ fuente.caso.titulo }}
+              {% else %}
+                —
+              {% endif %}
+            </dd>
+            <dt class="col-sm-4">Fecha carga</dt>
+            <dd class="col-sm-8">{{ fuente.created_at|localtime('%d/%m/%Y %H:%M:%S') }}</dd>
+            <dt class="col-sm-4">Tamaño</dt>
+            <dd class="col-sm-8">{% if fuente.size_bytes %}{{ fuente.size_bytes }} bytes{% else %}—{% endif %}</dd>
+            <dt class="col-sm-4">SHA-256</dt>
+            <dd class="col-sm-8"><code class="small user-select-all">{{ fuente.sha256 or '—' }}</code></dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-6">
+      <div class="card h-100">
+        <div class="card-header">Verificación en base</div>
+        <div class="card-body small">
+          <p class="mb-1">Registros en <code>ap_eventos</code> para esta fuente:</p>
+          <p class="mb-0 fs-5"><strong>{{ n_eventos_db if n_eventos_db is not none else '—' }}</strong></p>
+          {% if processing_summary and processing_summary.eventos_importados is defined %}
+            <p class="text-muted mb-0 mt-2 small">
+              Último informe de importación indicaba <strong>{{ processing_summary.eventos_importados }}</strong> eventos.
+              {% if n_eventos_db is not none and processing_summary.eventos_importados != n_eventos_db %}
+                <span class="text-warning">Si difiere, puede haberse reprocesado o borrado parcialmente.</span>
+              {% endif %}
+            </p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header">Informe de trazabilidad</div>
+        <div class="card-body">
+          {% if processing_summary %}
+            <div class="table-responsive">
+              <table class="table table-sm table-bordered mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Concepto</th>
+                    <th class="text-end">Valor</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% if processing_summary.source_type %}
+                  <tr><td>Tipo de fuente</td><td class="text-end">{{ processing_summary.source_type }}</td></tr>
+                  {% endif %}
+                  {% if processing_summary.filas_trafico_leidas is defined %}
+                  <tr><td>Filas leídas (hoja resultado de tráfico)</td><td class="text-end">{{ processing_summary.filas_trafico_leidas }}</td></tr>
+                  {% endif %}
+                  {% if processing_summary.eventos_importados is defined %}
+                  <tr><td>Eventos importados</td><td class="text-end">{{ processing_summary.eventos_importados }}</td></tr>
+                  {% endif %}
+                  {% if processing_summary.filas_omitidas_vacias is defined %}
+                  <tr><td>Filas omitidas (completamente vacías)</td><td class="text-end">{{ processing_summary.filas_omitidas_vacias }}</td></tr>
+                  {% endif %}
+                  {% if processing_summary.filas_omitidas_total is defined %}
+                  <tr><td>Total filas omitidas</td><td class="text-end">{{ processing_summary.filas_omitidas_total }}</td></tr>
+                  {% endif %}
+                </tbody>
+              </table>
+            </div>
+          {% elif fuente.upload_status == 'PENDING' %}
+            <p class="text-muted mb-0">Aún no se ejecutó el procesamiento sobre este archivo.</p>
+          {% else %}
+            <p class="text-muted mb-0">No hay informe estructurado guardado para esta fuente.</p>
+          {% endif %}
+
+          {% if error_text %}
+            <div class="alert alert-danger mt-3 mb-0 small">
+              <strong>Error / detalle técnico:</strong>
+              <pre class="mb-0 mt-2 small bg-white p-2 border rounded">{{ error_text }}</pre>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12">
+      <div class="card border-secondary">
+        <div class="card-header">Reglas aplicadas en la importación</div>
+        <div class="card-body small">
+          <ul class="mb-0">
+            <li>Se procesan las hojas <strong>Resultado de tráfico</strong>, <strong>Titulares</strong> y <strong>Datos técnicos</strong> (por nombre de hoja).</li>
+            <li>La hoja <strong>Criterio de búsqueda</strong> no se importa a tablas de análisis.</li>
+            <li>En la hoja de tráfico se importa <strong>cada fila que no esté completamente vacía</strong>; las filas totalmente vacías se omiten y se cuentan en “omitidas vacías”.</li>
+            <li>Para cada fila importada se conserva una copia de <strong>todas las columnas</strong> en <code>raw_payload_json</code> del evento.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12">
+      <a href="{{ url_for('sabana_llamadas.cargas_list') }}" class="btn btn-outline-secondary btn-sm">Volver a cargas</a>
+      <a href="{{ url_for('sabana_llamadas.mapa') }}" class="btn btn-outline-primary btn-sm">Ir al mapa</a>
+      {% if fuente.caso %}
+      <a href="{{ url_for('analisis_puntos.caso_relaciones', caso_id=fuente.caso.id) }}" class="btn btn-outline-secondary btn-sm">Ver caso</a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

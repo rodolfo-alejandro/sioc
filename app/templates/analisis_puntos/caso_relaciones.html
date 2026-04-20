@@ -1,0 +1,591 @@
+{% extends "layouts/base.html" %}
+{% block title %}Relaciones del caso{% endblock %}
+
+{% block extra_head %}
+<style>
+  .rel-caso-vista .rel-caso-nombre-archivo {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: min(36rem, 55vw);
+    cursor: help;
+  }
+  .rel-caso-vista .rel-caso-toolbar .btn { white-space: nowrap; }
+  .rel-caso-vista .acciones-dropdown-menu {
+    min-width: 11.5rem;
+  }
+  .rel-caso-vista .acciones-dropdown-menu .dropdown-item {
+    font-size: 0.9rem;
+    padding: 0.45rem 0.75rem;
+  }
+  .rel-caso-vista .acciones-dropdown-menu .bi {
+    font-size: 0.9rem;
+  }
+  @media (max-width: 768px) {
+    .rel-caso-vista .acciones-dropdown-menu {
+      min-width: 10.5rem;
+    }
+    .rel-caso-vista .acciones-dropdown-menu .dropdown-item {
+      font-size: 0.82rem;
+      padding: 0.35rem 0.6rem;
+    }
+    .rel-caso-vista .acciones-dropdown-menu .bi {
+      font-size: 0.82rem;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="rel-caso-vista container-fluid py-3 px-2 px-md-3">
+  <div class="d-flex flex-column flex-md-row justify-content-md-between align-items-md-start gap-3 mb-3">
+    <div>
+      <h4 class="mb-1">Relaciones del caso</h4>
+      <div class="small text-muted">
+        <strong>{{ caso.codigo }}</strong> — {{ caso.titulo }}
+        {% if caso.referencia_carpeta %} · <span class="text-secondary">Ref. {{ caso.referencia_carpeta }}</span>{% endif %}
+        {% if caso.fecha_referencia %} · Hechos {{ caso.fecha_referencia.strftime('%d/%m/%Y') }}{% endif %}
+      </div>
+    </div>
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      <div class="btn-group btn-group-sm rel-caso-toolbar flex-wrap" role="group">
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalVincularSujeto">
+          <i class="bi bi-person-plus"></i> Vincular sujeto
+        </button>
+        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalNotaArchivoRecord">
+          <i class="bi bi-sticky"></i> Nota (record)
+        </button>
+        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalNotaCargaSabana">
+          <i class="bi bi-sticky"></i> Nota (sábana)
+        </button>
+        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalVincularNumero">
+          <i class="bi bi-telephone-plus"></i> Vincular número
+        </button>
+        <button type="button"
+                class="btn btn-outline-secondary"
+                data-sabana-share
+                data-share-type="caso"
+                data-share-id="{{ caso.id }}"
+                data-share-title="Compartir caso {{ caso.codigo }}">
+          <i class="bi bi-share"></i> Compartir caso
+        </button>
+      </div>
+      <a href="{{ url_for('analisis_puntos.index') }}" class="btn btn-sm btn-outline-secondary">Volver a Casos</a>
+    </div>
+  </div>
+
+  <div class="alert alert-light border small mb-4">
+    Puede agregar <strong>notas internas</strong> sobre cada <strong>archivo record</strong> o cada <strong>carga de sábana</strong> del caso (misma lógica; no reemplaza la carga, solo anota en Relaciones).
+    Los <strong>puntos de referencia</strong> (domicilio, encuentro, etc.) se registran en el <strong>mapa</strong> y se listan en la tabla de abajo.
+    En <strong>Números de interés</strong> se muestran solo vínculos manuales del caso y números explícitos cargados manualmente en ficha de sujeto.
+  </div>
+
+  <div class="card mb-3 border-0 shadow-sm">
+    <div class="card-header bg-white fw-semibold">Sujetos vinculados</div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover table-sm mb-0 align-middle">
+          <thead class="table-light"><tr><th>Sujeto</th><th>Origen / nota</th><th class="text-end" style="width:9rem">Acciones</th></tr></thead>
+          <tbody>
+            {% for row in sujeto_filas %}
+              {% if row.kind == 'explicit' %}
+              {% set l = row.link %}
+              <tr>
+                <td>{{ l.sujeto.display_name() if l.sujeto else ('Sujeto #' ~ l.sujeto_id) }}</td>
+                <td class="small text-muted">{{ l.nota or '—' }}</td>
+                <td class="text-end text-nowrap">
+                  <div class="dropdown dropstart">
+                    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Acciones">
+                      <i class="bi bi-three-dots-vertical"></i>
+                    </button>
+                    <ul class="dropdown-menu acciones-dropdown-menu">
+                      {% if l.sujeto %}
+                      <li><a class="dropdown-item" href="{{ url_for('sabana_llamadas.sujetos_ver', sujeto_id=l.sujeto.id) }}"><i class="bi bi-person me-2"></i>Ver sujeto</a></li>
+                      {% endif %}
+                      <li><hr class="dropdown-divider"></li>
+                      <li>
+                        <form method="post" action="{{ url_for('analisis_puntos.caso_relaciones_sujetos_del', caso_id=caso.id, link_id=l.id) }}" onsubmit="return confirm('¿Quitar este vínculo caso–sujeto?');">
+                          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                          <button class="dropdown-item text-danger" type="submit"><i class="bi bi-trash me-2"></i>Quitar</button>
+                        </form>
+                      </li>
+                    </ul>
+                  </div>
+                </td>
+              </tr>
+              {% else %}
+              <tr>
+                <td>{{ row.sujeto.display_name() }}</td>
+                <td class="small"><span class="badge bg-light text-dark border">Carga sábana</span> {{ row.n_cargas }} archivo{% if row.n_cargas != 1 %}s{% endif %}</td>
+                <td class="text-end text-muted small">—</td>
+              </tr>
+              {% endif %}
+            {% else %}
+              <tr><td colspan="3" class="text-center text-muted py-4">Sin sujetos asociados a este caso.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-3 border-0 shadow-sm">
+    <div class="card-header bg-white fw-semibold">Archivos del caso</div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover table-sm mb-0 align-middle">
+          <thead class="table-light"><tr><th>Tipo</th><th>Archivo</th><th>Estado</th><th>Nota</th><th class="text-end" style="width:11rem">Acciones</th></tr></thead>
+          <tbody>
+            {% for row in archivo_filas %}
+              {% if row.kind == 'record' %}
+              {% set f = row.fuente %}
+              <tr>
+                <td class="text-nowrap"><span class="badge bg-primary">Record {{ f.source_type }}</span></td>
+                <td>
+                  {% set nom = f.nombre_archivo %}
+                  <span class="rel-caso-nombre-archivo small" title="{{ nom|e }}">{{ nom }}</span>
+                </td>
+                <td>
+                  <span class="badge {% if f.upload_status == 'PROCESSED' %}bg-success{% elif f.upload_status == 'ERROR' %}bg-danger{% else %}bg-secondary{% endif %}">{{ f.upload_status }}</span>
+                </td>
+                <td class="small text-muted">{% if f.relaciones_nota %}{{ f.relaciones_nota }}{% else %}—{% endif %}</td>
+                <td class="text-end text-nowrap">
+                  <div class="dropdown dropstart">
+                    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Acciones">
+                      <i class="bi bi-three-dots-vertical"></i>
+                    </button>
+                    <ul class="dropdown-menu acciones-dropdown-menu">
+                      <li><a class="dropdown-item" href="{{ url_for('analisis_puntos.fuente_detalle', fuente_id=f.id) }}"><i class="bi bi-eye me-2"></i>Detalle</a></li>
+                      <li>
+                        <button type="button" class="dropdown-item js-open-nota-record" data-bs-toggle="modal" data-bs-target="#modalNotaArchivoRecord" data-fuente-id="{{ f.id }}" data-nota="{{ (f.relaciones_nota or '')|e }}">
+                          <i class="bi bi-pencil-square me-2"></i>Editar nota
+                        </button>
+                      </li>
+                      {% if f.relaciones_nota %}
+                      <li><hr class="dropdown-divider"></li>
+                      <li>
+                        <form method="post" action="{{ url_for('analisis_puntos.caso_relaciones_record_nota', caso_id=caso.id) }}" onsubmit="return confirm('¿Quitar la nota de este archivo record?');">
+                          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                          <input type="hidden" name="fuente_id" value="{{ f.id }}">
+                          <input type="hidden" name="nota" value="">
+                          <button class="dropdown-item text-danger" type="submit"><i class="bi bi-trash me-2"></i>Quitar nota</button>
+                        </form>
+                      </li>
+                      {% endif %}
+                    </ul>
+                  </div>
+                </td>
+              </tr>
+              {% else %}
+              {% set c = row.carga %}
+              {% set nomc = c.nombre_archivo or '—' %}
+              <tr>
+                <td class="text-nowrap"><span class="badge bg-success">Sábana {{ c.tipo|upper }}</span></td>
+                <td><span class="rel-caso-nombre-archivo small" title="{{ nomc|e }}">{{ nomc }}</span></td>
+                <td><span class="badge bg-secondary">Importado</span></td>
+                <td class="small text-muted">{% if c.relaciones_nota %}{{ c.relaciones_nota }}{% else %}—{% endif %}</td>
+                <td class="text-end text-nowrap">
+                  <div class="dropdown dropstart">
+                    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Acciones">
+                      <i class="bi bi-three-dots-vertical"></i>
+                    </button>
+                    <ul class="dropdown-menu acciones-dropdown-menu">
+                      <li><a class="dropdown-item" href="{{ url_for('sabana_llamadas.cargas_detalle', carga_id=c.id) }}"><i class="bi bi-eye me-2"></i>Detalle</a></li>
+                      <li>
+                        <button type="button" class="dropdown-item js-open-nota-sabana" data-bs-toggle="modal" data-bs-target="#modalNotaCargaSabana" data-carga-id="{{ c.id }}" data-nota="{{ (c.relaciones_nota or '')|e }}">
+                          <i class="bi bi-pencil-square me-2"></i>Editar nota
+                        </button>
+                      </li>
+                      {% if c.relaciones_nota %}
+                      <li><hr class="dropdown-divider"></li>
+                      <li>
+                        <form method="post" action="{{ url_for('analisis_puntos.caso_relaciones_carga_sabana_nota', caso_id=caso.id) }}" onsubmit="return confirm('¿Quitar la nota de esta carga?');">
+                          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                          <input type="hidden" name="carga_id" value="{{ c.id }}">
+                          <input type="hidden" name="nota" value="">
+                          <button class="dropdown-item text-danger" type="submit"><i class="bi bi-trash me-2"></i>Quitar nota</button>
+                        </form>
+                      </li>
+                      {% endif %}
+                    </ul>
+                  </div>
+                </td>
+              </tr>
+              {% endif %}
+            {% else %}
+              <tr><td colspan="5" class="text-center text-muted py-4">Sin archivos asociados a este caso.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-3 border-0 shadow-sm">
+    <div class="card-header bg-white fw-semibold d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <span>Puntos de referencia (mapa)</span>
+      <a href="{{ url_for('sabana_llamadas.mapa', modo='record', caso_id=caso.id) }}" class="btn btn-sm btn-outline-primary py-0">
+        <i class="bi bi-geo-alt"></i> Ir al mapa
+      </a>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover table-sm mb-0 align-middle">
+          <thead class="table-light">
+            <tr>
+              <th>Tipo</th>
+              <th>Etiqueta</th>
+              <th>Coordenadas</th>
+              <th>Origen</th>
+              <th>Nota</th>
+              <th>Registro</th>
+              <th class="text-end" style="width:9rem">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in mapa_puntos %}
+            <tr>
+              <td class="text-nowrap">
+                {% if p.tipo == 'domicilio' %}
+                  <span class="badge bg-success">Domicilio</span>
+                {% elif p.tipo == 'encuentro' %}
+                  <span class="badge bg-warning text-dark">Encuentro</span>
+                {% elif p.tipo == 'hecho' %}
+                  <span class="badge bg-danger">Hecho</span>
+                {% else %}
+                  <span class="badge bg-secondary">Otro</span>
+                {% endif %}
+              </td>
+              <td class="small">{% if p.etiqueta %}{{ p.etiqueta }}{% else %}—{% endif %}</td>
+              <td class="small text-nowrap"><code>{{ '%.6f'|format(p.lat) }}, {{ '%.6f'|format(p.lon) }}</code></td>
+              <td class="small text-muted">
+                {% if p.origen_contexto == 'sabana' %}Sábana
+                {% elif p.origen_contexto == 'record' %}Record
+                {% else %}—{% endif %}
+              </td>
+              <td class="small text-muted">{% if p.nota %}{{ p.nota }}{% else %}—{% endif %}</td>
+              <td class="small text-muted">
+                {% if p.user %}<span class="text-nowrap">{{ p.user.username }}</span>{% else %}—{% endif %}
+                {% if p.created_at %}<br><span class="text-nowrap">{{ p.created_at.strftime('%d/%m/%Y %H:%M') }}</span>{% endif %}
+              </td>
+              <td class="text-end text-nowrap">
+                <div class="dropdown dropstart">
+                  <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Acciones">
+                    <i class="bi bi-three-dots-vertical"></i>
+                  </button>
+                  <ul class="dropdown-menu acciones-dropdown-menu">
+                    <li>
+                      <a class="dropdown-item" href="{{ url_for('sabana_llamadas.mapa', modo='record', caso_id=caso.id, center_lat=p.lat, center_lng=p.lon) }}">
+                        <i class="bi bi-geo-alt me-2"></i>Ver en mapa
+                      </a>
+                    </li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                      <form method="post" action="{{ url_for('analisis_puntos.caso_relaciones_mapa_punto_del', caso_id=caso.id, punto_id=p.id) }}" onsubmit="return confirm('¿Eliminar este punto de referencia?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="dropdown-item text-danger" type="submit"><i class="bi bi-trash me-2"></i>Eliminar</button>
+                      </form>
+                    </li>
+                  </ul>
+                </div>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="7" class="text-center text-muted py-4">
+                No hay puntos de referencia guardados. Desde el <a href="{{ url_for('sabana_llamadas.mapa', modo='record', caso_id=caso.id) }}">mapa</a> puede marcar domicilio, encuentro u otros lugares vinculados a este caso.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm">
+    <div class="card-header bg-white fw-semibold">Números de interés</div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover table-sm mb-0 align-middle">
+          <thead class="table-light"><tr><th>Número</th><th>Sujeto</th><th>Origen (archivo)</th><th>Origen / nota</th><th class="text-end" style="width:8rem">Acciones</th></tr></thead>
+          <tbody>
+            {% for row in numero_filas %}
+              {% if row.kind == 'manual' %}
+              {% set l = row.link %}
+              <tr>
+                <td><code>{{ l.msisdn }}</code></td>
+                <td>{{ l.sujeto.display_name() if l.sujeto else '—' }}</td>
+                <td class="small">
+                  {% if l.fuente %}
+                    Archivo record · {{ l.fuente.source_type }} · {{ l.fuente.nombre_archivo }}
+                  {% elif l.sujeto_id %}
+                    Ficha de sujeto
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+                <td class="small text-muted">{{ l.nota or '—' }}</td>
+                <td class="text-end text-nowrap">
+                  <div class="dropdown dropstart">
+                    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Acciones">
+                      <i class="bi bi-three-dots-vertical"></i>
+                    </button>
+                    <ul class="dropdown-menu acciones-dropdown-menu">
+                      {% if l.sujeto %}
+                      <li><a class="dropdown-item" href="{{ url_for('sabana_llamadas.sujetos_ver', sujeto_id=l.sujeto.id) }}"><i class="bi bi-person me-2"></i>Ver sujeto</a></li>
+                      {% endif %}
+                      <li><hr class="dropdown-divider"></li>
+                      <li>
+                        <form method="post" action="{{ url_for('analisis_puntos.caso_relaciones_numeros_del', caso_id=caso.id, link_id=l.id) }}" onsubmit="return confirm('¿Quitar este número del caso?');">
+                          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                          <button class="dropdown-item text-danger" type="submit"><i class="bi bi-trash me-2"></i>Quitar</button>
+                        </form>
+                      </li>
+                    </ul>
+                  </div>
+                </td>
+              </tr>
+              {% elif row.kind == 'sujeto_numero' %}
+              <tr>
+                <td><code>{{ row.msisdn }}</code></td>
+                <td class="small">{{ row.sujeto.display_name() if row.sujeto else '—' }}</td>
+                <td class="small">Ficha de sujeto</td>
+                <td class="small"><span class="badge bg-light text-dark border">Número de sujeto</span> {{ row.nota or 'Vinculado en ficha del sujeto' }}</td>
+                <td class="text-end">
+                  <div class="dropdown dropstart">
+                    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Acciones">
+                      <i class="bi bi-three-dots-vertical"></i>
+                    </button>
+                    <ul class="dropdown-menu acciones-dropdown-menu">
+                      <li>
+                        <form method="post" action="{{ url_for('analisis_puntos.caso_relaciones_numeros_add', caso_id=caso.id) }}">
+                          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                          <input type="hidden" name="msisdn" value="{{ row.msisdn }}">
+                          <input type="hidden" name="sujeto_id" value="{{ row.sujeto_id or '' }}">
+                          <input type="hidden" name="nota" value="{{ row.nota or 'Importado desde número explícito del sujeto' }}">
+                          <button class="dropdown-item" type="submit"><i class="bi bi-link-45deg me-2"></i>Vincular al caso</button>
+                        </form>
+                      </li>
+                    </ul>
+                  </div>
+                </td>
+              </tr>
+              {% else %}
+              <tr>
+                <td><code>{{ row.msisdn or '—' }}</code></td>
+                <td class="small text-muted">—</td>
+                <td class="small text-muted">—</td>
+                <td class="small text-muted">—</td>
+                <td class="text-end text-muted small">—</td>
+              </tr>
+              {% endif %}
+            {% else %}
+              <tr><td colspan="5" class="text-center text-muted py-4">Sin números registrados para este caso.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: vincular sujeto -->
+<div class="modal fade" id="modalVincularSujeto" tabindex="-1" aria-labelledby="modalVincularSujetoLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form method="post" action="{{ url_for('analisis_puntos.caso_relaciones_sujetos_add', caso_id=caso.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalVincularSujetoLabel">Vincular sujeto al caso</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <label class="form-label">Sujeto</label>
+          <select class="form-select mb-2" name="sujeto_id" required>
+            <option value="">Seleccionar...</option>
+            {% for s in sujetos %}
+              <option value="{{ s.id }}">{{ s.display_name() }}</option>
+            {% endfor %}
+          </select>
+          <label class="form-label">Nota (opcional)</label>
+          <input type="text" class="form-control" name="nota" placeholder="Nota">
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Vincular</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: nota opcional sobre archivo record (tabla técnica ap_fuentes; no es “fuente” policial / testigo) -->
+<div class="modal fade" id="modalNotaArchivoRecord" tabindex="-1" aria-labelledby="modalNotaArchivoRecordLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form method="post" action="{{ url_for('analisis_puntos.caso_relaciones_record_nota', caso_id=caso.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalNotaArchivoRecordLabel">Nota (archivo record)</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <p class="small text-muted mb-2">
+            El archivo record ya está en el caso; la nota se guarda en el mismo registro de importación (como en sábana).
+          </p>
+          <p class="small text-secondary border-start border-3 ps-2 mb-3">
+            Para <strong>sábanas</strong> use <em>Nota (sábana)</em> o la fila correspondiente.
+          </p>
+          <label class="form-label">Archivo record</label>
+          <select class="form-select mb-2" name="fuente_id" id="selectFuenteRecord" required {% if not fuentes %}disabled{% endif %}>
+            <option value="">Seleccionar...</option>
+            {% for f in fuentes %}
+              <option value="{{ f.id }}">{{ f.source_type }} · {{ f.nombre_archivo }}</option>
+            {% endfor %}
+          </select>
+          {% if not fuentes %}
+          <p class="small text-warning mb-0">No hay archivos record en este caso aún (subirlos como Record VOZ/GPRS en Cargas).</p>
+          {% endif %}
+          <label class="form-label">Nota</label>
+          <textarea class="form-control" name="nota" id="notaRecordTexto" rows="3" placeholder="Texto de la nota" maxlength="500"></textarea>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary" {% if not fuentes %}disabled{% endif %}>Guardar nota</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: nota sobre carga de sábana -->
+<div class="modal fade" id="modalNotaCargaSabana" tabindex="-1" aria-labelledby="modalNotaCargaSabanaLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form method="post" action="{{ url_for('analisis_puntos.caso_relaciones_carga_sabana_nota', caso_id=caso.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalNotaCargaSabanaLabel">Nota (carga de sábana)</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <p class="small text-muted mb-2">La carga ya está en el caso; aquí guarda una <strong>nota interna</strong> para el equipo (prioridad, hipótesis, etc.).</p>
+          <label class="form-label">Carga</label>
+          <select class="form-select mb-2" name="carga_id" id="selectCargaSabanaNota" required {% if not cargas_caso %}disabled{% endif %}>
+            <option value="">Seleccionar...</option>
+            {% for cg in cargas_caso %}
+              <option value="{{ cg.id }}">{{ cg.tipo|upper }} · {{ cg.nombre_archivo or ('#' ~ cg.id) }}</option>
+            {% endfor %}
+          </select>
+          {% if not cargas_caso %}
+          <p class="small text-warning mb-0">No hay cargas de sábana en este caso.</p>
+          {% endif %}
+          <label class="form-label">Nota</label>
+          <textarea class="form-control" name="nota" id="notaSabanaTexto" rows="3" placeholder="Texto de la nota" maxlength="500"></textarea>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary" {% if not cargas_caso %}disabled{% endif %}>Guardar nota</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: vincular número -->
+<div class="modal fade" id="modalVincularNumero" tabindex="-1" aria-labelledby="modalVincularNumeroLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form method="post" action="{{ url_for('analisis_puntos.caso_relaciones_numeros_add', caso_id=caso.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalVincularNumeroLabel">Vincular número al caso</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <label class="form-label">Número (msisdn)</label>
+          <input type="text" class="form-control mb-2" name="msisdn" placeholder="Número" required>
+          <label class="form-label">Sujeto (opcional)</label>
+          <select class="form-select mb-2" name="sujeto_id">
+            <option value="">Sin sujeto</option>
+            {% for s in sujetos %}
+              <option value="{{ s.id }}">{{ s.display_name() }}</option>
+            {% endfor %}
+          </select>
+          <label class="form-label">Archivo record (opcional)</label>
+          <select class="form-select mb-2" name="fuente_id">
+            <option value="">Sin archivo</option>
+            {% for f in fuentes %}
+              <option value="{{ f.id }}">{{ f.source_type }} · {{ f.nombre_archivo }}</option>
+            {% endfor %}
+          </select>
+          <label class="form-label">Nota (opcional)</label>
+          <input type="text" class="form-control" name="nota" placeholder="Nota">
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Vincular</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Compartir (reutiliza sabana_share.js) -->
+<div class="modal fade" id="sabanaShareModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-fullscreen-sm-down">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="sabana-share-title">Compartir</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <label class="form-label small mb-1">Buscar usuario</label>
+        <input type="text" class="form-control form-control-sm mb-2" id="sabana-share-search" placeholder="Buscar por usuario o email…">
+        <div class="mb-3">
+          <div class="small text-muted mb-1">Resultados</div>
+          <div id="sabana-share-results"></div>
+        </div>
+        <div>
+          <div class="small text-muted mb-1">Compartido con</div>
+          <div id="sabana-share-current"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/sabana_share.js') }}"></script>
+<script>
+(function () {
+  function bindModal(modalId, selectId, taId, openClass, dataIdAttr) {
+    var modal = document.getElementById(modalId);
+    if (!modal || !window.bootstrap) return;
+    modal.addEventListener('show.bs.modal', function (ev) {
+      var btn = ev.relatedTarget;
+      var sel = document.getElementById(selectId);
+      var ta = document.getElementById(taId);
+      if (!sel || !ta) return;
+      if (btn && btn.classList && btn.classList.contains(openClass)) {
+        var id = btn.getAttribute(dataIdAttr);
+        var nota = btn.getAttribute('data-nota') || '';
+        if (id) sel.value = id;
+        ta.value = nota;
+      } else {
+        sel.value = '';
+        ta.value = '';
+      }
+    });
+  }
+  bindModal('modalNotaCargaSabana', 'selectCargaSabanaNota', 'notaSabanaTexto', 'js-open-nota-sabana', 'data-carga-id');
+  bindModal('modalNotaArchivoRecord', 'selectFuenteRecord', 'notaRecordTexto', 'js-open-nota-record', 'data-fuente-id');
+})();
+</script>
+{% endblock %}

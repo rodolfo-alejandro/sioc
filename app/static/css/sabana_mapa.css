@@ -194,7 +194,7 @@ body.sabana-mapa-fullscreen .sabana-mapa {
     display: flex;
     gap: 0.5rem;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
     flex-wrap: wrap;
 }
 
@@ -209,6 +209,19 @@ body.sabana-mapa-fullscreen .sabana-mapa {
     display: flex;
     gap: 0.35rem;
     align-items: center;
+}
+
+.sabana-goto-orden-wrap {
+    align-items: flex-end;
+}
+
+.sabana-goto-orden-menu {
+    min-width: min(22rem, calc(100vw - 2rem));
+    max-width: min(28rem, calc(100vw - 1rem));
+}
+
+.sabana-filtros-top .sabana-goto-orden-list {
+    max-height: 200px;
 }
 
 .sabana-ig {
@@ -251,6 +264,12 @@ body.sabana-mapa-fullscreen .sabana-mapa {
     border-top: 6px solid rgba(0,0,0,0.55);
     transform: translateY(-30%);
     pointer-events: none;
+}
+
+/* “Ir a orden”: más aire a la derecha para que el caret no tape el texto (evita lectura tipo “?”). */
+.sabana-filtros-bar .sabana-dd-goto-orden.sabana-dd-btn {
+    padding-right: 2rem;
+    min-width: 10.5rem;
 }
 .sabana-dd-btn.btn-outline-secondary::after {
     border-top-color: rgba(0,0,0,0.55);
@@ -344,13 +363,12 @@ body.sabana-mapa-fullscreen .sabana-mapa {
         flex-wrap: wrap;
     }
 
-    /* Ajustar el “Ir a #” (input-group) que tiene ancho fijo en el template */
-    .sabana-filtros-bar-right .input-group {
-        width: 100% !important;
-        max-width: 100%;
+    .sabana-goto-orden-wrap {
+        width: 100%;
     }
-    .sabana-filtros-bar-right .input-group .form-control {
-        min-width: 0;
+    .sabana-goto-orden-wrap .dropdown {
+        min-width: 0 !important;
+        flex: 1 1 100%;
     }
 
     /* Modal detalle “en el punto” en móvil pequeño */
@@ -391,6 +409,14 @@ body.sabana-mapa-fullscreen .sabana-mapa {
 .sabana-celda-num:hover {
     background: #0a58ca;
     transform: translateY(-1px);
+}
+
+.sabana-celda-num.sabana-celda-num--range {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    padding: 0 2px;
+    line-height: 1.05;
 }
 
 /* Spiderfy: pines numerados + líneas desde el centro */
@@ -532,4 +558,35 @@ body.sabana-mapa-fullscreen .sabana-mapa {
     .sabana-filtros-ayuda {
         font-size: 0.8rem;
     }
+}
+
+/* Puntos de referencia del caso: icono en el mapa (Leaflet divIcon) */
+.sabana-caso-ref-icono-group .sabana-caso-ref-icono-btn {
+    min-width: 2.25rem;
+    line-height: 1.2;
+    padding: 0.2rem 0.35rem;
+}
+.sabana-caso-ref-icono-group .sabana-caso-ref-icono-btn.active {
+    border-color: #0d6efd;
+    background-color: rgba(13, 110, 253, 0.12);
+}
+.leaflet-div-icon.sabana-caso-ref-marker-wrap {
+    background: transparent;
+    border: none;
+    box-sizing: border-box;
+}
+.leaflet-div-icon.sabana-caso-ref-marker-wrap .sabana-caso-ref-pin {
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    border-radius: 50%;
+    border: 2px solid #6c757d;
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.28rem;
+    line-height: 1;
+    cursor: pointer;
 }

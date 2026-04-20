@@ -5,17 +5,28 @@
 {% block content %}
 <div class="page-header">
     <h1><i class="bi bi-telephone"></i> Sabana de Llamadas</h1>
-    <p class="text-muted">Análisis de tráfico GPRS y VOZ. Importe archivos, vincule sujetos y visualice geolocalización.</p>
+    <p class="text-muted">Flujo de trabajo de izquierda a derecha: <strong>Inicio</strong> → <strong>Casos</strong> → <strong>Sujetos</strong> (opcional) → <strong>Cargas</strong> → análisis (mapa y relaciones).</p>
 </div>
 
 <div class="row">
+    {# Orden: Casos → Sujetos → Cargas (subir + historial) → Análisis por puntos #}
     {% if current_user.has_permission('SABANA_LLAMADAS_UPLOAD') %}
+    <div class="col-md-4 mb-3">
+        <div class="card h-100 border-primary border-opacity-25">
+            <div class="card-body text-center">
+                <i class="bi bi-briefcase display-4 text-primary"></i>
+                <h5 class="card-title mt-2">Casos</h5>
+                <p class="card-text text-muted">Paso 1: cree el caso investigativo antes de cargar archivos.</p>
+                <a href="{{ url_for('analisis_puntos.index') }}" class="btn btn-primary">Abrir Casos</a>
+            </div>
+        </div>
+    </div>
     <div class="col-md-4 mb-3">
         <div class="card h-100">
             <div class="card-body text-center">
                 <i class="bi bi-person display-4 text-primary"></i>
                 <h5 class="card-title mt-2">Sujetos</h5>
-                <p class="card-text text-muted">Personas de interés (apodo, nombre, DNI, imagen). Vincule cargas a cada uno.</p>
+                <p class="card-text text-muted">Paso 2 (opcional): personas de interés para vincular cargas.</p>
                 <a href="{{ url_for('sabana_llamadas.sujetos_list') }}" class="btn btn-outline-primary">Ver / Crear</a>
             </div>
         </div>
@@ -24,19 +35,22 @@
         <div class="card h-100">
             <div class="card-body text-center">
                 <i class="bi bi-cloud-upload display-4 text-success"></i>
-                <h5 class="card-title mt-2">Cargar GPRS</h5>
-                <p class="card-text text-muted">Importar archivo Excel de sabana GPRS (tráfico de datos).</p>
-                <a href="{{ url_for('sabana_llamadas.gprs_upload') }}" class="btn btn-outline-success">Subir archivo</a>
+                <h5 class="card-title mt-2">Cargas</h5>
+                <p class="card-text text-muted">Paso 3: suba archivos con caso elegido; historial en la misma pantalla.</p>
+                <div class="d-flex flex-wrap gap-2 justify-content-center">
+                    <a href="{{ url_for('sabana_llamadas.cargas_list', nuevo=1) }}" class="btn btn-success">Nueva carga</a>
+                    <a href="{{ url_for('sabana_llamadas.cargas_list') }}" class="btn btn-outline-success">Ver historial</a>
+                </div>
             </div>
         </div>
     </div>
     <div class="col-md-4 mb-3">
         <div class="card h-100">
             <div class="card-body text-center">
-                <i class="bi bi-cloud-upload display-4 text-info"></i>
-                <h5 class="card-title mt-2">Cargar VOZ</h5>
-                <p class="card-text text-muted">Importar archivo Excel de sabana VOZ (llamadas).</p>
-                <a href="{{ url_for('sabana_llamadas.voz_upload') }}" class="btn btn-outline-info">Subir archivo</a>
+                <i class="bi bi-bullseye display-4 text-info"></i>
+                <h5 class="card-title mt-2">Casos y mapa</h5>
+                <p class="card-text text-muted">Fuentes record por caso, relaciones y mapa unificado.</p>
+                <a href="{{ url_for('analisis_puntos.index') }}" class="btn btn-outline-info">Abrir casos</a>
             </div>
         </div>
     </div>
@@ -47,7 +61,7 @@
             <div class="card-body text-center">
                 <i class="bi bi-geo-alt display-4 text-warning"></i>
                 <h5 class="card-title mt-2">Mapa</h5>
-                <p class="card-text text-muted">Geolocalización de celdas (lat/long) con filtros por sujeto, carga y tipo.</p>
+                <p class="card-text text-muted">Geolocalización unificada: sábana y análisis por puntos.</p>
                 <a href="{{ url_for('sabana_llamadas.mapa') }}" class="btn btn-outline-warning">Abrir mapa</a>
             </div>
         </div>
@@ -56,9 +70,9 @@
         <div class="card h-100">
             <div class="card-body text-center">
                 <i class="bi bi-diagram-3 display-4 text-danger"></i>
-                <h5 class="card-title mt-2">Relaciones (VOZ)</h5>
-                <p class="card-text text-muted">Resumen de relaciones entre números basado en llamadas VOZ.</p>
-                <a href="{{ url_for('sabana_llamadas.relaciones') }}" class="btn btn-outline-danger">Ver relaciones</a>
+                <h5 class="card-title mt-2">Relaciones</h5>
+                <p class="card-text text-muted">Sábana o Record, VOZ o GPRS; filtros como en el mapa.</p>
+                <a href="{{ url_for('sabana_llamadas.relaciones') }}" class="btn btn-outline-danger">Abrir relaciones</a>
             </div>
         </div>
     </div>
@@ -75,6 +89,7 @@
                         <thead>
                             <tr>
                                 <th>Tipo</th>
+                                <th>Caso</th>
                                 <th>Archivo</th>
                                 <th>Sujeto</th>
                                 <th>Fecha</th>
@@ -84,6 +99,13 @@
                             {% for c in cargas %}
                             <tr>
                                 <td><span class="badge bg-{{ 'success' if c.tipo == 'gprs' else 'info' }}">{{ c.tipo|upper }}</span></td>
+                                <td>
+                                    {% if c.caso %}
+                                        <a href="{{ url_for('analisis_puntos.caso_relaciones', caso_id=c.caso.id) }}" class="small">{{ c.caso.codigo }}</a>
+                                    {% else %}
+                                        <span class="text-muted small">—</span>
+                                    {% endif %}
+                                </td>
                                 <td>{{ c.nombre_archivo or 'Sin nombre' }}</td>
                                 <td>
                                     {% if c.sujeto %}

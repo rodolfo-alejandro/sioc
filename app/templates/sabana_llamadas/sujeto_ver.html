@@ -123,6 +123,9 @@
                         <div class="text-break" style="min-width: 0;">
                             <span class="badge bg-{{ 'success' if c.tipo == 'gprs' else 'info' }}">{{ c.tipo|upper }}</span>
                             {{ c.nombre_archivo or 'Sin nombre' }}
+                            {% if c.caso %}
+                            <span class="small text-muted"> · Caso <a href="{{ url_for('analisis_puntos.caso_relaciones', caso_id=c.caso.id) }}">{{ c.caso.codigo }}</a></span>
+                            {% endif %}
                             <small class="text-muted d-block">{{ c.created_at|localtime if c.created_at else '' }}</small>
                         </div>
                         {% if current_user.has_permission('SABANA_LLAMADAS_UPLOAD') and c.user_id == current_user.id %}

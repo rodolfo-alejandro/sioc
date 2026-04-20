@@ -1,106 +1,274 @@
 {% extends "layouts/base.html" %}
-{% block title %}Análisis de Puntos{% endblock %}
+{% block title %}Casos{% endblock %}
+
+{% block extra_head %}
+<style>
+  .casos-vista .casos-hero {
+    background: linear-gradient(135deg, #f8f9fc 0%, #eef2f9 45%, #f0f4ff 100%);
+    border: 1px solid rgba(13, 110, 253, 0.12);
+    border-radius: 0.75rem;
+    padding: 1.25rem 1.5rem;
+  }
+  .casos-vista .btn-crear-caso {
+    padding: 0.6rem 1.35rem;
+    font-weight: 600;
+    border-radius: 0.5rem;
+    box-shadow: 0 2px 8px rgba(13, 110, 253, 0.25);
+  }
+  .casos-vista .table-casos-wrap {
+    border-radius: 0.5rem;
+    overflow-x: auto;
+    overflow-y: visible;
+    max-height: none;
+  }
+  .casos-vista .table-casos thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    font-size: 0.7rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #6c757d;
+    background: #f8f9fa !important;
+    border-bottom: 2px solid #dee2e6;
+    white-space: nowrap;
+  }
+  .casos-vista .table-casos tbody tr:hover {
+    background-color: rgba(13, 110, 253, 0.04);
+  }
+  .casos-vista .casos-code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.8rem;
+  }
+  .casos-vista .casos-empty {
+    padding: 3rem 1.5rem;
+  }
+  .casos-vista .modal-caso .modal-content {
+    border: none;
+    border-radius: 0.75rem;
+    box-shadow: 0 0.5rem 2rem rgba(0, 0, 0, 0.12);
+  }
+  .casos-vista .modal-caso .modal-header {
+    background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+    color: #fff;
+    border-radius: 0.75rem 0.75rem 0 0;
+  }
+  .casos-vista .modal-caso .modal-header .btn-close {
+    filter: invert(1);
+  }
+  .casos-vista .acciones-dropdown-menu {
+    min-width: 11.5rem;
+  }
+  .casos-vista .acciones-dropdown-menu .dropdown-item {
+    font-size: 0.9rem;
+    padding: 0.45rem 0.75rem;
+  }
+  .casos-vista .acciones-dropdown-menu .bi {
+    font-size: 0.9rem;
+  }
+  @media (max-width: 768px) {
+    .casos-vista .acciones-dropdown-menu {
+      min-width: 10.5rem;
+    }
+    .casos-vista .acciones-dropdown-menu .dropdown-item {
+      font-size: 0.82rem;
+      padding: 0.35rem 0.6rem;
+    }
+    .casos-vista .acciones-dropdown-menu .bi {
+      font-size: 0.82rem;
+    }
+  }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-3">
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <h4 class="mb-0">Análisis de Puntos</h4>
-    <span class="badge bg-primary">Módulo independiente de Sabana</span>
-  </div>
-
-  <div class="row g-3">
-    <div class="col-lg-4">
-      <div class="card">
-        <div class="card-header">Crear Caso</div>
-        <div class="card-body">
-          <form method="post" action="{{ url_for('analisis_puntos.crear_caso') }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <div class="mb-2">
-              <label class="form-label">Título</label>
-              <input type="text" class="form-control" name="titulo" placeholder="Ej: Homicidio zona X - madrugada">
-            </div>
-            <div class="mb-3">
-              <label class="form-label">Descripción</label>
-              <textarea class="form-control" name="descripcion" rows="3"></textarea>
-            </div>
-            <button type="submit" class="btn btn-primary w-100">Crear caso</button>
-          </form>
-        </div>
+<div class="casos-vista container-fluid py-3 px-2 px-md-3">
+  <!-- Barra superior: título + acción principal -->
+  <div class="casos-hero mb-3">
+    <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-lg-between gap-3">
+      <div class="flex-grow-1">
+        <h1 class="h4 mb-1 d-flex align-items-center gap-2">
+          <span class="d-inline-flex align-items-center justify-content-center rounded-3 bg-primary text-white" style="width:2.5rem;height:2.5rem;">
+            <i class="bi bi-briefcase-fill"></i>
+          </span>
+          Casos investigativos
+        </h1>
+        <p class="text-muted small mb-0 mb-lg-0">
+          Cree el caso <strong>antes</strong> de cargar archivos (sábanas VOZ/GPRS, análisis por puntos y relaciones).
+        </p>
+      </div>
+      <div class="d-flex flex-wrap align-items-center gap-2">
+        <button type="button" class="btn btn-primary btn-crear-caso" data-bs-toggle="modal" data-bs-target="#modalCrearCaso">
+          <i class="bi bi-plus-lg"></i> Crear caso
+        </button>
       </div>
     </div>
+    <div class="d-flex flex-wrap gap-2 mt-3 pt-3 border-top border-white border-opacity-50">
+      <a href="{{ url_for('sabana_llamadas.cargas_list', nuevo=1) }}" class="btn btn-sm btn-outline-secondary rounded-pill">
+        <i class="bi bi-cloud-upload"></i> Cargas
+      </a>
+      <a href="{{ url_for('sabana_llamadas.sujetos_list') }}" class="btn btn-sm btn-outline-secondary rounded-pill">
+        <i class="bi bi-person"></i> Sujetos
+      </a>
+    </div>
+  </div>
 
-    <div class="col-lg-8">
-      <div class="card">
-        <div class="card-header">Casos Recientes</div>
-        <div class="card-body p-0">
-          <div class="table-responsive">
-            <table class="table table-sm table-striped mb-0">
-              <thead>
-                <tr>
-                  <th>Código</th>
-                  <th>Título</th>
-                  <th>Estado</th>
-                  <th>Creado</th>
-                  <th>Mapa</th>
-                  <th>Subir archivo</th>
-                  <th>Fuentes</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for c in casos %}
-                <tr>
-                  <td>{{ c.codigo }}</td>
-                  <td>{{ c.titulo }}</td>
-                  <td>{{ c.estado }}</td>
-                  <td>{{ c.created_at|localtime('%d/%m/%Y %H:%M') }}</td>
-                  <td>
-                    <a href="{{ url_for('analisis_puntos.mapa_caso', caso_id=c.id) }}" class="btn btn-sm btn-outline-primary">Abrir</a>
-                  </td>
-                  <td>
-                    <form method="post" action="{{ url_for('analisis_puntos.upload_archivo', caso_id=c.id) }}" enctype="multipart/form-data" class="d-flex gap-1">
-                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                      <select class="form-select form-select-sm" name="source_type" style="max-width: 90px;">
-                        <option value="VOZ">VOZ</option>
-                        <option value="GPRS">GPRS</option>
-                      </select>
-                      <input type="file" class="form-control form-control-sm" name="archivo" accept=".xlsx,.xls,.csv">
-                      <button class="btn btn-sm btn-success" type="submit">Subir</button>
-                    </form>
-                  </td>
-                  <td>
-                    {% if c.fuentes %}
-                      <div class="small">
-                      {% for f in c.fuentes %}
-                        <div class="mb-1 border rounded p-1">
-                          <div><strong>{{ f.source_type }}</strong> - {{ f.nombre_archivo }}</div>
-                          <div>Estado: <span class="badge {% if f.upload_status == 'PROCESSED' %}bg-success{% elif f.upload_status == 'ERROR' %}bg-danger{% else %}bg-secondary{% endif %}">{{ f.upload_status }}</span></div>
-                          <form method="post" action="{{ url_for('analisis_puntos.procesar_fuente', fuente_id=f.id) }}" class="mt-1">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <button class="btn btn-sm btn-outline-primary" type="submit">Procesar</button>
-                          </form>
-                        </div>
-                      {% endfor %}
-                      </div>
-                    {% else %}
-                      <span class="text-muted small">Sin fuentes</span>
-                    {% endif %}
-                  </td>
-                </tr>
+  <!-- Tabla a ancho completo -->
+  <div class="card border-0 shadow-sm">
+    <div class="card-header bg-white py-3 d-flex flex-wrap justify-content-between align-items-center gap-2 border-bottom">
+      <div>
+        <span class="fw-semibold">Casos de su unidad</span>
+        <span class="text-muted small ms-1">Listado completo</span>
+      </div>
+      <span class="badge rounded-pill bg-primary bg-opacity-10 text-primary px-3 py-2">{{ casos|length }} caso{% if casos|length != 1 %}s{% endif %}</span>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-casos-wrap">
+        <table class="table table-casos table-hover align-middle mb-0">
+          <thead>
+            <tr>
+              <th class="ps-3">Código</th>
+              <th>Ref.</th>
+              <th>Título</th>
+              <th>Hechos</th>
+              <th>Estado</th>
+              <th>Alta en sistema</th>
+              <th class="text-end pe-3">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in casos %}
+            <tr>
+              <td class="ps-3 text-nowrap"><span class="casos-code fw-semibold text-primary">{{ c.codigo }}</span></td>
+              <td class="small">{% if c.referencia_carpeta %}<span class="text-dark">{{ c.referencia_carpeta }}</span>{% else %}<span class="text-muted">—</span>{% endif %}</td>
+              <td class="fw-medium">{{ c.titulo }}</td>
+              <td class="small text-nowrap">{% if c.fecha_referencia %}<i class="bi bi-calendar3 text-muted me-1"></i>{{ c.fecha_referencia.strftime('%d/%m/%Y') }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+              <td>
+                {% if c.estado == 'ACTIVO' %}
+                <span class="badge rounded-pill bg-success bg-opacity-15 text-success border border-success border-opacity-25">{{ c.estado }}</span>
                 {% else %}
-                <tr>
-                  <td colspan="7" class="text-center text-muted py-3">Sin casos todavía.</td>
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                <span class="badge rounded-pill bg-light text-dark border">{{ c.estado }}</span>
+                {% endif %}
+              </td>
+              <td class="small text-muted text-nowrap">{{ c.created_at|localtime('%d/%m/%Y %H:%M') }}</td>
+              <td class="text-end pe-3 text-nowrap">
+                <div class="dropdown dropstart">
+                  <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Acciones">
+                    <i class="bi bi-three-dots-vertical"></i>
+                  </button>
+                  <ul class="dropdown-menu dropdown-menu-end acciones-dropdown-menu">
+                    <li>
+                      <a class="dropdown-item" href="{{ url_for('sabana_llamadas.mapa', modo='record', caso_id=c.id) }}">
+                        <i class="bi bi-geo-alt me-2"></i>Mapa
+                      </a>
+                    </li>
+                    <li>
+                      <a class="dropdown-item" href="{{ url_for('analisis_puntos.caso_relaciones', caso_id=c.id) }}">
+                        <i class="bi bi-diagram-3 me-2"></i>Relaciones
+                      </a>
+                    </li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                      <button type="button"
+                              class="dropdown-item"
+                              data-sabana-share
+                              data-share-type="caso"
+                              data-share-id="{{ c.id }}"
+                              data-share-title="Compartir caso {{ c.codigo }}">
+                        <i class="bi bi-share me-2"></i>Compartir caso
+                      </button>
+                    </li>
+                  </ul>
+                </div>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="7" class="casos-empty text-center border-0">
+                <div class="text-muted mb-3"><i class="bi bi-inbox" style="font-size:2.5rem;opacity:.35;"></i></div>
+                <p class="mb-2 fw-medium text-secondary">No hay casos registrados</p>
+                <p class="small text-muted mb-3">Pulse <strong>Crear caso</strong> arriba para dar de alta el primero.</p>
+                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalCrearCaso">
+                  <i class="bi bi-plus-lg"></i> Crear caso
+                </button>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
     </div>
-  </div>
-
-  <div class="alert alert-info mt-3 mb-0">
-    Siguiente implementación: parser VOZ/GPRS, mapa de celdas/radios, filtro por distancia en metros, grafo e informe PDF.
   </div>
 </div>
+
+<!-- Modal Compartir (reutiliza sabana_share.js) -->
+<div class="modal fade" id="sabanaShareModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-fullscreen-sm-down">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="sabana-share-title">Compartir</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <label class="form-label small mb-1">Buscar usuario</label>
+        <input type="text" class="form-control form-control-sm mb-2" id="sabana-share-search" placeholder="Buscar por usuario o email…">
+        <div class="mb-3">
+          <div class="small text-muted mb-1">Resultados</div>
+          <div id="sabana-share-results"></div>
+        </div>
+        <div>
+          <div class="small text-muted mb-1">Compartido con</div>
+          <div id="sabana-share-current"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: formulario de alta -->
+<div class="modal fade modal-caso" id="modalCrearCaso" tabindex="-1" aria-labelledby="modalCrearCasoLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title h5 mb-0" id="modalCrearCasoLabel"><i class="bi bi-folder-plus me-2"></i>Nuevo caso</h2>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <form method="post" action="{{ url_for('analisis_puntos.crear_caso') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-body">
+          <p class="small text-muted mb-3">El título es obligatorio; el resto puede completarse después.</p>
+          <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label">Título <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" name="titulo" required placeholder="Ej. Causa X — allanamiento zona norte">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Referencia / expediente <span class="text-muted small">(opcional)</span></label>
+              <input type="text" class="form-control" name="referencia_carpeta" maxlength="120" placeholder="Nº carpeta, causa judicial…">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Fecha hechos o inicio <span class="text-muted small">(opcional)</span></label>
+              <input type="date" class="form-control" name="fecha_referencia">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Descripción <span class="text-muted small">(opcional)</span></label>
+              <textarea class="form-control" name="descripcion" rows="4" placeholder="Hechos relevantes, hipótesis o notas internas"></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer bg-light border-top">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary px-4"><i class="bi bi-check2"></i> Guardar caso</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/sabana_share.js') }}"></script>
 {% endblock %}

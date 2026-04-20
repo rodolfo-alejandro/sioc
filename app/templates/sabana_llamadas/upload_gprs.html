@@ -5,15 +5,37 @@
 {% block content %}
 <div class="page-header">
     <h1><i class="bi bi-cloud-upload"></i> Cargar archivo GPRS</h1>
-    <p class="text-muted">Importar sabana de tráfico GPRS (.xls, .xlsx). Opcionalmente vincule a un sujeto.</p>
+    <p class="text-muted">Orden: <strong>operadora</strong> y <strong>caso</strong> obligatorios; el sujeto es opcional. Formatos: .xls, .xlsx, .xlsm.</p>
 </div>
 
 <div class="row">
-    <div class="col-md-8">
+    <div class="col-lg-8">
+        {% if not casos_ap %}
+        <div class="alert alert-warning">
+            No hay casos investigativos en su unidad. Cree uno en
+            <a href="{{ url_for('analisis_puntos.index') }}" class="alert-link">Casos</a>
+            antes de importar.
+        </div>
+        {% endif %}
         <div class="card">
             <div class="card-body">
                 <form method="POST" action="{{ url_for('sabana_llamadas.gprs_upload') }}" enctype="multipart/form-data">
                     {{ form.hidden_tag() }}
+                    <div class="mb-3">
+                        {{ form.operadora.label(class="form-label") }}
+                        {{ form.operadora(class="form-select" + (" is-invalid" if form.operadora.errors else "")) }}
+                        {% if form.operadora.errors %}
+                        <div class="invalid-feedback">{% for e in form.operadora.errors %}{{ e }}{% endfor %}</div>
+                        {% endif %}
+                    </div>
+                    <div class="mb-3">
+                        {{ form.caso_id.label(class="form-label") }} <span class="text-danger">*</span>
+                        {{ form.caso_id(class="form-select" + (" is-invalid" if form.caso_id.errors else "")) }}
+                        {% if form.caso_id.errors %}
+                        <div class="invalid-feedback">{% for e in form.caso_id.errors %}{{ e }}{% endfor %}</div>
+                        {% endif %}
+                        <small class="form-text text-muted">¿No hay casos? <a href="{{ url_for('analisis_puntos.index') }}">Crear en Casos</a>.</small>
+                    </div>
                     <div class="mb-3">
                         {{ form.file.label(class="form-label") }}
                         {{ form.file(class="form-control" + (" is-invalid" if form.file.errors else ""), accept=".xls,.xlsx,.xlsm") }}
@@ -28,9 +50,10 @@
                         {% if form.sujeto_id.errors %}
                         <div class="invalid-feedback">{% for e in form.sujeto_id.errors %}{{ e }}{% endfor %}</div>
                         {% endif %}
-                        <small class="form-text text-muted">Opcional. Puede vincular después desde el sujeto.</small>
+                        <small class="form-text text-muted">Opcional. También puede vincular después desde “Vincular” en el historial de cargas.</small>
                     </div>
-                    <button type="submit" class="btn btn-success">Importar</button>
+                    <button type="submit" class="btn btn-success" {% if not casos_ap %}disabled{% endif %}>Importar</button>
+                    <a href="{{ url_for('sabana_llamadas.cargas_list', nuevo=1) }}" class="btn btn-outline-primary">Carga unificada</a>
                     <a href="{{ url_for('sabana_llamadas.index') }}" class="btn btn-secondary">Volver</a>
                 </form>
             </div>

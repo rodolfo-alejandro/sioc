@@ -2,7 +2,12 @@
 
 {% block title %}Relaciones - Sabana de Llamadas{% endblock %}
 
+{% block extra_head %}
+<link href="{{ url_for('static', filename='css/sabana_mapa.css') }}" rel="stylesheet">
+{% endblock %}
+
 {% block content %}
+{% set cargas_activas = cargas_gprs if filtros.tipo_trafico == 'gprs' else cargas_voz %}
 <style>
     .rel-row-highlight {
         background-color: rgba(13, 110, 253, 0.08);
@@ -14,7 +19,7 @@
 
     .relaciones-graph-fullscreen {
         position: fixed !important;
-        inset: var(--topbar-height, 56px) 0 0 0; /* debajo del navbar */
+        inset: var(--topbar-height, 56px) 0 0 0;
         z-index: 1050;
         background: #ffffff;
         border-radius: 0;
@@ -36,7 +41,6 @@
             max-height: 60dvh;
         }
 
-        /* Los botones del informe no deben quedar fuera */
         #panel-analisis .card-header .d-flex.gap-2 {
             flex-direction: column;
             align-items: stretch;
@@ -48,40 +52,173 @@
     }
 </style>
 <div class="page-header">
-    <h1><i class="bi bi-diagram-3"></i> Relaciones (VOZ)</h1>
-    <p class="text-muted">
-        Vista simplificada de relaciones entre números a partir de llamadas VOZ, similar a un grafo tipo i2.
+    <h1><i class="bi bi-diagram-3"></i> Relaciones</h1>
+    <p class="text-muted mb-1">
+        Misma vista para <strong>sábana</strong> y <strong>Record</strong>, y para tráfico <strong>VOZ</strong> o <strong>GPRS</strong>.
+        Filtros alineados al mapa: multiselección, buscadores y cascada entre opciones.
     </p>
+    {% if gprs_record_truncated %}
+    <p class="small text-warning mb-0"><i class="bi bi-exclamation-triangle"></i> Resultado GPRS Record parcial por límite de procesamiento; acote filtros.</p>
+    {% endif %}
 </div>
 
 <div class="card mb-3">
     <div class="card-body">
-        <form method="GET" class="row g-3">
+        <form method="GET" class="row g-3" id="form-relaciones">
             <div class="col-md-3">
-                <label for="sujeto_id" class="form-label">Sujeto</label>
-                <select name="sujeto_id" id="sujeto_id" class="form-select">
-                    <option value="">-- Todos --</option>
-                    {% for s in sujetos %}
-                    <option value="{{ s.id }}" {% if filtros.sujeto_id == s.id %}selected{% endif %}>
-                        {{ s.display_name() }}
-                    </option>
-                    {% endfor %}
+                <label for="filtro-origen" class="form-label">Origen de datos</label>
+                <select name="origen" id="filtro-origen" class="form-select" title="Sábana: cargas subidas. Record: eventos del caso en análisis por puntos.">
+                    <option value="sabana" {% if filtros.origen == 'sabana' %}selected{% endif %}>Sábana (cargas)</option>
+                    <option value="record" {% if filtros.origen == 'record' %}selected{% endif %}>Record (caso AP)</option>
                 </select>
             </div>
             <div class="col-md-3">
-                <label for="carga_id" class="form-label">Carga VOZ</label>
-                <select name="carga_id" id="carga_id" class="form-select">
-                    <option value="">-- Todas --</option>
-                    {% for c in cargas_voz %}
-                    <option value="{{ c.id }}" {% if filtros.carga_id == c.id %}selected{% endif %}>
-                        #{{ c.id }} - {{ c.nombre_archivo or 'Sin nombre' }}
-                    </option>
-                    {% endfor %}
+                <label for="filtro-tipo-trafico" class="form-label">Tipo de tráfico</label>
+                <select name="tipo_trafico" id="filtro-tipo-trafico" class="form-select">
+                    <option value="voz" {% if filtros.tipo_trafico == 'voz' %}selected{% endif %}>VOZ</option>
+                    <option value="gprs" {% if filtros.tipo_trafico == 'gprs' %}selected{% endif %}>GPRS</option>
                 </select>
             </div>
+            <div class="col-md-6">
+                <label for="caso_id" class="form-label">Caso investigativo</label>
+                <select name="caso_id" id="caso_id" class="form-select">
+                    <option value="">— Sin filtrar por caso —</option>
+                    {% for c in casos_record %}
+                    <option value="{{ c.id }}" {% if filtros.caso_id == c.id %}selected{% endif %}>{{ c.codigo }} — {{ c.titulo }}</option>
+                    {% endfor %}
+                </select>
+                <div class="form-text">Sábana: limita cargas vinculadas al caso. Record: <strong>requerido</strong> para consultar eventos.</div>
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label">Sujetos</label>
+                <button class="btn btn-outline-secondary btn-sm w-100 sabana-dd-btn text-start text-truncate" type="button" id="dd-rel-sujetos" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                    Sujetos…
+                </button>
+                <div class="dropdown-menu p-2 sabana-dd-menu w-100" aria-labelledby="dd-rel-sujetos">
+                    <input type="text" class="form-control form-control-sm mb-1 sabana-dd-search" placeholder="Buscar sujeto…" data-target="rel-filtro-sujetos">
+                    <div id="rel-filtro-sujetos" class="sabana-filtro-checkboxes sabana-dd-list">
+                        {% for s in sujetos %}
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="sujeto_ids[]" id="rel-sujeto-{{ s.id }}" value="{{ s.id }}" {% if s.id in filtros.sujeto_ids %}checked{% endif %}>
+                            <label class="form-check-label" for="rel-sujeto-{{ s.id }}">{{ s.display_name() }}</label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label">Cargas{% if filtros.tipo_trafico == 'gprs' %} GPRS{% else %} VOZ{% endif %}</label>
+                <button class="btn btn-outline-secondary btn-sm w-100 sabana-dd-btn text-start text-truncate" type="button" id="dd-rel-cargas" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                    Cargas…
+                </button>
+                <div class="dropdown-menu p-2 sabana-dd-menu w-100" aria-labelledby="dd-rel-cargas">
+                    <input type="text" class="form-control form-control-sm mb-1 sabana-dd-search" placeholder="Buscar carga…" data-target="rel-filtro-cargas">
+                    <div id="rel-filtro-cargas" class="sabana-filtro-checkboxes sabana-dd-list">
+                        {% for c in cargas_activas %}
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="carga_ids[]" id="rel-carga-{{ c.id }}" value="{{ c.id }}" {% if c.id in filtros.carga_ids %}checked{% endif %}>
+                            <label class="form-check-label" for="rel-carga-{{ c.id }}">#{{ c.id }} - {{ c.nombre_archivo or 'Sin nombre' }}</label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label">Archivos Record</label>
+                <button class="btn btn-outline-secondary btn-sm w-100 sabana-dd-btn text-start text-truncate" type="button" id="dd-rel-fuentes" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                    Archivos Record…
+                </button>
+                <div class="dropdown-menu p-2 sabana-dd-menu w-100" aria-labelledby="dd-rel-fuentes">
+                    <input type="text" class="form-control form-control-sm mb-1 sabana-dd-search" placeholder="Buscar archivo…" data-target="rel-filtro-fuentes-record">
+                    <div id="rel-filtro-fuentes-record" class="sabana-filtro-checkboxes sabana-dd-list">
+                        {% for f in fuentes_record %}
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="fuente_ids[]" id="rel-fuente-{{ f.id }}" value="{{ f.id }}" {% if f.id in filtros.fuente_ids %}checked{% endif %}>
+                            <label class="form-check-label" for="rel-fuente-{{ f.id }}">{{ f.nombre_archivo or ('#' ~ f.id) }}</label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
             <div class="col-md-3">
-                <label for="numero" class="form-label">Número (A o B)</label>
-                <input type="text" name="numero" id="numero" class="form-control" value="{{ filtros.numero }}">
+                <label class="form-label">Provincias</label>
+                <button class="btn btn-outline-secondary btn-sm w-100 sabana-dd-btn text-start text-truncate" type="button" id="dd-rel-provincias" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                    Provincias…
+                </button>
+                <div class="dropdown-menu p-2 sabana-dd-menu w-100" aria-labelledby="dd-rel-provincias">
+                    <input type="text" class="form-control form-control-sm mb-1" id="rel-provincias-search" placeholder="Buscar provincia…">
+                    <div id="rel-filtro-provincias" class="sabana-filtro-checkboxes sabana-dd-list">
+                        {% for p in filtros.provincias_sel %}
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="provincias[]" id="rel-prov-init-{{ loop.index }}" value="{{ p }}" checked>
+                            <label class="form-check-label" for="rel-prov-init-{{ loop.index }}">{{ p }}</label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label">Localidades</label>
+                <button class="btn btn-outline-secondary btn-sm w-100 sabana-dd-btn text-start text-truncate" type="button" id="dd-rel-localidades" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                    Localidades…
+                </button>
+                <div class="dropdown-menu p-2 sabana-dd-menu w-100" aria-labelledby="dd-rel-localidades">
+                    <input type="text" class="form-control form-control-sm mb-1" id="rel-localidades-search" placeholder="Buscar localidad…">
+                    <div id="rel-filtro-localidades" class="sabana-filtro-checkboxes sabana-dd-list">
+                        {% for l in filtros.localidades_sel %}
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="localidades[]" id="rel-loc-init-{{ loop.index }}" value="{{ l }}" checked>
+                            <label class="form-check-label" for="rel-loc-init-{{ loop.index }}">{{ l }}</label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label">Números (múltiple)</label>
+                <button class="btn btn-outline-secondary btn-sm w-100 sabana-dd-btn text-start text-truncate" type="button" id="dd-rel-numeros" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                    Números…
+                </button>
+                <div class="dropdown-menu p-2 sabana-dd-menu w-100" aria-labelledby="dd-rel-numeros">
+                    <input type="text" class="form-control form-control-sm mb-1" id="rel-numeros-search" placeholder="Buscar número…">
+                    <div id="rel-filtro-numeros" class="sabana-filtro-checkboxes sabana-dd-list">
+                        {% for n in filtros.numeros_sel %}
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="rel-num-init-{{ loop.index }}" value="{{ n }}" checked>
+                            <label class="form-check-label" for="rel-num-init-{{ loop.index }}">{{ n }}</label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label">IMEIs (múltiple)</label>
+                <button class="btn btn-outline-secondary btn-sm w-100 sabana-dd-btn text-start text-truncate" type="button" id="dd-rel-imeis" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                    IMEIs…
+                </button>
+                <div class="dropdown-menu p-2 sabana-dd-menu w-100" aria-labelledby="dd-rel-imeis">
+                    <input type="text" class="form-control form-control-sm mb-1" id="rel-imeis-search" placeholder="Buscar IMEI…">
+                    <div id="rel-filtro-imeis" class="sabana-filtro-checkboxes sabana-dd-list">
+                        {% for i in filtros.imeis_sel %}
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="rel-imei-init-{{ loop.index }}" value="{{ i }}" checked>
+                            <label class="form-check-label" for="rel-imei-init-{{ loop.index }}">{{ i }}</label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <label for="numero" class="form-label">Número puntual (legacy)</label>
+                <input type="text" name="numero" id="numero" class="form-control" value="{{ filtros.numero }}" placeholder="Opcional">
             </div>
             <div class="col-md-3">
                 <label for="limit" class="form-label">Máx. relaciones</label>
@@ -103,8 +240,9 @@
                 <label for="hora_hasta" class="form-label">Hora hasta</label>
                 <input type="time" name="hora_hasta" id="hora_hasta" class="form-control" value="{{ filtros.hora_hasta }}">
             </div>
-            <div class="col-12 d-flex justify-content-end mt-2">
-                <button type="submit" class="btn btn-primary me-2">
+            <div id="rel-filtros-resumen" class="col-12 alert alert-secondary py-2 px-3 small mb-0 d-none"></div>
+            <div class="col-12 d-flex justify-content-end mt-2 flex-wrap gap-2">
+                <button type="submit" class="btn btn-primary">
                     <i class="bi bi-search"></i> Aplicar filtros
                 </button>
                 <a href="{{ url_for('sabana_llamadas.relaciones') }}" class="btn btn-secondary">
@@ -119,16 +257,25 @@
     <li class="nav-item" role="presentation">
         <button class="nav-link active" id="tab-tabla" data-bs-toggle="tab" data-bs-target="#panel-tabla" type="button" role="tab" aria-controls="panel-tabla" aria-selected="true">
             <i class="bi bi-table"></i> Tabla
+            <span id="tab-badge-tabla" class="badge text-bg-secondary ms-1"></span>
         </button>
     </li>
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="tab-grafo" data-bs-toggle="tab" data-bs-target="#panel-grafo" type="button" role="tab" aria-controls="panel-grafo" aria-selected="false">
             <i class="bi bi-diagram-3"></i> Grafo
+            <span id="tab-badge-grafo" class="badge text-bg-secondary ms-1"></span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-patrones" data-bs-toggle="tab" data-bs-target="#panel-patrones" type="button" role="tab" aria-controls="panel-patrones" aria-selected="false">
+            <i class="bi bi-bar-chart"></i> Patrones
+            <span id="tab-badge-patrones" class="badge text-bg-secondary ms-1">--</span>
         </button>
     </li>
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="tab-analisis" data-bs-toggle="tab" data-bs-target="#panel-analisis" type="button" role="tab" aria-controls="panel-analisis" aria-selected="false">
             <i class="bi bi-file-text"></i> Análisis / Informe
+            <span id="tab-badge-analisis" class="badge text-bg-secondary ms-1">Sin generar</span>
         </button>
     </li>
 </ul>
@@ -136,31 +283,43 @@
 <div class="tab-content">
     <div class="tab-pane fade show active" id="panel-tabla" role="tabpanel" aria-labelledby="tab-tabla">
         <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
+            <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
                 <h5 class="mb-0">
                     <i class="bi bi-people"></i> Relaciones encontradas
                 </h5>
                 <small class="text-muted">
-                    Mostrando hasta {{ filtros.limit }} pares (ordenados por cantidad de llamadas).
+                    {% if filtros.tipo_trafico == 'gprs' %}
+                    Hasta {{ filtros.limit }} pares línea–IP (orden por cantidad de accesos).
+                    {% else %}
+                    Hasta {{ filtros.limit }} pares (orden por cantidad de llamadas).
+                    {% endif %}
                 </small>
             </div>
             <div class="card-body">
                 {% if relaciones %}
                 <div class="row mb-2">
                     <div class="col-md-4 ms-auto">
-                        <input type="text" id="relaciones-table-search" class="form-control" placeholder="Buscar en la tabla (número, fecha...)">
+                        <input type="text" id="relaciones-table-search" class="form-control" placeholder="Buscar en la tabla…">
                     </div>
                 </div>
                 <div class="table-responsive">
                     <table class="table table-striped table-hover align-middle" id="relaciones-table">
                         <thead>
                             <tr>
+                                {% if filtros.tipo_trafico == 'gprs' %}
+                                <th>Número / Sujeto</th>
+                                <th>IP remota</th>
+                                <th class="text-end"># Accesos</th>
+                                {% else %}
                                 <th>Numero A / Sujeto</th>
                                 <th>Numero B / Sujeto</th>
                                 <th class="text-end"># Llamadas</th>
+                                {% endif %}
                                 <th>Primera fecha</th>
                                 <th>Última fecha</th>
+                                {% if filtros.tipo_trafico == 'voz' %}
                                 <th class="text-end">Acciones</th>
+                                {% endif %}
                             </tr>
                         </thead>
                         <tbody>
@@ -182,7 +341,9 @@
                                     {% endif %}
                                 </td>
                                 <td data-role="num-b" data-numero="{{ r.numero_b }}">
-                                    {% if r.sujeto_b %}
+                                    {% if filtros.tipo_trafico == 'gprs' %}
+                                    <code>{{ r.numero_b }}</code>
+                                    {% elif r.sujeto_b %}
                                     <div class="d-flex align-items-center gap-2">
                                         {% if r.sujeto_b.imagen_url %}
                                         <img src="{{ r.sujeto_b.imagen_url }}" alt="{{ r.sujeto_b.display }}" class="rounded-circle border" style="width:24px;height:24px;object-fit:cover;">
@@ -199,11 +360,13 @@
                                 <td class="text-end"><span class="badge bg-primary">{{ r.cantidad }}</span></td>
                                 <td>{{ r.primera_fecha|localtime if r.primera_fecha else '-' }}</td>
                                 <td>{{ r.ultima_fecha|localtime if r.ultima_fecha else '-' }}</td>
+                                {% if filtros.tipo_trafico == 'voz' %}
                                 <td class="text-end">
-                                    <a href="{{ url_for('sabana_llamadas.mapa') }}?numeros[]={{ r.numero_a }}&numeros[]={{ r.numero_b }}" class="btn btn-sm btn-outline-primary" title="Ver estos números en el mapa">
+                                    <a href="{{ url_for('sabana_llamadas.mapa') }}?numeros[]={{ r.numero_a|urlencode }}&numeros[]={{ r.numero_b|urlencode }}{% if filtros.origen == 'record' and filtros.caso_id %}&caso_id={{ filtros.caso_id }}{% endif %}" class="btn btn-sm btn-outline-primary" title="Ver en el mapa">
                                         <i class="bi bi-geo-alt"></i>
                                     </a>
                                 </td>
+                                {% endif %}
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -222,17 +385,17 @@
                 <h5 class="mb-0"><i class="bi bi-diagram-3"></i> Grafo de relaciones</h5>
                 <div class="d-flex align-items-center gap-3 flex-wrap">
                     <div class="d-flex align-items-center gap-2 flex-wrap">
-                        <label class="small mb-0 text-nowrap" for="relaciones-node-scale" title="Escala de todos los nodos (incl. solo número)">Tamaño nodos</label>
+                        <label class="small mb-0 text-nowrap" for="relaciones-node-scale" title="Escala de todos los nodos">Tamaño nodos</label>
                         <input type="range" id="relaciones-node-scale" min="80" max="150" value="100" class="form-range" style="width: 70px;">
                         <span class="small text-muted" id="relaciones-node-scale-val">100%</span>
                     </div>
                     <div class="d-flex align-items-center gap-2 flex-wrap">
-                        <label class="small mb-0 text-nowrap" for="relaciones-avatar-size" title="Tamaño extra de avatares (nodos con foto)">Tamaño avatares</label>
+                        <label class="small mb-0 text-nowrap" for="relaciones-avatar-size" title="Tamaño extra de avatares">Tamaño avatares</label>
                         <input type="range" id="relaciones-avatar-size" min="0" max="20" value="6" class="form-range" style="width: 70px;">
                         <span class="small text-muted" id="relaciones-avatar-size-val">6</span>
                     </div>
                     <div class="d-flex align-items-center gap-2 flex-wrap">
-                        <label class="small mb-0 text-nowrap" for="relaciones-edge-label-size" title="Tamaño del número en las líneas (cantidad de llamadas)">Nº en líneas</label>
+                        <label class="small mb-0 text-nowrap" for="relaciones-edge-label-size" title="Tamaño del número en las líneas">Nº en líneas</label>
                         <input type="range" id="relaciones-edge-label-size" min="8" max="24" value="10" class="form-range" style="width: 65px;">
                         <span class="small text-muted" id="relaciones-edge-label-size-val">10</span>
                     </div>
@@ -253,17 +416,56 @@
                            class="form-control form-control-sm"
                            placeholder="Ej: Relaciones caso X"
                            style="max-width: 260px;">
+                    <label for="relaciones-edge-min" class="small mb-0 text-nowrap ms-2" title="Mostrar solo líneas con este mínimo de comunicaciones">Umbral</label>
+                    <input type="range" id="relaciones-edge-min" min="1" max="50" value="1" class="form-range" style="width: 90px;">
+                    <span class="small text-muted" id="relaciones-edge-min-val">>= 1</span>
                 </div>
+                {% if filtros.tipo_trafico == 'gprs' %}
                 <p class="text-muted small">
-                    Cada nodo es un número; las líneas representan llamadas entre ellos. Arrastre un nodo para moverlo (la etiqueta va con él).
-                    Clic: resaltar. Doble clic: agrandar ese nodo (1× → 1.5× → 2×). Use «Ver todas las líneas» para marcar todas las conexiones.
+                    Nodos azules: líneas telefónicas; nodos gris: direcciones IP. Arrastre para mover. Clic: resaltar; doble clic: agrandar nodo.
                 </p>
+                {% else %}
+                <p class="text-muted small">
+                    Cada nodo es un número; las líneas representan llamadas entre ellos. Arrastre un nodo para moverlo.
+                </p>
+                {% endif %}
+                <p class="text-muted small mb-2">Use el umbral para ocultar relaciones débiles y resaltar patrones principales.</p>
                 <div id="relaciones-graph-wrap" class="border rounded relaciones-graph-wrap" style="min-height: 320px; overflow: hidden;">
                     <div id="relaciones-graph-title-overlay"
                          class="position-absolute px-2 py-1 bg-white bg-opacity-75 border rounded small"
                          style="top: 8px; left: 8px; cursor: move; z-index: 5; display: none;"></div>
                     <div id="relaciones-graph" style="width: 100%; height: 100%;"></div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="panel-patrones" role="tabpanel" aria-labelledby="tab-patrones">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <h5 class="mb-0"><i class="bi bi-bar-chart"></i> Patrones temporales</h5>
+                <button type="button" class="btn btn-outline-primary btn-sm" id="btn-refrescar-patrones">
+                    <i class="bi bi-arrow-repeat"></i> Refrescar
+                </button>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-3">Distribucion de comunicaciones por dia de semana y por hora, segun filtros activos.</p>
+                <div id="patrones-resumen" class="alert alert-secondary py-2 px-3 small d-none"></div>
+                <div class="row g-3">
+                    <div class="col-lg-6">
+                        <div class="border rounded p-2">
+                            <h6 class="text-secondary mb-2">Por dia de semana</h6>
+                            <div id="patrones-weekday-chart" style="min-height: 280px;"></div>
+                        </div>
+                    </div>
+                    <div class="col-lg-6">
+                        <div class="border rounded p-2">
+                            <h6 class="text-secondary mb-2">Por hora</h6>
+                            <div id="patrones-hour-chart" style="min-height: 280px;"></div>
+                        </div>
+                    </div>
+                </div>
+                <div id="patrones-extra" class="mt-3"></div>
             </div>
         </div>
     </div>
@@ -294,10 +496,20 @@
                 </div>
             </div>
             <div class="card-body" id="analisis-content"
-                 data-api-informe="{{ url_for('sabana_llamadas.api_informe_voz') }}"
-                 data-relaciones-tipo="VOZ">
-                <p class="text-muted small mb-3">El informe incluye comunicaciones VOZ, impactos en celdas con ubicación (lat/long, dirección) y un texto redactado para presentación. Use «Generar informe completo» y luego «Exportar a PDF».</p>
+                 data-api-informe="{% if filtros.tipo_trafico == 'gprs' %}{{ url_for('sabana_llamadas.api_informe_gprs') }}{% else %}{{ url_for('sabana_llamadas.api_informe_voz') }}{% endif %}"
+                 data-relaciones-tipo="{{ filtros.tipo_trafico|upper }}"
+                 data-informe-sabana="{{ '1' if informe_sabana else '0' }}">
+                {% if not informe_sabana %}
+                <p class="text-muted small mb-3">Informe Record: incluye contexto completo de filtros, síntesis automática y hallazgos para exportación PDF/Word. Los impactos en celdas dependen de la disponibilidad de coordenadas.</p>
+                {% elif filtros.tipo_trafico == 'gprs' %}
+                <p class="text-muted small mb-3">Informe GPRS: accesos de datos, coincidencias e impactos en celdas según filtros. Use «Generar informe completo» y luego PDF o Word.</p>
+                {% else %}
+                <p class="text-muted small mb-3">Informe VOZ: comunicaciones, impactos en celdas con ubicación y texto redactado. Use «Generar informe completo» y luego «Exportar a PDF».</p>
+                {% endif %}
+                <div id="analisis-contexto" class="mb-4"></div>
                 <div id="analisis-informe-narrativo" class="mb-4"></div>
+                <div id="analisis-hallazgos" class="mb-4"></div>
+                <div id="analisis-recomendaciones" class="mb-4"></div>
                 <div id="analisis-resumen" class="mb-4"></div>
                 <div id="analisis-top-pares" class="mb-4"></div>
                 <div id="analisis-impactos-celdas" class="mb-4"></div>
@@ -308,6 +520,7 @@
 
 <script id="relaciones-data" type="application/json">{{ relaciones|tojson }}</script>
 <script id="relaciones-meta" type="application/json">{{ informe_meta|default({})|tojson }}</script>
+<script id="rel-mf-prefill" type="application/json">{{ {'numeros': filtros.numeros_sel, 'imeis': filtros.imeis_sel, 'provincias': filtros.provincias_sel, 'localidades': filtros.localidades_sel}|tojson }}</script>
+<script src="{{ url_for('static', filename='js/sabana_relaciones_filtros.js') }}"></script>
 <script src="{{ url_for('static', filename='js/sabana_relaciones.js') }}"></script>
 {% endblock %}
-

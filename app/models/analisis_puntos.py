@@ -17,6 +17,10 @@ class AnalisisPuntoCaso(db.Model):
     codigo = db.Column(db.String(64), nullable=False, index=True)
     titulo = db.Column(db.String(255), nullable=False)
     descripcion = db.Column(db.Text, nullable=True)
+    # Referencia administrativa / judicial (expediente, carpeta, Nº de causa)
+    referencia_carpeta = db.Column(db.String(120), nullable=True, index=True)
+    # Fecha de los hechos o inicio operativo (no confundir con created_at del sistema)
+    fecha_referencia = db.Column(db.Date, nullable=True, index=True)
     estado = db.Column(db.String(20), nullable=False, default="ACTIVO", index=True)
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
@@ -30,6 +34,20 @@ class AnalisisPuntoCaso(db.Model):
     )
 
 
+class AnalisisPuntoCasoCompartido(db.Model):
+    """Comparte un caso de análisis con otro usuario de la misma unidad."""
+    __tablename__ = "ap_casos_compartidos"
+
+    caso_id = db.Column(db.Integer, db.ForeignKey("ap_casos.id"), primary_key=True, nullable=False)
+    shared_with_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), primary_key=True, nullable=False, index=True)
+    shared_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    caso = db.relationship("AnalisisPuntoCaso", backref="compartidos", foreign_keys=[caso_id])
+    shared_with = db.relationship("User", foreign_keys=[shared_with_user_id])
+    shared_by = db.relationship("User", foreign_keys=[shared_by_user_id])
+
+
 class AnalisisPuntoFuente(db.Model):
     __tablename__ = "ap_fuentes"
 
@@ -39,6 +57,7 @@ class AnalisisPuntoFuente(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
 
     source_type = db.Column(db.String(20), nullable=False, index=True)  # VOZ / GPRS
+    operadora = db.Column(db.String(30), nullable=True, index=True)  # PERSONAL / MOVISTAR / CLARO / OTRA
     nombre_archivo = db.Column(db.String(255), nullable=False)
     sha256 = db.Column(db.String(128), nullable=True, index=True)
     mime_type = db.Column(db.String(120), nullable=True)
@@ -48,6 +67,8 @@ class AnalisisPuntoFuente(db.Model):
     date_to = db.Column(db.DateTime, nullable=True, index=True)
     upload_status = db.Column(db.String(20), nullable=False, default="PENDING", index=True)
     error_detail = db.Column(db.Text, nullable=True)
+    # Nota en pantalla Relaciones (unificada con sábana; antes vivía en ap_caso_fuentes)
+    relaciones_nota = db.Column(db.String(500), nullable=True)
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
@@ -149,3 +170,104 @@ class AnalisisPuntoTitular(db.Model):
     __table_args__ = (
         db.UniqueConstraint("caso_id", "msisdn", name="uq_ap_titulares_caso_msisdn"),
     )
+
+
+class AnalisisPuntoCasoSujeto(db.Model):
+    """Vínculo N:M entre caso Record y sujeto de Sábana."""
+    __tablename__ = "ap_caso_sujetos"
+
+    id = db.Column(db.Integer, primary_key=True)
+    caso_id = db.Column(db.Integer, db.ForeignKey("ap_casos.id"), nullable=False, index=True)
+    sujeto_id = db.Column(db.Integer, db.ForeignKey("sabana_sujetos.id"), nullable=False, index=True)
+    unidad_id = db.Column(db.Integer, db.ForeignKey("unidades.id"), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    nota = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    caso = db.relationship("AnalisisPuntoCaso", backref="caso_sujetos", foreign_keys=[caso_id])
+    sujeto = db.relationship("Sujeto", backref="ap_caso_links", foreign_keys=[sujeto_id])
+    unidad = db.relationship("Unidad", backref="ap_caso_sujetos")
+    user = db.relationship("User", backref="ap_caso_sujetos")
+
+    __table_args__ = (
+        db.UniqueConstraint("caso_id", "sujeto_id", name="uq_ap_caso_sujetos"),
+    )
+
+
+class AnalisisPuntoCasoFuente(db.Model):
+    """Legado: notas de relación migradas a ap_fuentes.relaciones_nota. Tabla conservada por compatibilidad."""
+    __tablename__ = "ap_caso_fuentes"
+
+    id = db.Column(db.Integer, primary_key=True)
+    caso_id = db.Column(db.Integer, db.ForeignKey("ap_casos.id"), nullable=False, index=True)
+    fuente_id = db.Column(db.Integer, db.ForeignKey("ap_fuentes.id"), nullable=False, index=True)
+    unidad_id = db.Column(db.Integer, db.ForeignKey("unidades.id"), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    nota = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    caso = db.relationship("AnalisisPuntoCaso", backref="caso_fuentes", foreign_keys=[caso_id])
+    fuente = db.relationship("AnalisisPuntoFuente", backref="caso_links", foreign_keys=[fuente_id])
+    unidad = db.relationship("Unidad", backref="ap_caso_fuentes")
+    user = db.relationship("User", backref="ap_caso_fuentes")
+
+    __table_args__ = (
+        db.UniqueConstraint("caso_id", "fuente_id", name="uq_ap_caso_fuentes"),
+    )
+
+
+class AnalisisPuntoCasoNumero(db.Model):
+    """Números de interés vinculados al caso (con opcional referencia a sujeto/fuente)."""
+    __tablename__ = "ap_caso_numeros"
+
+    id = db.Column(db.Integer, primary_key=True)
+    caso_id = db.Column(db.Integer, db.ForeignKey("ap_casos.id"), nullable=False, index=True)
+    unidad_id = db.Column(db.Integer, db.ForeignKey("unidades.id"), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    msisdn = db.Column(db.String(64), nullable=False, index=True)
+    sujeto_id = db.Column(db.Integer, db.ForeignKey("sabana_sujetos.id"), nullable=True, index=True)
+    fuente_id = db.Column(db.Integer, db.ForeignKey("ap_fuentes.id"), nullable=True, index=True)
+    nota = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    caso = db.relationship("AnalisisPuntoCaso", backref="caso_numeros", foreign_keys=[caso_id])
+    sujeto = db.relationship("Sujeto", backref="ap_numero_links", foreign_keys=[sujeto_id])
+    fuente = db.relationship("AnalisisPuntoFuente", backref="numero_links", foreign_keys=[fuente_id])
+    unidad = db.relationship("Unidad", backref="ap_caso_numeros")
+    user = db.relationship("User", backref="ap_caso_numeros")
+
+    __table_args__ = (
+        db.UniqueConstraint("caso_id", "msisdn", "sujeto_id", "fuente_id", name="uq_ap_caso_numeros"),
+    )
+
+
+class AnalisisPuntoCasoMapaPunto(db.Model):
+    """
+    Punto de referencia geográfico vinculado a un caso (domicilio, encuentro, lugar del hecho, etc.).
+    Visible en el mapa de Sábana/Record para el mismo caso.
+    """
+
+    __tablename__ = "ap_caso_mapa_puntos"
+
+    id = db.Column(db.Integer, primary_key=True)
+    caso_id = db.Column(db.Integer, db.ForeignKey("ap_casos.id"), nullable=False, index=True)
+    unidad_id = db.Column(db.Integer, db.ForeignKey("unidades.id"), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+
+    lat = db.Column(db.Float, nullable=False)
+    lon = db.Column(db.Float, nullable=False)
+    # domicilio | encuentro | hecho | otro
+    tipo = db.Column(db.String(40), nullable=False, index=True)
+    etiqueta = db.Column(db.String(120), nullable=True)
+    nota = db.Column(db.Text, nullable=True)
+    # sabana | record — contexto en que se creó (informativo)
+    origen_contexto = db.Column(db.String(20), nullable=True)
+    # pin | casa | hecho | encuentro | auto | tienda | cruz — icono en mapa (clave corta)
+    icono = db.Column(db.String(40), nullable=True)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    caso = db.relationship("AnalisisPuntoCaso", backref="mapa_puntos", foreign_keys=[caso_id])
+    unidad = db.relationship("Unidad", backref="ap_caso_mapa_puntos")
+    user = db.relationship("User", backref="ap_caso_mapa_puntos")

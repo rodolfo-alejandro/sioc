@@ -3,10 +3,13 @@
 
     var graphState = null;
     var lastInformeData = null;
+    var patronesState = { loaded: false, data: null };
+    var TAB_STORAGE_KEY = 'sabana_relaciones_active_tab';
     var relContext = {
         tipo: 'VOZ',
         label: 'VOZ',
         apiInforme: null,
+        informeSabana: true,
     };
 
     function parseRelacionesFromDom() {
@@ -40,6 +43,7 @@
         var avatarSizeBonus = typeof opts.avatarSizeBonus === 'number' ? opts.avatarSizeBonus : 6;
         var nodeScale = typeof opts.nodeScale === 'number' && opts.nodeScale > 0 ? opts.nodeScale : 1;
         var edgeLabelFontSize = typeof opts.edgeLabelFontSize === 'number' && opts.edgeLabelFontSize > 0 ? opts.edgeLabelFontSize : 10;
+        var edgeMin = typeof opts.edgeMin === 'number' && opts.edgeMin > 0 ? opts.edgeMin : 1;
         var container = document.getElementById('relaciones-graph');
         if (!container) return;
 
@@ -54,8 +58,10 @@
         var links = [];
         var maxCantidad = 0;
 
-        relaciones.forEach(function (r) {
+        (relaciones || []).forEach(function (r) {
             if (!r || !r.numero_a || !r.numero_b) return;
+            var cant = parseInt(r.cantidad || 0, 10) || 0;
+            if (cant < edgeMin) return;
             var a = String(r.numero_a);
             var b = String(r.numero_b);
             if (!nodesMap[a]) nodesMap[a] = { id: a, label: a, degree: 0, sujeto: r.sujeto_a || null };
@@ -64,14 +70,13 @@
             else if (!nodesMap[b].sujeto && r.sujeto_b) nodesMap[b].sujeto = r.sujeto_b;
             nodesMap[a].degree += 1;
             nodesMap[b].degree += 1;
-            var cant = parseInt(r.cantidad || 0, 10) || 0;
             if (cant > maxCantidad) maxCantidad = cant;
             links.push({ source: a, target: b, cantidad: cant });
         });
 
         var nodes = Object.keys(nodesMap).map(function (k) { return nodesMap[k]; });
         if (!nodes.length) {
-            container.innerHTML = '<p class="text-muted mb-0">No hay datos suficientes para dibujar el grafo.</p>';
+            container.innerHTML = '<p class="text-muted mb-0">No hay datos suficientes para dibujar el grafo con el umbral actual (>= ' + edgeMin + ').</p>';
             return;
         }
 
@@ -139,7 +144,7 @@
             line.setAttribute('data-source', a.id);
             line.setAttribute('data-target', b.id);
             line.setAttribute('data-cantidad', String(l.cantidad));
-            line.appendChild(createTitle(svgNS, a.id + ' ↔ ' + b.id + ' (' + l.cantidad + ' llamadas)'));
+            line.appendChild(createTitle(svgNS, a.id + ' ↔ ' + b.id + ' (' + l.cantidad + (relContext.tipo === 'GPRS' ? ' accesos)' : ' llamadas)')));
             svg.appendChild(line);
 
             // Etiqueta con cantidad de llamadas en el medio de la arista (se actualiza al arrastrar)
@@ -577,6 +582,7 @@
         var scaleEl = document.getElementById('relaciones-node-scale');
         var avatarEl = document.getElementById('relaciones-avatar-size');
         var edgeLabelEl = document.getElementById('relaciones-edge-label-size');
+        var edgeMinEl = document.getElementById('relaciones-edge-min');
         var nodeScale = 1;
         if (scaleEl) {
             var pct = parseInt(scaleEl.value, 10) || 100;
@@ -584,7 +590,8 @@
         }
         var avatarSizeBonus = (avatarEl && parseInt(avatarEl.value, 10)) || 6;
         var edgeLabelFontSize = (edgeLabelEl && parseInt(edgeLabelEl.value, 10)) || 10;
-        return { nodeScale: nodeScale, avatarSizeBonus: avatarSizeBonus, edgeLabelFontSize: edgeLabelFontSize };
+        var edgeMin = (edgeMinEl && parseInt(edgeMinEl.value, 10)) || 1;
+        return { nodeScale: nodeScale, avatarSizeBonus: avatarSizeBonus, edgeLabelFontSize: edgeLabelFontSize, edgeMin: edgeMin };
     }
 
     function initGraphTitle() {
@@ -679,6 +686,8 @@
 
         var edgeLabelSlider = document.getElementById('relaciones-edge-label-size');
         var edgeLabelVal = document.getElementById('relaciones-edge-label-size-val');
+        var edgeMinSlider = document.getElementById('relaciones-edge-min');
+        var edgeMinVal = document.getElementById('relaciones-edge-min-val');
         if (edgeLabelSlider) {
             function updateEdgeLabelVal() {
                 if (edgeLabelVal) edgeLabelVal.textContent = edgeLabelSlider.value;
@@ -694,6 +703,15 @@
                 }
             });
             updateEdgeLabelVal();
+        }
+        if (edgeMinSlider) {
+            function updateEdgeMinVal() {
+                var v = parseInt(edgeMinSlider.value, 10) || 1;
+                if (edgeMinVal) edgeMinVal.textContent = '>= ' + v;
+            }
+            edgeMinSlider.addEventListener('input', updateEdgeMinVal);
+            edgeMinSlider.addEventListener('change', rebuild);
+            updateEdgeMinVal();
         }
 
         var toggleAllLines = document.getElementById('relaciones-toggle-all-lines');
@@ -723,7 +741,313 @@
             relContext.tipo = tipo;
             relContext.label = String(tipo).toUpperCase();
             relContext.apiInforme = ac.getAttribute('data-api-informe') || null;
+            relContext.informeSabana = ac.getAttribute('data-informe-sabana') === '1';
         }
+    }
+
+    function pushCtxItem(items, label, value) {
+        if (value == null) return;
+        var txt = String(value).trim();
+        if (!txt) return;
+        items.push('<li><strong>' + escapeHtml(label) + ':</strong> ' + escapeHtml(txt) + '</li>');
+    }
+
+    function renderAnalisisContexto(relaciones) {
+        var box = document.getElementById('analisis-contexto');
+        if (!box) return;
+        var meta = parseMetaFromDom();
+        var f = (meta && meta.filtros) ? meta.filtros : {};
+        var list = Array.isArray(relaciones) ? relaciones : [];
+        var items = [];
+        pushCtxItem(items, 'Origen', f.origen || '');
+        pushCtxItem(items, 'Tipo de tráfico', f.tipo || relContext.label);
+        pushCtxItem(items, 'Caso', f.caso || '');
+        pushCtxItem(items, 'Sujetos', f.sujetos || f.sujeto || '');
+        pushCtxItem(items, 'Cargas', f.cargas || f.carga_voz || f.carga_gprs || '');
+        pushCtxItem(items, 'Archivos Record', f.fuentes_record || '');
+        pushCtxItem(items, 'Números (múltiple)', f.numeros || '');
+        pushCtxItem(items, 'IMEIs', f.imeis || '');
+        pushCtxItem(items, 'Provincias', f.provincias || '');
+        pushCtxItem(items, 'Localidades', f.localidades || '');
+        pushCtxItem(items, 'Número puntual', f.numero || '');
+        if (f.fecha_desde || f.fecha_hasta) {
+            pushCtxItem(items, 'Rango de fechas', (f.fecha_desde || '-') + ' a ' + (f.fecha_hasta || '-'));
+        }
+        if (f.hora_desde || f.hora_hasta) {
+            pushCtxItem(items, 'Rango horario', (f.hora_desde || '-') + ' a ' + (f.hora_hasta || '-'));
+        }
+        if (typeof f.limit !== 'undefined') {
+            pushCtxItem(items, 'Límite de pares', String(f.limit));
+        }
+        pushCtxItem(items, 'Pares analizados', String(list.length || 0));
+        if (!items.length) {
+            box.innerHTML = '';
+            return;
+        }
+        box.innerHTML = '<h6 class="text-secondary">Contexto del análisis</h6><ul class="small mb-0">' + items.join('') + '</ul>';
+    }
+
+    function renderNarrativaAutomatica(relaciones) {
+        var narrativoEl = document.getElementById('analisis-informe-narrativo');
+        if (!narrativoEl) return;
+        var list = Array.isArray(relaciones) ? relaciones : [];
+        if (!list.length) {
+            narrativoEl.innerHTML = '';
+            return;
+        }
+        var texto = buildNarrativaText(list);
+        narrativoEl.innerHTML =
+            '<h6 class="text-secondary border-bottom pb-2">Síntesis automática</h6>' +
+            '<div class="informe-parrafo bg-light border-start border-4 border-secondary px-3 py-2 small lh-base">' +
+            escapeHtml(texto) +
+            '</div>';
+    }
+
+    function buildNarrativaText(relaciones) {
+        var list = Array.isArray(relaciones) ? relaciones : [];
+        if (!list.length) return '';
+        var ordenado = list.slice().sort(function (a, b) {
+            return (parseInt(b.cantidad || 0, 10) || 0) - (parseInt(a.cantidad || 0, 10) || 0);
+        });
+        var top = ordenado[0] || {};
+        var total = ordenado.reduce(function (sum, r) { return sum + (parseInt(r.cantidad || 0, 10) || 0); }, 0);
+        var nums = Object.create(null);
+        ordenado.forEach(function (r) {
+            if (r && r.numero_a) nums[String(r.numero_a).trim()] = true;
+            if (r && r.numero_b) nums[String(r.numero_b).trim()] = true;
+        });
+        var texto = 'Con los filtros aplicados se observan ' + ordenado.length + ' pares y un volumen total de ' + total +
+            (relContext.tipo === 'GPRS' ? ' accesos de datos' : ' comunicaciones') + '. ';
+        if (top && top.numero_a && top.numero_b) {
+            texto += 'El vínculo de mayor intensidad corresponde a ' + top.numero_a + ' y ' + top.numero_b +
+                ' con ' + (top.cantidad || 0) + '. ';
+        }
+        texto += 'Se identifican ' + Object.keys(nums).length + ' nodos únicos involucrados en el período analizado.';
+        return texto;
+    }
+
+    function buildLocalInformeData() {
+        var relaciones = parseRelacionesFromDom();
+        var totalCom = 0;
+        var nums = Object.create(null);
+        var apiLike = [];
+        relaciones.forEach(function (r) {
+            var cant = parseInt(r.cantidad || 0, 10) || 0;
+            totalCom += cant;
+            if (r.numero_a) nums[String(r.numero_a).trim()] = true;
+            if (r.numero_b) nums[String(r.numero_b).trim()] = true;
+            apiLike.push({
+                numero_a: r.numero_a || null,
+                numero_b: r.numero_b || null,
+                cantidad: cant,
+                sujeto_a: (r.sujeto_a && r.sujeto_a.display) ? r.sujeto_a.display : null,
+                sujeto_b: (r.sujeto_b && r.sujeto_b.display) ? r.sujeto_b.display : null,
+            });
+        });
+        return {
+            relaciones: apiLike,
+            resumen: {
+                total_pares: relaciones.length,
+                total_comunicaciones: totalCom,
+                numeros_unicos: Object.keys(nums).length,
+            },
+            sujetos_por_numero: {},
+            impactos_por_numero: {},
+            parrafo_informe: buildNarrativaText(relaciones),
+            metadatos: {
+                origen_local: true,
+            },
+        };
+    }
+
+    function parseIsoLike(fecha, hora) {
+        var f = (fecha || '').trim();
+        var h = (hora || '').trim();
+        if (!f) return null;
+        if (!h) h = '00:00:00';
+        if (h.length === 5) h += ':00';
+        return f + 'T' + h;
+    }
+
+    function buildRecordImpactosPorNumero(items) {
+        var byNumero = Object.create(null);
+        (Array.isArray(items) ? items : []).forEach(function (cell) {
+            if (!cell || !Array.isArray(cell.impactos)) return;
+            var celdaId = cell.celda_id || cell.id || '—';
+            cell.impactos.forEach(function (imp) {
+                var num = imp && imp.numero ? String(imp.numero).trim() : '';
+                if (!num) return;
+                if (!byNumero[num]) byNumero[num] = Object.create(null);
+                var key = String(celdaId);
+                if (!byNumero[num][key]) {
+                    byNumero[num][key] = {
+                        celda_id: celdaId,
+                        lat: (cell.lat != null) ? Number(cell.lat) : null,
+                        long: (cell.lng != null) ? Number(cell.lng) : null,
+                        direccion: cell.celda_direccion || null,
+                        localidad: cell.locality_cell || null,
+                        provincia: cell.province_cell || null,
+                        cantidad: 0,
+                        primera_fecha: null,
+                        ultima_fecha: null,
+                    };
+                }
+                var rec = byNumero[num][key];
+                rec.cantidad += 1;
+                var when = parseIsoLike(imp.fecha, imp.hora);
+                if (when) {
+                    if (!rec.primera_fecha || when < rec.primera_fecha) rec.primera_fecha = when;
+                    if (!rec.ultima_fecha || when > rec.ultima_fecha) rec.ultima_fecha = when;
+                }
+            });
+        });
+        var out = {};
+        Object.keys(byNumero).forEach(function (num) {
+            out[num] = Object.keys(byNumero[num]).map(function (k) {
+                return byNumero[num][k];
+            }).sort(function (a, b) {
+                return (b.cantidad || 0) - (a.cantidad || 0);
+            });
+        });
+        return out;
+    }
+
+    function fetchRecordGeoResumenForInforme() {
+        var casoId = '';
+        try {
+            var qs = new URLSearchParams(window.location.search || '');
+            casoId = (qs.get('caso_id') || '').trim();
+        } catch (e) { casoId = ''; }
+        if (!casoId) {
+            return Promise.resolve({
+                total_filtrados: 0,
+                con_cell_id: 0,
+                con_celda_geo: 0,
+                sin_cell_id: 0,
+                sin_celda_geo: 0,
+            });
+        }
+        var q = new URLSearchParams(window.location.search || '');
+        q.set('source_type', relContext.tipo === 'GPRS' ? 'GPRS' : 'VOZ');
+        return fetch((document.body.getAttribute('data-sabana-base') || '') + '/sabana-llamadas/api/relaciones/record-geo-resumen?' + q.toString(), {
+            headers: { 'Accept': 'application/json' }
+        }).then(function (res) {
+            return res.ok ? res.json() : {};
+        }).catch(function () {
+            return {};
+        });
+    }
+
+    function fetchRecordImpactosForInforme() {
+        var casoId = '';
+        try {
+            var qs = new URLSearchParams(window.location.search || '');
+            casoId = (qs.get('caso_id') || '').trim();
+        } catch (e) { casoId = ''; }
+        if (!casoId) return Promise.resolve({ impactos_por_numero: {}, geo_resumen: {} });
+        var q = new URLSearchParams(window.location.search || '');
+        q.set('source_type', relContext.tipo === 'GPRS' ? 'GPRS' : 'VOZ');
+        return fetch((document.body.getAttribute('data-sabana-base') || '') + '/sabana-llamadas/api/mapa/record-impactos?' + q.toString(), {
+            headers: { 'Accept': 'application/json' }
+        }).then(function (res) {
+            return res.ok ? res.json() : [];
+        }).then(function (items) {
+            return fetchRecordGeoResumenForInforme().then(function (geo) {
+                return {
+                    impactos_por_numero: buildRecordImpactosPorNumero(items),
+                    geo_resumen: geo || {},
+                };
+            });
+        }).catch(function () {
+            return { impactos_por_numero: {}, geo_resumen: {} };
+        });
+    }
+
+    function computeHallazgos(relaciones) {
+        var list = Array.isArray(relaciones) ? relaciones : [];
+        if (!list.length) return [];
+        var ordenado = list.slice().sort(function (a, b) {
+            return (parseInt(b.cantidad || 0, 10) || 0) - (parseInt(a.cantidad || 0, 10) || 0);
+        });
+        var topPar = ordenado[0] || null;
+        var nodoStats = Object.create(null);
+        list.forEach(function (r) {
+            if (!r) return;
+            var cant = parseInt(r.cantidad || 0, 10) || 0;
+            ['a', 'b'].forEach(function (side) {
+                var numKey = side === 'a' ? 'numero_a' : 'numero_b';
+                var sjKey = side === 'a' ? 'sujeto_a' : 'sujeto_b';
+                var n = r[numKey] ? String(r[numKey]).trim() : '';
+                if (!n) return;
+                if (!nodoStats[n]) {
+                    nodoStats[n] = { numero: n, conexiones: 0, volumen: 0, sujeto: r[sjKey] || null };
+                }
+                nodoStats[n].conexiones += 1;
+                nodoStats[n].volumen += cant;
+                if (!nodoStats[n].sujeto && r[sjKey]) nodoStats[n].sujeto = r[sjKey];
+            });
+        });
+        var nodos = Object.keys(nodoStats).map(function (k) { return nodoStats[k]; });
+        nodos.sort(function (a, b) {
+            if (b.conexiones !== a.conexiones) return b.conexiones - a.conexiones;
+            return b.volumen - a.volumen;
+        });
+        var nodoClave = nodos[0] || null;
+        var volTotal = list.reduce(function (sum, r) { return sum + (parseInt(r.cantidad || 0, 10) || 0); }, 0);
+        var conectividadProm = nodos.length ? (list.length * 2 / nodos.length) : 0;
+        var hallazgos = [];
+        if (topPar) {
+            hallazgos.push('Par más intenso: ' + (topPar.numero_a || '—') + ' ↔ ' + (topPar.numero_b || '—') + ' (' + (topPar.cantidad || 0) + ').');
+        }
+        if (nodoClave) {
+            var sujetoNombre = '';
+            if (typeof nodoClave.sujeto === 'string') sujetoNombre = nodoClave.sujeto;
+            else if (nodoClave.sujeto && nodoClave.sujeto.display) sujetoNombre = nodoClave.sujeto.display;
+            var sujetoTxt = sujetoNombre ? (' — ' + sujetoNombre) : '';
+            hallazgos.push('Nodo con mayor centralidad: ' + nodoClave.numero + sujetoTxt + ' (conexiones: ' + nodoClave.conexiones + ', volumen: ' + nodoClave.volumen + ').');
+        }
+        hallazgos.push('Densidad observada: ' + list.length + ' enlaces, ' + nodos.length + ' nodos, conectividad media ' + conectividadProm.toFixed(2) + '.');
+        if (volTotal > 0 && topPar) {
+            var topShare = ((parseInt(topPar.cantidad || 0, 10) || 0) * 100 / volTotal);
+            hallazgos.push('Concentración del par líder: ' + topShare.toFixed(1) + '% del volumen total.');
+        }
+        return hallazgos;
+    }
+
+    function renderHallazgos(relaciones) {
+        var box = document.getElementById('analisis-hallazgos');
+        if (!box) return;
+        var hallazgos = computeHallazgos(relaciones);
+        if (!hallazgos.length) {
+            box.innerHTML = '';
+            return;
+        }
+        box.innerHTML = '<h6 class="text-secondary">Hallazgos automáticos</h6><ul class="mb-0 small">' +
+            hallazgos.map(function (h) { return '<li>' + escapeHtml(h) + '</li>'; }).join('') +
+            '</ul>';
+    }
+
+    function renderRecomendaciones(relaciones) {
+        var box = document.getElementById('analisis-recomendaciones');
+        if (!box) return;
+        var list = Array.isArray(relaciones) ? relaciones : [];
+        if (!list.length) {
+            box.innerHTML = '';
+            return;
+        }
+        var ordenado = list.slice().sort(function (a, b) {
+            return (parseInt(b.cantidad || 0, 10) || 0) - (parseInt(a.cantidad || 0, 10) || 0);
+        });
+        var top = ordenado[0] || null;
+        var recomendaciones = [];
+        if (top && top.numero_a && top.numero_b) {
+            recomendaciones.push('Priorizar trazado geográfico del par ' + top.numero_a + ' ↔ ' + top.numero_b + ' por concentrar mayor intensidad.');
+        }
+        recomendaciones.push('Cruzar nodos de mayor centralidad con líneas/sujetos ya judicializados y validar continuidad temporal en pestaña Patrones.');
+        recomendaciones.push('Repetir análisis por ventanas horarias acotadas (mañana/tarde/noche) para detectar cambios de comportamiento.');
+        box.innerHTML = '<h6 class="text-secondary">Conclusiones y recomendaciones</h6><ul class="mb-0 small">' +
+            recomendaciones.map(function (r) { return '<li>' + escapeHtml(r) + '</li>'; }).join('') +
+            '</ul>';
     }
 
     function buildAnalisisSummary() {
@@ -731,15 +1055,20 @@
         var resumenEl = document.getElementById('analisis-resumen');
         var topParesEl = document.getElementById('analisis-top-pares');
         if (!resumenEl || !topParesEl) return;
+        renderAnalisisContexto(relaciones);
 
         if (!relaciones || relaciones.length === 0) {
             resumenEl.innerHTML = '<p class="text-muted mb-0">No hay datos para analizar. Aplique filtros y recargue.</p>';
             topParesEl.innerHTML = '';
+            renderHallazgos([]);
+            renderRecomendaciones([]);
+            renderNarrativaAutomatica([]);
             return;
         }
 
         var totalPares = relaciones.length;
         var totalComunicaciones = relaciones.reduce(function (sum, r) { return sum + (parseInt(r.cantidad, 10) || 0); }, 0);
+        var commLabel = relContext.tipo === 'GPRS' ? 'accesos de datos' : 'llamadas';
         var numerosSet = Object.create(null);
         var conSujeto = 0;
         relaciones.forEach(function (r) {
@@ -754,7 +1083,7 @@
             '<h6 class="text-secondary">Resumen (' + relContext.label + ')</h6>' +
             '<ul class="list-unstyled mb-0">' +
             '<li><strong>Pares de números en relación:</strong> ' + totalPares + '</li>' +
-            '<li><strong>Total comunicaciones (llamadas):</strong> ' + totalComunicaciones + '</li>' +
+            '<li><strong>Total comunicaciones (' + commLabel + '):</strong> ' + totalComunicaciones + '</li>' +
             '<li><strong>Números únicos involucrados:</strong> ' + numUnicos + '</li>' +
             '<li><strong>Relaciones con sujeto identificado:</strong> ' + conSujeto + ' extremos</li>' +
             '</ul>';
@@ -769,9 +1098,16 @@
             var labelB = (r.sujeto_b && r.sujeto_b.display) ? r.sujeto_b.display + ' (' + r.numero_b + ')' : r.numero_b;
             return '<tr><td>' + escapeHtml(labelA) + '</td><td>' + escapeHtml(labelB) + '</td><td class="text-end">' + (r.cantidad || 0) + '</td></tr>';
         }).join('');
+        var thB = relContext.tipo === 'GPRS' ? 'IP / destino' : 'Número B';
+        var thCount = relContext.tipo === 'GPRS' ? '# Accesos' : '# Llamadas';
         topParesEl.innerHTML =
             '<h6 class="text-secondary">Top pares por cantidad de comunicaciones</h6>' +
-            '<div class="table-responsive"><table class="table table-sm table-bordered"><thead><tr><th>Número A</th><th>Número B</th><th class="text-end"># Llamadas</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+            '<div class="table-responsive"><table class="table table-sm table-bordered"><thead><tr><th>Número A</th><th>' + thB + '</th><th class="text-end">' + thCount + '</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+        renderHallazgos(relaciones);
+        renderRecomendaciones(relaciones);
+        if (!lastInformeData || !lastInformeData.parrafo_informe) {
+            renderNarrativaAutomatica(relaciones);
+        }
     }
 
     function renderInformeCompleto(data) {
@@ -780,6 +1116,10 @@
         var resumenEl = document.getElementById('analisis-resumen');
         var impactosEl = document.getElementById('analisis-impactos-celdas');
         if (!data) return;
+        var rels = Array.isArray(data.relaciones) ? data.relaciones : parseRelacionesFromDom();
+        renderAnalisisContexto(rels);
+        renderHallazgos(rels);
+        renderRecomendaciones(rels);
 
         if (narrativoEl && data.parrafo_informe) {
             narrativoEl.innerHTML =
@@ -787,6 +1127,8 @@
                 '<div class="informe-parrafo bg-light border-start border-4 border-primary px-3 py-2 small lh-base">' +
                 escapeHtml(data.parrafo_informe).replace(/\n/g, '<br>') +
                 '</div>';
+        } else {
+            renderNarrativaAutomatica(rels);
         }
 
         if (resumenEl && data.resumen) {
@@ -817,21 +1159,47 @@
             });
             impactosEl.innerHTML = html;
         } else if (impactosEl) {
-            impactosEl.innerHTML = '<p class="text-muted small mb-0">No hay impactos en celdas con coordenadas para los números del informe, o genere el informe completo.</p>';
+            var extra = '';
+            try {
+                var geo = data && data.metadatos ? (data.metadatos.record_geo || {}) : {};
+                if (geo && (geo.total_filtrados || geo.con_cell_id || geo.con_celda_geo || geo.sin_cell_id || geo.sin_celda_geo)) {
+                    extra = '<div class="mt-2"><span class="badge text-bg-secondary me-1">Total filtrados: ' + String(geo.total_filtrados || 0) + '</span>' +
+                        '<span class="badge text-bg-secondary me-1">Con cell_id: ' + String(geo.con_cell_id || 0) + '</span>' +
+                        '<span class="badge text-bg-secondary me-1">Georreferenciables: ' + String(geo.con_celda_geo || 0) + '</span>' +
+                        '<span class="badge text-bg-warning text-dark me-1">Sin cell_id: ' + String(geo.sin_cell_id || 0) + '</span>' +
+                        '<span class="badge text-bg-warning text-dark">Sin coordenadas: ' + String(geo.sin_celda_geo || 0) + '</span></div>';
+                }
+            } catch (eGeo) {}
+            impactosEl.innerHTML = '<p class="text-muted small mb-0">No hay impactos en celdas con coordenadas para los números del informe.</p>' + extra;
         }
     }
 
     function fetchInformeCompleto() {
         var btn = document.getElementById('btn-generar-informe');
+        if (btn) btn.disabled = true;
+        if (!relContext.informeSabana) {
+            var localData = buildLocalInformeData();
+            fetchRecordImpactosForInforme().then(function (payload) {
+                payload = payload || {};
+                localData.impactos_por_numero = payload.impactos_por_numero || {};
+                if (!localData.metadatos) localData.metadatos = {};
+                localData.metadatos.record_geo = payload.geo_resumen || {};
+                renderInformeCompleto(localData);
+                updateAnalisisBadgeWithTime();
+            }).finally(function () {
+                if (btn) btn.disabled = false;
+            });
+            return;
+        }
         var qs = window.location.search || '';
         var api = relContext.apiInforme || (window.location.pathname.replace(/\/relaciones\/?$/, '') + '/api/informe-voz');
         var url = api + (qs ? qs : '?limit=200');
-        if (btn) btn.disabled = true;
         fetch(url, { headers: { 'Accept': 'application/json' } })
             .then(function (res) { return res.json(); })
             .then(function (data) {
                 if (data.error) throw new Error(data.error);
                 renderInformeCompleto(data);
+                updateAnalisisBadgeWithTime();
                 var topParesEl = document.getElementById('analisis-top-pares');
                 if (topParesEl && data.relaciones && data.relaciones.length) {
                     var ordenado = data.relaciones.slice().sort(function (a, b) { return (b.cantidad || 0) - (a.cantidad || 0); });
@@ -852,6 +1220,160 @@
             .finally(function () {
                 if (btn) btn.disabled = false;
             });
+    }
+
+    function fetchPatronesData() {
+        var qs = window.location.search || '';
+        var url = (document.body.getAttribute('data-sabana-base') || '') + '/sabana-llamadas/api/relaciones/patrones' + (qs ? qs : '');
+        if (!qs) {
+            url += '?origen=sabana&tipo_trafico=voz';
+        }
+        return fetch(url, { headers: { 'Accept': 'application/json' } }).then(function (res) {
+            return res.ok ? res.json() : {};
+        }).catch(function () {
+            return {};
+        });
+    }
+
+    function renderPatronesCharts(data) {
+        var wdEl = document.getElementById('patrones-weekday-chart');
+        var hrEl = document.getElementById('patrones-hour-chart');
+        var sumEl = document.getElementById('patrones-resumen');
+        var extraEl = document.getElementById('patrones-extra');
+        if (!wdEl || !hrEl) return;
+
+        var byW = Array.isArray(data.by_weekday) ? data.by_weekday : [];
+        var byH = Array.isArray(data.by_hour) ? data.by_hour : [];
+        var wdLabels = byW.map(function (x) { return x.label || ''; });
+        var wdVals = byW.map(function (x) { return parseInt(x.count || 0, 10) || 0; });
+        var hLabels = byH.map(function (x) { return String(x.hour || '00') + ':00'; });
+        var hVals = byH.map(function (x) { return parseInt(x.count || 0, 10) || 0; });
+
+        var total = parseInt(data.total_eventos || 0, 10) || 0;
+        if (sumEl) {
+            if (total > 0) {
+                var tw = data.top_weekday ? (data.top_weekday.label + ' (' + (data.top_weekday.count || 0) + ')') : '—';
+                var th = data.top_hour ? ((data.top_hour.hour || '00') + ':00 (' + (data.top_hour.count || 0) + ')') : '—';
+                sumEl.classList.remove('d-none');
+                sumEl.textContent = 'Total eventos analizados: ' + total + ' | Pico semanal: ' + tw + ' | Pico horario: ' + th;
+            } else {
+                sumEl.classList.remove('d-none');
+                sumEl.textContent = 'Sin eventos con fecha/hora para los filtros actuales.';
+            }
+        }
+
+        if (typeof window.Plotly !== 'undefined') {
+            window.Plotly.react(wdEl, [{
+                x: wdLabels, y: wdVals, type: 'bar', marker: { color: '#0d6efd' }, hovertemplate: '%{x}: %{y}<extra></extra>'
+            }], {
+                margin: { l: 36, r: 10, t: 8, b: 36 },
+                yaxis: { title: 'Eventos' },
+                xaxis: { title: 'Dia' },
+            }, { displayModeBar: false, responsive: true });
+            window.Plotly.react(hrEl, [{
+                x: hLabels, y: hVals, type: 'bar', marker: { color: '#20c997' }, hovertemplate: '%{x}: %{y}<extra></extra>'
+            }], {
+                margin: { l: 36, r: 10, t: 8, b: 36 },
+                yaxis: { title: 'Eventos' },
+                xaxis: { title: 'Hora' },
+            }, { displayModeBar: false, responsive: true });
+        } else {
+            wdEl.innerHTML = '<p class="text-muted small mb-0">Plotly no disponible.</p>';
+            hrEl.innerHTML = '<p class="text-muted small mb-0">Plotly no disponible.</p>';
+        }
+
+        if (extraEl) {
+            var topHours = byH.slice().sort(function (a, b) { return (b.count || 0) - (a.count || 0); }).slice(0, 3);
+            if (topHours.length && (topHours[0].count || 0) > 0) {
+                extraEl.innerHTML = '<h6 class="text-secondary mb-1">Patrones sugeridos</h6><ul class="small mb-0">' +
+                    '<li>Las franjas con mayor actividad son: ' + topHours.map(function (h) { return (h.hour || '00') + ':00'; }).join(', ') + '.</li>' +
+                    '<li>Contrastar estos picos con desplazamientos geográficos en mapa para inferir rutinas.</li>' +
+                    '<li>Comparar días pico vs días valle para detectar comportamiento anómalo.</li>' +
+                    '</ul>';
+            } else {
+                extraEl.innerHTML = '';
+            }
+        }
+    }
+
+    function loadPatrones(force) {
+        if (!force && patronesState.loaded && patronesState.data) {
+            renderPatronesCharts(patronesState.data);
+            return Promise.resolve(patronesState.data);
+        }
+        return fetchPatronesData().then(function (data) {
+            patronesState.loaded = true;
+            patronesState.data = data || {};
+            renderPatronesCharts(patronesState.data);
+            setBadgeText('tab-badge-patrones', String((patronesState.data && patronesState.data.total_eventos) || 0));
+            return patronesState.data;
+        });
+    }
+
+    function initPatronesTab() {
+        var tab = document.getElementById('tab-patrones');
+        if (tab) {
+            tab.addEventListener('shown.bs.tab', function () {
+                loadPatrones(false);
+            });
+        }
+        var btn = document.getElementById('btn-refrescar-patrones');
+        if (btn) {
+            btn.addEventListener('click', function () {
+                loadPatrones(true);
+            });
+        }
+    }
+
+    function setBadgeText(id, txt) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = txt || '';
+    }
+
+    function updateAnalisisBadgeWithTime() {
+        try {
+            var hhmm = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            setBadgeText('tab-badge-analisis', hhmm);
+        } catch (e) {
+            setBadgeText('tab-badge-analisis', 'Generado');
+        }
+    }
+
+    function updateTabBadges(relaciones) {
+        var list = Array.isArray(relaciones) ? relaciones : [];
+        setBadgeText('tab-badge-tabla', String(list.length || 0));
+        var nodes = Object.create(null);
+        var edges = 0;
+        list.forEach(function (r) {
+            if (!r) return;
+            var a = r.numero_a ? String(r.numero_a).trim() : '';
+            var b = r.numero_b ? String(r.numero_b).trim() : '';
+            if (a) nodes[a] = true;
+            if (b) nodes[b] = true;
+            if (a && b) edges += 1;
+        });
+        setBadgeText('tab-badge-grafo', Object.keys(nodes).length + '/' + edges);
+        if (!lastInformeData) setBadgeText('tab-badge-analisis', 'Sin generar');
+    }
+
+    function initTabPersistence() {
+        var tabs = document.querySelectorAll('.nav-link[data-bs-toggle="tab"]');
+        tabs.forEach(function (tabBtn) {
+            tabBtn.addEventListener('shown.bs.tab', function (ev) {
+                var target = ev && ev.target ? ev.target.getAttribute('data-bs-target') : null;
+                if (!target) return;
+                try { localStorage.setItem(TAB_STORAGE_KEY, target); } catch (e) {}
+            });
+        });
+        try {
+            var savedTarget = localStorage.getItem(TAB_STORAGE_KEY);
+            if (!savedTarget) return;
+            var savedTab = document.querySelector('.nav-link[data-bs-target="' + savedTarget + '"]');
+            if (!savedTab || !window.bootstrap || !window.bootstrap.Tab) return;
+            var instance = window.bootstrap.Tab.getOrCreateInstance(savedTab);
+            if (instance) instance.show();
+        } catch (e2) {}
     }
 
     function escapeHtml(s) {
@@ -875,8 +1397,16 @@
         var filtrosItems = [];
         if (meta.filtros) {
             if (meta.filtros.sujeto) filtrosItems.push('<li><strong>Sujeto:</strong> ' + escapeHtml(meta.filtros.sujeto) + '</li>');
+            if (meta.filtros.sujetos) filtrosItems.push('<li><strong>Sujetos:</strong> ' + escapeHtml(meta.filtros.sujetos) + '</li>');
             if (meta.filtros.carga_voz) filtrosItems.push('<li><strong>Carga VOZ:</strong> ' + escapeHtml(meta.filtros.carga_voz) + '</li>');
+            if (meta.filtros.carga_gprs) filtrosItems.push('<li><strong>Carga GPRS:</strong> ' + escapeHtml(meta.filtros.carga_gprs) + '</li>');
+            if (meta.filtros.cargas) filtrosItems.push('<li><strong>Cargas (múltiple):</strong> ' + escapeHtml(meta.filtros.cargas) + '</li>');
+            if (meta.filtros.fuentes_record) filtrosItems.push('<li><strong>Archivos Record:</strong> ' + escapeHtml(meta.filtros.fuentes_record) + '</li>');
             if (meta.filtros.numero) filtrosItems.push('<li><strong>Número (A/B):</strong> ' + escapeHtml(meta.filtros.numero) + '</li>');
+            if (meta.filtros.numeros) filtrosItems.push('<li><strong>Números (múltiple):</strong> ' + escapeHtml(meta.filtros.numeros) + '</li>');
+            if (meta.filtros.imeis) filtrosItems.push('<li><strong>IMEIs:</strong> ' + escapeHtml(meta.filtros.imeis) + '</li>');
+            if (meta.filtros.provincias) filtrosItems.push('<li><strong>Provincias:</strong> ' + escapeHtml(meta.filtros.provincias) + '</li>');
+            if (meta.filtros.localidades) filtrosItems.push('<li><strong>Localidades:</strong> ' + escapeHtml(meta.filtros.localidades) + '</li>');
             if (meta.filtros.fecha_desde || meta.filtros.fecha_hasta) {
                 filtrosItems.push('<li><strong>Fechas:</strong> ' + escapeHtml(meta.filtros.fecha_desde || '-') + ' a ' + escapeHtml(meta.filtros.fecha_hasta || '-') + '</li>');
             }
@@ -987,8 +1517,16 @@
         var filtrosItems = [];
         if (meta.filtros) {
             if (meta.filtros.sujeto) filtrosItems.push('<li><strong>Sujeto:</strong> ' + escapeHtml(meta.filtros.sujeto) + '</li>');
-            if (meta.filtros.carga_voz) filtrosItems.push('<li><strong>Carga:</strong> ' + escapeHtml(meta.filtros.carga_voz) + '</li>');
+            if (meta.filtros.sujetos) filtrosItems.push('<li><strong>Sujetos:</strong> ' + escapeHtml(meta.filtros.sujetos) + '</li>');
+            if (meta.filtros.carga_voz) filtrosItems.push('<li><strong>Carga VOZ:</strong> ' + escapeHtml(meta.filtros.carga_voz) + '</li>');
+            if (meta.filtros.carga_gprs) filtrosItems.push('<li><strong>Carga GPRS:</strong> ' + escapeHtml(meta.filtros.carga_gprs) + '</li>');
+            if (meta.filtros.cargas) filtrosItems.push('<li><strong>Cargas (múltiple):</strong> ' + escapeHtml(meta.filtros.cargas) + '</li>');
+            if (meta.filtros.fuentes_record) filtrosItems.push('<li><strong>Archivos Record:</strong> ' + escapeHtml(meta.filtros.fuentes_record) + '</li>');
             if (meta.filtros.numero) filtrosItems.push('<li><strong>Número:</strong> ' + escapeHtml(meta.filtros.numero) + '</li>');
+            if (meta.filtros.numeros) filtrosItems.push('<li><strong>Números (múltiple):</strong> ' + escapeHtml(meta.filtros.numeros) + '</li>');
+            if (meta.filtros.imeis) filtrosItems.push('<li><strong>IMEIs:</strong> ' + escapeHtml(meta.filtros.imeis) + '</li>');
+            if (meta.filtros.provincias) filtrosItems.push('<li><strong>Provincias:</strong> ' + escapeHtml(meta.filtros.provincias) + '</li>');
+            if (meta.filtros.localidades) filtrosItems.push('<li><strong>Localidades:</strong> ' + escapeHtml(meta.filtros.localidades) + '</li>');
             if (meta.filtros.fecha_desde || meta.filtros.fecha_hasta) {
                 filtrosItems.push('<li><strong>Fechas:</strong> ' + escapeHtml(meta.filtros.fecha_desde || '-') + ' a ' + escapeHtml(meta.filtros.fecha_hasta || '-') + '</li>');
             }
@@ -1038,7 +1576,7 @@
             '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + escapeHtml(titulo) + '</title>' +
             '<style>@page { margin: 2.5cm; } body{font-family:Arial,Segoe UI,sans-serif;font-size:12pt;line-height:1.5;text-align:justify;} h1,h2,h3,h4{font-weight:bold;text-align:left;} h1{font-size:18pt;margin-bottom:8px;} h2{font-size:16pt;margin-top:14px;margin-bottom:6px;} h3{font-size:14pt;margin-top:12px;margin-bottom:6px;} table{border-collapse:collapse;width:100%;margin:8px 0;font-size:11pt;} th,td{border:1px solid #ddd;padding:6px;text-align:left;} th{background:#f5f5f5;font-weight:bold;} .informe-parrafo{line-height:1.5;}</style></head><body>' +
             '<h1>' + escapeHtml(titulo) + '</h1>' +
-            '<p style="color:#6c757d;font-size:10pt;">Generado desde Relaciones (VOZ).</p>' +
+            '<p style="color:#6c757d;font-size:10pt;">Generado desde Relaciones (' + relContext.label + ').</p>' +
             encabezadoHtml +
             filtrosHtml +
             '<hr>' +
@@ -1111,7 +1649,10 @@
         initGraphTitle();
         initGraphSliders();
         initAnalisisTab();
+        initPatronesTab();
         var relaciones = parseRelacionesFromDom();
+        updateTabBadges(relaciones);
+        initTabPersistence();
         if (relaciones && relaciones.length) {
             buildGraph(relaciones, getGraphOpts());
         }

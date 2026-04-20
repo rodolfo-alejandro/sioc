@@ -51,18 +51,26 @@ class CargaLlamada(db.Model):
     unidad_id = db.Column(db.Integer, db.ForeignKey('unidades.id'), nullable=False, index=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     sujeto_id = db.Column(db.Integer, db.ForeignKey('sabana_sujetos.id'), nullable=True, index=True)
+    caso_id = db.Column(db.Integer, db.ForeignKey('ap_casos.id'), nullable=True, index=True)
 
     tipo = db.Column(db.String(10), nullable=False, index=True)
+    operadora = db.Column(db.String(30), nullable=True, index=True)  # PERSONAL / MOVISTAR / CLARO / OTRA
     nombre_archivo = db.Column(db.String(255), nullable=True)
     rango_desde = db.Column(db.DateTime, nullable=True)
     rango_hasta = db.Column(db.DateTime, nullable=True)
     criterio_busqueda = db.Column(db.Text, nullable=True)
+    processing_detail = db.Column(db.Text, nullable=True)  # JSON con trazabilidad de importación
+    sha256 = db.Column(db.String(128), nullable=True, index=True)
+    size_bytes = db.Column(db.Integer, nullable=True)
+    # Nota opcional en pantalla Relaciones del caso (no confundir con “fuente” policial)
+    relaciones_nota = db.Column(db.String(500), nullable=True)
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     unidad = db.relationship('Unidad', backref='sabana_cargas')
     user = db.relationship('User', backref='sabana_cargas')
     sujeto = db.relationship('Sujeto', backref='cargas', foreign_keys=[sujeto_id])
+    caso = db.relationship('AnalisisPuntoCaso', foreign_keys=[caso_id], backref='sabana_cargas')
 
     def __repr__(self):
         return f'<CargaLlamada {self.id} {self.tipo}>'

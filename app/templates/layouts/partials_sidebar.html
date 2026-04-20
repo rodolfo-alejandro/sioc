@@ -78,17 +78,16 @@
                     </a>
                     <ul class="nav flex-column collapse" id="submenuSabana">
                         <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('sabana_llamadas.index') }}"><i class="bi bi-house"></i> Inicio</a></li>
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('analisis_puntos.index') }}"><i class="bi bi-briefcase"></i> Casos</a></li>
                         {% if current_user.has_permission('SABANA_LLAMADAS_UPLOAD') %}
                         <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('sabana_llamadas.sujetos_list') }}"><i class="bi bi-person"></i> Sujetos</a></li>
-                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('sabana_llamadas.cargas_list') }}"><i class="bi bi-file-earmark-spreadsheet"></i> Cargas</a></li>
-                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('sabana_llamadas.gprs_upload') }}"><i class="bi bi-cloud-upload"></i> Cargar GPRS</a></li>
-                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('sabana_llamadas.voz_upload') }}"><i class="bi bi-cloud-upload"></i> Cargar VOZ</a></li>
+                        {% endif %}
+                        {% if current_user.has_permission('SABANA_LLAMADAS_VIEW') or current_user.has_permission('SABANA_LLAMADAS_UPLOAD') %}
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('sabana_llamadas.cargas_list') }}"><i class="bi bi-cloud-upload"></i> Cargas</a></li>
                         {% endif %}
                         {% if current_user.has_permission('SABANA_LLAMADAS_VIEW') %}
                         <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('sabana_llamadas.mapa') }}"><i class="bi bi-geo-alt"></i> Mapa</a></li>
-                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('sabana_llamadas.relaciones') }}"><i class="bi bi-diagram-3"></i> Relaciones (VOZ)</a></li>
-                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('sabana_llamadas.relaciones_gprs') }}"><i class="bi bi-diagram-3"></i> Relaciones (GPRS)</a></li>
-                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('analisis_puntos.index') }}"><i class="bi bi-bullseye"></i> Análisis de Puntos</a></li>
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('sabana_llamadas.relaciones') }}"><i class="bi bi-diagram-3"></i> Relaciones</a></li>
                         {% endif %}
                     </ul>
                 </li>

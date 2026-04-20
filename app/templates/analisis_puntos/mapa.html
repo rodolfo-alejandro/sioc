@@ -1,5 +1,5 @@
 {% extends "layouts/base.html" %}
-{% block title %}Mapa de Caso - Análisis de Puntos{% endblock %}
+{% block title %}Mapa del caso{% endblock %}
 
 {% block extra_head %}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
@@ -16,7 +16,7 @@
       <h5 class="mb-0">Mapa del caso</h5>
       <div class="small text-muted">{{ caso.codigo }} - {{ caso.titulo }}</div>
     </div>
-    <a href="{{ url_for('analisis_puntos.index') }}" class="btn btn-sm btn-outline-secondary">Volver</a>
+    <a href="{{ url_for('analisis_puntos.index') }}" class="btn btn-sm btn-outline-secondary">Volver a Casos</a>
   </div>
 
   <div class="card mb-2">

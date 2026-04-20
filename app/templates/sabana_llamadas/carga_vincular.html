@@ -5,7 +5,7 @@
 {% block content %}
 <div class="page-header">
     <h1><i class="bi bi-link-45deg"></i> Vincular carga</h1>
-    <p class="text-muted">Seleccione el sujeto al que debe vincularse este archivo o deje "Sin sujeto".</p>
+    <p class="text-muted">Asigne el <strong>caso investigativo</strong> (obligatorio) y, si corresponde, un <strong>sujeto</strong>. Útil para cargas antiguas sin caso o para corregir la vinculación.</p>
 </div>
 
 <div class="card mb-3">
@@ -15,24 +15,45 @@
             <dd class="col-sm-10"><span class="badge bg-{{ 'success' if carga.tipo == 'gprs' else 'info' }}">{{ carga.tipo|upper }}</span></dd>
             <dt class="col-sm-2">Archivo</dt>
             <dd class="col-sm-10">{{ carga.nombre_archivo or 'Sin nombre' }}</dd>
+            <dt class="col-sm-2">Caso actual</dt>
+            <dd class="col-sm-10">
+                {% if carga.caso %}
+                    <a href="{{ url_for('analisis_puntos.caso_relaciones', caso_id=carga.caso.id) }}">{{ carga.caso.codigo }} — {{ carga.caso.titulo }}</a>
+                {% else %}
+                    <span class="badge bg-warning text-dark">Sin caso</span>
+                {% endif %}
+            </dd>
             <dt class="col-sm-2">Fecha</dt>
             <dd class="col-sm-10">{{ carga.created_at|localtime if carga.created_at else '' }}</dd>
         </dl>
     </div>
 </div>
 
+{% if not casos_ap %}
+<div class="alert alert-warning">
+    No hay casos en su unidad. Cree uno en
+    <a href="{{ url_for('analisis_puntos.index') }}" class="alert-link">Casos</a>.
+</div>
+{% endif %}
+
 <div class="card">
     <div class="card-body">
         <form method="POST" action="{{ request.url }}">
             {{ form.hidden_tag() }}
             <div class="mb-3">
+                {{ form.caso_id.label(class="form-label") }} <span class="text-danger">*</span>
+                {{ form.caso_id(class="form-select" + (" is-invalid" if form.caso_id.errors else "")) }}
+                {% if form.caso_id.errors %}
+                <div class="invalid-feedback">{% for e in form.caso_id.errors %}{{ e }}{% endfor %}</div>
+                {% endif %}
+            </div>
+            <div class="mb-3">
                 {{ form.sujeto_id.label(class="form-label") }}
                 {{ form.sujeto_id(class="form-select") }}
             </div>
-            <button type="submit" class="btn btn-primary">Guardar</button>
+            <button type="submit" class="btn btn-primary" {% if not casos_ap %}disabled{% endif %}>Guardar</button>
             <a href="{{ url_for('sabana_llamadas.cargas_list') }}" class="btn btn-secondary">Volver</a>
         </form>
     </div>
 </div>
 {% endblock %}
-
