@@ -51,6 +51,7 @@ from app.models.analisis_puntos import (
 )
 from app.models.billeteras_virtuales import (
     BilleteraCarga,
+    BilleteraCargaCompartida,
     BilleteraMovimiento,
     BilleteraSalida,
 )
@@ -74,6 +75,6 @@ __all__ = [
     'AnalisisPuntoCaso', 'AnalisisPuntoCasoCompartido', 'AnalisisPuntoFuente', 'AnalisisPuntoCelda', 'AnalisisPuntoEvento',
     'AnalisisPuntoTitular', 'AnalisisPuntoCasoSujeto', 'AnalisisPuntoCasoFuente', 'AnalisisPuntoCasoNumero',
     'AnalisisPuntoCasoMapaPunto',
-    'BilleteraCarga', 'BilleteraMovimiento', 'BilleteraSalida',
+    'BilleteraCarga', 'BilleteraCargaCompartida', 'BilleteraMovimiento', 'BilleteraSalida',
 ]
 

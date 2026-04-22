@@ -10,11 +10,20 @@ from io import BytesIO
 import pandas as pd
 from flask import Response, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
-from sqlalchemy import func, inspect
+from sqlalchemy.orm import joinedload
+from sqlalchemy import and_, exists, func, inspect, or_, text
 
 from app.blueprints.billeteras_virtuales import bp
 from app.extensions import db
-from app.models.billeteras_virtuales import BilleteraCarga, BilleteraMovimiento, BilleteraSalida
+from app.models.analisis_puntos import AnalisisPuntoCaso, AnalisisPuntoCasoCompartido
+from app.models.billeteras_virtuales import (
+    BilleteraCarga,
+    BilleteraCargaCompartida,
+    BilleteraMovimiento,
+    BilleteraSalida,
+)
+from app.models.sabana_llamadas import Sujeto, SujetoCompartido
+from app.models.user import User
 
 
 _bv_schema_checked = False
@@ -47,28 +56,148 @@ def _ensure_billeteras_schema():
         BilleteraMovimiento.__table__.create(bind=db.engine)
     if BilleteraSalida.__tablename__ not in existing:
         BilleteraSalida.__table__.create(bind=db.engine)
+    if BilleteraCargaCompartida.__tablename__ not in existing:
+        BilleteraCargaCompartida.__table__.create(bind=db.engine)
+    # Migración idempotente de columnas nuevas para vínculo a caso/sujeto
+    cols = {c.get("name") for c in inspect(db.engine).get_columns(BilleteraCarga.__tablename__)}
+    if "sujeto_id" not in cols:
+        db.session.execute(text("ALTER TABLE bv_cargas ADD COLUMN sujeto_id INTEGER NULL"))
+    if "caso_id" not in cols:
+        db.session.execute(text("ALTER TABLE bv_cargas ADD COLUMN caso_id INTEGER NULL"))
+    try:
+        idxs = inspect(db.engine).get_indexes(BilleteraCargaCompartida.__tablename__)
+        if not any((ix.get("name") or "").lower() == "idx_bv_cargas_compartidas_shared_with" for ix in idxs):
+            db.session.execute(
+                text("CREATE INDEX idx_bv_cargas_compartidas_shared_with ON bv_cargas_compartidas(shared_with_user_id)")
+            )
+    except Exception:
+        pass
+    db.session.commit()
     _bv_schema_checked = True
 
 
+def _carga_access_predicate():
+    if _is_superadmin():
+        return True
+    owned = (BilleteraCarga.user_id == current_user.id)
+    shared_carga = exists().where(
+        and_(
+            BilleteraCargaCompartida.carga_id == BilleteraCarga.id,
+            BilleteraCargaCompartida.shared_with_user_id == current_user.id,
+        )
+    )
+    shared_suj = exists().where(
+        and_(
+            BilleteraCarga.sujeto_id == SujetoCompartido.sujeto_id,
+            SujetoCompartido.shared_with_user_id == current_user.id,
+        )
+    )
+    shared_case = exists().where(
+        and_(
+            BilleteraCarga.caso_id == AnalisisPuntoCasoCompartido.caso_id,
+            AnalisisPuntoCasoCompartido.shared_with_user_id == current_user.id,
+        )
+    )
+    return or_(owned, shared_carga, shared_suj, shared_case)
+
+
 def _q_cargas():
-    q = BilleteraCarga.query
-    if not _is_superadmin():
-        q = q.filter(BilleteraCarga.unidad_id == current_user.unidad_id)
+    q = BilleteraCarga.query.filter(BilleteraCarga.unidad_id == current_user.unidad_id)
+    pred = _carga_access_predicate()
+    if pred is not True:
+        q = q.filter(pred)
     return q
 
 
 def _q_movimientos():
-    q = BilleteraMovimiento.query
-    if not _is_superadmin():
-        q = q.filter(BilleteraMovimiento.unidad_id == current_user.unidad_id)
-    return q
+    carga_ids = _q_cargas().with_entities(BilleteraCarga.id)
+    return BilleteraMovimiento.query.filter(BilleteraMovimiento.carga_id.in_(carga_ids))
 
 
 def _q_salidas():
-    q = BilleteraSalida.query
+    carga_ids = _q_cargas().with_entities(BilleteraCarga.id)
+    return BilleteraSalida.query.filter(BilleteraSalida.carga_id.in_(carga_ids))
+
+
+def _get_int_list_arg(name):
+    out = []
+    for raw in request.args.getlist(name):
+        try:
+            v = int(raw)
+            if v > 0:
+                out.append(v)
+        except Exception:
+            continue
+    return sorted(set(out))
+
+
+def _get_str_list_arg(name):
+    out = []
+    for raw in request.args.getlist(name):
+        s = _clean_str(raw)
+        if s:
+            out.append(s)
+    return sorted(set(out))
+
+
+def _q_casos_accesibles():
+    q = AnalisisPuntoCaso.query.filter(AnalisisPuntoCaso.unidad_id == current_user.unidad_id)
     if not _is_superadmin():
-        q = q.filter(BilleteraSalida.unidad_id == current_user.unidad_id)
+        shared_case = exists().where(
+            and_(
+                AnalisisPuntoCasoCompartido.caso_id == AnalisisPuntoCaso.id,
+                AnalisisPuntoCasoCompartido.shared_with_user_id == current_user.id,
+            )
+        )
+        q = q.filter(or_(AnalisisPuntoCaso.user_id == current_user.id, shared_case))
     return q
+
+
+def _q_sujetos_accesibles():
+    q = Sujeto.query.filter(Sujeto.unidad_id == current_user.unidad_id)
+    if not _is_superadmin():
+        shared_suj = exists().where(
+            and_(
+                SujetoCompartido.sujeto_id == Sujeto.id,
+                SujetoCompartido.shared_with_user_id == current_user.id,
+            )
+        )
+        shared_via_carga = exists().where(
+            and_(
+                BilleteraCarga.sujeto_id == Sujeto.id,
+                BilleteraCargaCompartida.carga_id == BilleteraCarga.id,
+                BilleteraCargaCompartida.shared_with_user_id == current_user.id,
+            )
+        )
+        shared_via_case = exists().where(
+            and_(
+                BilleteraCarga.sujeto_id == Sujeto.id,
+                BilleteraCarga.caso_id == AnalisisPuntoCasoCompartido.caso_id,
+                AnalisisPuntoCasoCompartido.shared_with_user_id == current_user.id,
+            )
+        )
+        q = q.filter(or_(Sujeto.user_id == current_user.id, shared_suj, shared_via_carga, shared_via_case))
+    return q
+
+
+def _get_caso_accesible(caso_id):
+    if not caso_id:
+        return None
+    try:
+        cid = int(caso_id)
+    except Exception:
+        return None
+    return _q_casos_accesibles().filter(AnalisisPuntoCaso.id == cid).first()
+
+
+def _get_sujeto_accesible(sujeto_id):
+    if not sujeto_id:
+        return None
+    try:
+        sid = int(sujeto_id)
+    except Exception:
+        return None
+    return _q_sujetos_accesibles().filter(Sujeto.id == sid).first()
 
 
 def _clean_str(v):
@@ -195,12 +324,34 @@ def _apply_common_filters(q, model):
     desde = _parse_dt(request.args.get("desde"))
     hasta = _parse_dt(request.args.get("hasta"))
     estado = _clean_str(request.args.get("estado"))
+    estados = _get_str_list_arg("estados[]")
     qtxt = _clean_str(request.args.get("q"))
+    caso_ids = _get_int_list_arg("caso_ids[]")
+    sujeto_ids = _get_int_list_arg("sujeto_ids[]")
+    carga_ids = _get_int_list_arg("carga_ids[]")
+    # Backward compatibility con filtros simples
+    caso_id = request.args.get("caso_id", type=int)
+    sujeto_id = request.args.get("sujeto_id", type=int)
+    if caso_id and caso_id not in caso_ids:
+        caso_ids.append(caso_id)
+    if sujeto_id and sujeto_id not in sujeto_ids:
+        sujeto_ids.append(sujeto_id)
+    if caso_ids:
+        q = q.filter(model.carga_id.in_(db.session.query(BilleteraCarga.id).filter(BilleteraCarga.caso_id.in_(caso_ids))))
+    if sujeto_ids:
+        q = q.filter(model.carga_id.in_(db.session.query(BilleteraCarga.id).filter(BilleteraCarga.sujeto_id.in_(sujeto_ids))))
+    if carga_ids:
+        q = q.filter(model.carga_id.in_(carga_ids))
     if desde:
         q = q.filter(model.fecha_operacion >= desde)
     if hasta:
         q = q.filter(model.fecha_operacion <= hasta)
-    if estado:
+    if estados:
+        if model is BilleteraMovimiento:
+            q = q.filter(BilleteraMovimiento.estado_payment.in_(estados))
+        else:
+            q = q.filter(BilleteraSalida.estado.in_(estados))
+    elif estado:
         if model is BilleteraMovimiento:
             q = q.filter(BilleteraMovimiento.estado_payment.ilike(f"%{estado}%"))
         else:
@@ -229,13 +380,29 @@ def _build_analisis_context():
 
     tipo_mov = _clean_str(request.args.get("tipo_movimiento"))
     entidad = _clean_str(request.args.get("entidad"))
-    if tipo_mov:
-        mov_q = mov_q.filter(BilleteraMovimiento.tipo_movimiento == tipo_mov)
-    if entidad:
-        sal_q = sal_q.filter(BilleteraSalida.entidad.ilike(f"%{entidad}%"))
+    tipos_mov = _get_str_list_arg("tipos_movimiento[]")
+    entidades = _get_str_list_arg("entidades[]")
+    if tipo_mov and tipo_mov not in tipos_mov:
+        tipos_mov.append(tipo_mov)
+    if entidad and entidad not in entidades:
+        entidades.append(entidad)
+    if tipos_mov:
+        mov_q = mov_q.filter(BilleteraMovimiento.tipo_movimiento.in_(tipos_mov))
+    if entidades:
+        sal_q = sal_q.filter(BilleteraSalida.entidad.in_(entidades))
 
-    mov_items = mov_q.order_by(BilleteraMovimiento.fecha_operacion.desc()).limit(500).all()
-    sal_items = sal_q.order_by(BilleteraSalida.fecha_operacion.desc()).limit(300).all()
+    mov_items = (
+        mov_q.options(joinedload(BilleteraMovimiento.carga).joinedload(BilleteraCarga.caso), joinedload(BilleteraMovimiento.carga).joinedload(BilleteraCarga.sujeto))
+        .order_by(BilleteraMovimiento.fecha_operacion.desc())
+        .limit(500)
+        .all()
+    )
+    sal_items = (
+        sal_q.options(joinedload(BilleteraSalida.carga).joinedload(BilleteraCarga.caso), joinedload(BilleteraSalida.carga).joinedload(BilleteraCarga.sujeto))
+        .order_by(BilleteraSalida.fecha_operacion.desc())
+        .limit(300)
+        .all()
+    )
 
     mov_count, mov_total = mov_q.with_entities(
         func.count(BilleteraMovimiento.id), func.coalesce(func.sum(BilleteraMovimiento.total_pagado), 0)
@@ -343,6 +510,33 @@ def _build_analisis_context():
         .order_by(BilleteraMovimiento.tipo_movimiento.asc())
         .all()
     )
+    estado_mov_opts = (
+        _q_movimientos()
+        .with_entities(BilleteraMovimiento.estado_payment)
+        .filter(BilleteraMovimiento.estado_payment.isnot(None))
+        .distinct()
+        .order_by(BilleteraMovimiento.estado_payment.asc())
+        .all()
+    )
+    estado_sal_opts = (
+        _q_salidas()
+        .with_entities(BilleteraSalida.estado)
+        .filter(BilleteraSalida.estado.isnot(None))
+        .distinct()
+        .order_by(BilleteraSalida.estado.asc())
+        .all()
+    )
+    entidad_opts = (
+        _q_salidas()
+        .with_entities(BilleteraSalida.entidad)
+        .filter(BilleteraSalida.entidad.isnot(None))
+        .distinct()
+        .order_by(BilleteraSalida.entidad.asc())
+        .all()
+    )
+
+    casos_opts = _q_casos_accesibles().order_by(AnalisisPuntoCaso.created_at.desc()).limit(300).all()
+    sujetos_opts = _q_sujetos_accesibles().order_by(Sujeto.apodo, Sujeto.nombre).limit(500).all()
 
     return {
         "mov_items": mov_items,
@@ -354,6 +548,15 @@ def _build_analisis_context():
         "top_buyer": top_buyer,
         "top_entidad": top_entidad,
         "tipo_mov_opts": [r[0] for r in tipo_mov_opts if r[0]],
+        "estado_opts": sorted(set([r[0] for r in estado_mov_opts if r[0]] + [r[0] for r in estado_sal_opts if r[0]])),
+        "entidad_opts": [r[0] for r in entidad_opts if r[0]],
+        "casos_opts": casos_opts,
+        "sujetos_opts": sujetos_opts,
+        "selected_caso_ids": _get_int_list_arg("caso_ids[]"),
+        "selected_sujeto_ids": _get_int_list_arg("sujeto_ids[]"),
+        "selected_tipos_mov": tipos_mov,
+        "selected_estados": _get_str_list_arg("estados[]"),
+        "selected_entidades": entidades,
         "alertas": alertas,
         "mov_daily_json": json.dumps(mov_daily),
         "sal_daily_json": json.dumps(sal_daily),
@@ -375,6 +578,8 @@ def index():
         return redirect(url_for("core.dashboard"))
 
     cargas_recientes = _q_cargas().order_by(BilleteraCarga.created_at.desc()).limit(20).all()
+    casos_count = _q_casos_accesibles().count()
+    sujetos_count = _q_sujetos_accesibles().count()
 
     kpi_mov = _q_movimientos().with_entities(
         func.count(BilleteraMovimiento.id), func.coalesce(func.sum(BilleteraMovimiento.total_pagado), 0)
@@ -390,6 +595,8 @@ def index():
         mov_total=float(kpi_mov[1] or 0),
         sal_count=int(kpi_sal[0] or 0),
         sal_total=float(kpi_sal[1] or 0),
+        casos_count=casos_count,
+        sujetos_count=sujetos_count,
     )
 
 
@@ -398,6 +605,9 @@ def cargas():
     if not _permiso_view():
         flash("No tiene permisos para ver Billeteras Virtuales.", "warning")
         return redirect(url_for("core.dashboard"))
+
+    casos_opts = _q_casos_accesibles().order_by(AnalisisPuntoCaso.created_at.desc()).limit(300).all()
+    sujetos_opts = _q_sujetos_accesibles().order_by(Sujeto.apodo, Sujeto.nombre).limit(500).all()
 
     if request.method == "POST":
         if not _permiso_upload():
@@ -430,9 +640,17 @@ def cargas():
             flash("No se detectó un formato compatible (movimientos o salidas).", "danger")
             return redirect(url_for("billeteras_virtuales.cargas"))
 
+        caso = _get_caso_accesible(request.form.get("caso_id"))
+        if not caso:
+            flash("Debe seleccionar un caso válido.", "warning")
+            return redirect(url_for("billeteras_virtuales.cargas"))
+        sujeto = _get_sujeto_accesible(request.form.get("sujeto_id"))
+
         carga = BilleteraCarga(
             unidad_id=current_user.unidad_id,
             user_id=current_user.id,
+            sujeto_id=sujeto.id if sujeto else None,
+            caso_id=caso.id,
             tipo_archivo=tipo,
             nombre_archivo=f.filename,
             archivo_hash=file_hash,
@@ -455,11 +673,25 @@ def cargas():
 
     cargas_q = _q_cargas().order_by(BilleteraCarga.created_at.desc())
     tipo = _clean_str(request.args.get("tipo"))
+    caso_id = request.args.get("caso_id", type=int)
+    sujeto_id = request.args.get("sujeto_id", type=int)
     if tipo in {"movimientos", "salidas"}:
         cargas_q = cargas_q.filter(BilleteraCarga.tipo_archivo == tipo)
+    if caso_id:
+        cargas_q = cargas_q.filter(BilleteraCarga.caso_id == caso_id)
+    if sujeto_id:
+        cargas_q = cargas_q.filter(BilleteraCarga.sujeto_id == sujeto_id)
 
     cargas_list = cargas_q.limit(200).all()
-    return render_template("billeteras_virtuales/cargas.html", cargas=cargas_list, tipo=tipo or "")
+    return render_template(
+        "billeteras_virtuales/cargas.html",
+        cargas=cargas_list,
+        tipo=tipo or "",
+        caso_id=caso_id,
+        sujeto_id=sujeto_id,
+        casos_opts=casos_opts,
+        sujetos_opts=sujetos_opts,
+    )
 
 
 @bp.route("/analisis")
@@ -480,15 +712,31 @@ def analisis_export_csv():
 
     mov_q = _apply_common_filters(_q_movimientos(), BilleteraMovimiento)
     sal_q = _apply_common_filters(_q_salidas(), BilleteraSalida)
+    tipos_mov = _get_str_list_arg("tipos_movimiento[]")
+    entidades = _get_str_list_arg("entidades[]")
     tipo_mov = _clean_str(request.args.get("tipo_movimiento"))
     entidad = _clean_str(request.args.get("entidad"))
-    if tipo_mov:
-        mov_q = mov_q.filter(BilleteraMovimiento.tipo_movimiento == tipo_mov)
-    if entidad:
-        sal_q = sal_q.filter(BilleteraSalida.entidad.ilike(f"%{entidad}%"))
+    if tipo_mov and tipo_mov not in tipos_mov:
+        tipos_mov.append(tipo_mov)
+    if entidad and entidad not in entidades:
+        entidades.append(entidad)
+    if tipos_mov:
+        mov_q = mov_q.filter(BilleteraMovimiento.tipo_movimiento.in_(tipos_mov))
+    if entidades:
+        sal_q = sal_q.filter(BilleteraSalida.entidad.in_(entidades))
 
-    mov_items = mov_q.order_by(BilleteraMovimiento.fecha_operacion.desc()).limit(2000).all()
-    sal_items = sal_q.order_by(BilleteraSalida.fecha_operacion.desc()).limit(2000).all()
+    mov_items = (
+        mov_q.options(joinedload(BilleteraMovimiento.carga).joinedload(BilleteraCarga.caso), joinedload(BilleteraMovimiento.carga).joinedload(BilleteraCarga.sujeto))
+        .order_by(BilleteraMovimiento.fecha_operacion.desc())
+        .limit(2000)
+        .all()
+    )
+    sal_items = (
+        sal_q.options(joinedload(BilleteraSalida.carga).joinedload(BilleteraCarga.caso), joinedload(BilleteraSalida.carga).joinedload(BilleteraCarga.sujeto))
+        .order_by(BilleteraSalida.fecha_operacion.desc())
+        .limit(2000)
+        .all()
+    )
 
     # little shim: csv.writer expects file-like with write()
     class _W:
@@ -498,11 +746,13 @@ def analisis_export_csv():
             self.parts.append(s)
     w = _W()
     cw = csv.writer(w)
-    cw.writerow(["tipo", "fecha", "estado", "monto", "nombre", "documento", "detalle", "entidad"])
+    cw.writerow(["tipo", "caso", "sujeto", "fecha", "estado", "monto", "nombre", "documento", "detalle", "entidad"])
     for r in mov_items:
         cw.writerow(
             [
                 "movimiento",
+                r.carga.caso.codigo if r.carga and r.carga.caso else "",
+                r.carga.sujeto.display_name() if r.carga and r.carga.sujeto else "",
                 r.fecha_operacion.isoformat() if r.fecha_operacion else "",
                 r.estado_payment or "",
                 float(r.total_pagado or 0),
@@ -516,6 +766,8 @@ def analisis_export_csv():
         cw.writerow(
             [
                 "salida",
+                r.carga.caso.codigo if r.carga and r.carga.caso else "",
+                r.carga.sujeto.display_name() if r.carga and r.carga.sujeto else "",
                 r.fecha_operacion.isoformat() if r.fecha_operacion else "",
                 r.estado or "",
                 float(r.monto_retirado or 0),
@@ -541,3 +793,65 @@ def analisis_informe():
     ctx = _build_analisis_context()
     ctx["emitido_en"] = datetime.utcnow()
     return render_template("billeteras_virtuales/informe.html", **ctx)
+
+
+@bp.route("/api/share/users")
+def api_share_users():
+    """Busca usuarios activos de la misma unidad para compartir."""
+    if not _permiso_view():
+        return Response("[]", mimetype="application/json"), 403
+    q = (request.args.get("q") or "").strip().lower()
+    users_q = User.query.filter(User.unidad_id == current_user.unidad_id, User.active.is_(True), User.id != current_user.id)
+    if q:
+        users_q = users_q.filter(or_(User.username.ilike(f"%{q}%"), User.email.ilike(f"%{q}%")))
+    users = users_q.order_by(User.username.asc()).limit(30).all()
+    payload = [{"id": u.id, "username": u.username, "email": u.email} for u in users]
+    return Response(json.dumps(payload), mimetype="application/json")
+
+
+@bp.route("/api/share/carga/<int:carga_id>", methods=["GET", "POST", "DELETE"])
+def api_share_carga(carga_id):
+    carga = _q_cargas().filter(BilleteraCarga.id == carga_id).first_or_404()
+    if not (_is_superadmin() or carga.user_id == current_user.id):
+        return Response(json.dumps({"error": "Sin permiso para compartir esta carga"}), mimetype="application/json"), 403
+
+    if request.method == "GET":
+        shares = (
+            BilleteraCargaCompartida.query
+            .join(User, User.id == BilleteraCargaCompartida.shared_with_user_id)
+            .filter(BilleteraCargaCompartida.carga_id == carga_id)
+            .order_by(User.username.asc())
+            .all()
+        )
+        payload = [{"id": s.shared_with.id, "username": s.shared_with.username, "email": s.shared_with.email} for s in shares]
+        return Response(json.dumps(payload), mimetype="application/json")
+
+    if request.method == "POST":
+        data = request.get_json(silent=True) or {}
+        user_id = data.get("user_id")
+        try:
+            user_id = int(user_id)
+        except Exception:
+            return Response(json.dumps({"error": "user_id inválido"}), mimetype="application/json"), 400
+        user = User.query.filter(User.id == user_id, User.unidad_id == current_user.unidad_id, User.active.is_(True)).first()
+        if not user or user.id == current_user.id:
+            return Response(json.dumps({"error": "Usuario destino inválido"}), mimetype="application/json"), 400
+        exists_row = BilleteraCargaCompartida.query.filter_by(carga_id=carga_id, shared_with_user_id=user.id).first()
+        if not exists_row:
+            db.session.add(
+                BilleteraCargaCompartida(
+                    carga_id=carga_id,
+                    shared_with_user_id=user.id,
+                    shared_by_user_id=current_user.id,
+                )
+            )
+            db.session.commit()
+        return Response(json.dumps({"ok": True}), mimetype="application/json")
+
+    # DELETE
+    user_id = request.args.get("user_id", type=int)
+    if not user_id:
+        return Response(json.dumps({"error": "user_id requerido"}), mimetype="application/json"), 400
+    BilleteraCargaCompartida.query.filter_by(carga_id=carga_id, shared_with_user_id=user_id).delete(synchronize_session=False)
+    db.session.commit()
+    return Response(json.dumps({"ok": True}), mimetype="application/json")

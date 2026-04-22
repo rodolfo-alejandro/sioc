@@ -5,18 +5,36 @@
 {% block content %}
 <div class="page-header">
     <h1><i class="bi bi-cloud-upload"></i> Cargas · Billeteras Virtuales</h1>
-    <p class="text-muted">Suba el Excel tal como se recibe. El sistema detecta automáticamente si es <strong>movimientos</strong> o <strong>salidas</strong>.</p>
+    <p class="text-muted">Misma lógica de Sábana: seleccione <strong>caso</strong>, opcionalmente <strong>sujeto</strong> y suba el Excel.</p>
 </div>
 
 <div class="card mb-3">
     <div class="card-body">
         <form method="POST" enctype="multipart/form-data" class="row g-2 align-items-end">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <div class="col-md-8">
+            <div class="col-md-4">
+                <label class="form-label">Caso (obligatorio)</label>
+                <select name="caso_id" class="form-select" required>
+                    <option value="">Seleccionar caso...</option>
+                    {% for c in casos_opts %}
+                    <option value="{{ c.id }}">{{ c.codigo }} — {{ c.titulo }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Sujeto (opcional)</label>
+                <select name="sujeto_id" class="form-select">
+                    <option value="">-- Sin vincular --</option>
+                    {% for s in sujetos_opts %}
+                    <option value="{{ s.id }}">{{ s.display_name() }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
                 <label class="form-label">Archivo Excel (.xlsx)</label>
                 <input type="file" name="archivo" accept=".xlsx" class="form-control" required>
             </div>
-            <div class="col-md-4 d-grid">
+            <div class="col-md-12 d-grid">
                 <button type="submit" class="btn btn-success"><i class="bi bi-upload"></i> Procesar carga</button>
             </div>
         </form>
@@ -26,11 +44,23 @@
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="mb-0"><i class="bi bi-list-check"></i> Historial de cargas</h5>
-        <form method="GET" class="d-flex gap-2">
+        <form method="GET" class="d-flex gap-2 flex-wrap">
             <select name="tipo" class="form-select form-select-sm" onchange="this.form.submit()">
                 <option value="" {{ '' == tipo and 'selected' or '' }}>Todos</option>
                 <option value="movimientos" {{ 'movimientos' == tipo and 'selected' or '' }}>Movimientos</option>
                 <option value="salidas" {{ 'salidas' == tipo and 'selected' or '' }}>Salidas</option>
+            </select>
+            <select name="caso_id" class="form-select form-select-sm" onchange="this.form.submit()">
+                <option value="">Todos los casos</option>
+                {% for c in casos_opts %}
+                <option value="{{ c.id }}" {{ c.id == caso_id and 'selected' or '' }}>{{ c.codigo }}</option>
+                {% endfor %}
+            </select>
+            <select name="sujeto_id" class="form-select form-select-sm" onchange="this.form.submit()">
+                <option value="">Todos los sujetos</option>
+                {% for s in sujetos_opts %}
+                <option value="{{ s.id }}" {{ s.id == sujeto_id and 'selected' or '' }}>{{ s.display_name() }}</option>
+                {% endfor %}
             </select>
         </form>
     </div>
@@ -41,9 +71,12 @@
                     <tr>
                         <th>Fecha carga</th>
                         <th>Tipo</th>
+                        <th>Caso</th>
+                        <th>Sujeto</th>
                         <th>Archivo</th>
                         <th>Registros</th>
                         <th>Rango fechas</th>
+                        <th></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -51,6 +84,20 @@
                     <tr>
                         <td>{{ c.created_at|localtime if c.created_at else '' }}</td>
                         <td><span class="badge bg-{{ 'primary' if c.tipo_archivo == 'movimientos' else 'warning text-dark' }}">{{ c.tipo_archivo }}</span></td>
+                        <td>
+                            {% if c.caso %}
+                                {{ c.caso.codigo }} — {{ c.caso.titulo }}
+                            {% else %}
+                                <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if c.sujeto %}
+                                {{ c.sujeto.display_name() }}
+                            {% else %}
+                                <span class="text-muted">Sin vincular</span>
+                            {% endif %}
+                        </td>
                         <td>{{ c.nombre_archivo }}</td>
                         <td>{{ c.registros_validos }}/{{ c.registros_total }}</td>
                         <td>
@@ -60,10 +107,49 @@
                                 <span class="text-muted">—</span>
                             {% endif %}
                         </td>
+                        <td class="text-end">
+                            <div class="dropdown">
+                                <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="bi bi-three-dots-vertical"></i>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li>
+                                        <a class="dropdown-item" href="{{ url_for('billeteras_virtuales.analisis') }}?carga_ids[]={{ c.id }}">
+                                            <i class="bi bi-table me-2"></i>Ver en análisis
+                                        </a>
+                                    </li>
+                                    {% if c.caso %}
+                                    <li>
+                                        <button type="button" class="dropdown-item"
+                                                data-bv-share data-share-type="caso" data-share-id="{{ c.caso.id }}"
+                                                data-share-title="Compartir caso {{ c.caso.codigo }}">
+                                            <i class="bi bi-share me-2"></i>Compartir caso
+                                        </button>
+                                    </li>
+                                    {% endif %}
+                                    {% if c.sujeto %}
+                                    <li>
+                                        <button type="button" class="dropdown-item"
+                                                data-bv-share data-share-type="sujeto" data-share-id="{{ c.sujeto.id }}"
+                                                data-share-title="Compartir sujeto {{ c.sujeto.display_name() }}">
+                                            <i class="bi bi-share me-2"></i>Compartir sujeto
+                                        </button>
+                                    </li>
+                                    {% endif %}
+                                    <li>
+                                        <button type="button" class="dropdown-item"
+                                                data-bv-share data-share-type="carga" data-share-id="{{ c.id }}"
+                                                data-share-title="Compartir carga {{ c.nombre_archivo or ('#' ~ c.id) }}">
+                                            <i class="bi bi-share me-2"></i>Compartir carga
+                                        </button>
+                                    </li>
+                                </ul>
+                            </div>
+                        </td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="5" class="text-center text-muted">Sin cargas registradas.</td>
+                        <td colspan="8" class="text-center text-muted">Sin cargas registradas.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -71,4 +157,34 @@
         </div>
     </div>
 </div>
+
+<div class="modal fade" id="bvShareModal" tabindex="-1" aria-labelledby="bv-share-title" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="bv-share-title">Compartir</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <label class="form-label">Buscar usuario</label>
+        <input type="text" class="form-control form-control-sm mb-2" id="bv-share-search" placeholder="Buscar por usuario o email...">
+        <div class="small text-muted mb-1">Resultados</div>
+        <div class="border rounded p-2 mb-3" style="max-height: 180px; overflow:auto;">
+          <div id="bv-share-results"></div>
+        </div>
+        <div class="small text-muted mb-1">Usuarios con acceso</div>
+        <div class="border rounded p-2" style="max-height: 220px; overflow:auto;">
+          <div id="bv-share-current"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/bv_share.js') }}"></script>
 {% endblock %}

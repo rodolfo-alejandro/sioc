@@ -5,27 +5,50 @@
 {% block content %}
 <div class="page-header">
     <h1><i class="bi bi-wallet2"></i> Billeteras Virtuales</h1>
-    <p class="text-muted">Flujo simple: <strong>Cargar Excel</strong> → <strong>Revisar tabla</strong> → <strong>Analizar patrones</strong>.</p>
+    <p class="text-muted">Flujo de trabajo: <strong>Casos</strong> → <strong>Sujetos</strong> → <strong>Cargas</strong> → <strong>Análisis</strong>.</p>
 </div>
 
 <div class="row g-3 mb-3">
+    <div class="col-md-4">
+        <div class="card h-100 border-primary border-opacity-25">
+            <div class="card-body text-center">
+                <i class="bi bi-briefcase display-5 text-primary"></i>
+                <h5 class="mt-2">Casos</h5>
+                <p class="text-muted">{{ casos_count|number_format }} casos disponibles para vincular evidencia.</p>
+                <a class="btn btn-primary" href="{{ url_for('analisis_puntos.index') }}">Abrir casos</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-person display-5 text-secondary"></i>
+                <h5 class="mt-2">Sujetos</h5>
+                <p class="text-muted">{{ sujetos_count|number_format }} sujetos disponibles para vinculación.</p>
+                <a class="btn btn-outline-secondary" href="{{ url_for('sabana_llamadas.sujetos_list') }}">Abrir sujetos</a>
+            </div>
+        </div>
+    </div>
     <div class="col-md-4">
         <div class="card h-100 border-success border-opacity-25">
             <div class="card-body text-center">
                 <i class="bi bi-cloud-upload display-5 text-success"></i>
                 <h5 class="mt-2">Cargas</h5>
-                <p class="text-muted">Suba archivos de movimientos o extracciones/salidas.</p>
+                <p class="text-muted">Suba movimientos/salidas y vincule cada archivo a caso y sujeto.</p>
                 <a class="btn btn-success" href="{{ url_for('billeteras_virtuales.cargas') }}">Abrir cargas</a>
             </div>
         </div>
     </div>
+</div>
+
+<div class="row g-3 mb-3">
     <div class="col-md-4">
-        <div class="card h-100 border-primary border-opacity-25">
+        <div class="card h-100 border-danger border-opacity-25">
             <div class="card-body text-center">
-                <i class="bi bi-table display-5 text-primary"></i>
-                <h5 class="mt-2">Tabla y filtros</h5>
-                <p class="text-muted">Filtre por fecha, estado, tipo de movimiento y persona.</p>
-                <a class="btn btn-primary" href="{{ url_for('billeteras_virtuales.analisis') }}">Abrir análisis</a>
+                <i class="bi bi-graph-up display-5 text-danger"></i>
+                <h5 class="mt-2">Análisis</h5>
+                <p class="text-muted">Tabla, alertas, serie temporal, vínculos y exportaciones.</p>
+                <a class="btn btn-outline-danger" href="{{ url_for('billeteras_virtuales.analisis') }}">Abrir análisis</a>
             </div>
         </div>
     </div>
@@ -52,6 +75,8 @@
                     <tr>
                         <th>Fecha</th>
                         <th>Tipo</th>
+                        <th>Caso</th>
+                        <th>Sujeto</th>
                         <th>Archivo</th>
                         <th>Registros</th>
                         <th>Rango fechas</th>
@@ -62,6 +87,20 @@
                     <tr>
                         <td>{{ c.created_at|localtime if c.created_at else '' }}</td>
                         <td><span class="badge bg-{{ 'primary' if c.tipo_archivo == 'movimientos' else 'warning text-dark' }}">{{ c.tipo_archivo }}</span></td>
+                        <td>
+                            {% if c.caso %}
+                                {{ c.caso.codigo }} — {{ c.caso.titulo }}
+                            {% else %}
+                                <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if c.sujeto %}
+                                {{ c.sujeto.display_name() }}
+                            {% else %}
+                                <span class="text-muted">Sin vincular</span>
+                            {% endif %}
+                        </td>
                         <td>{{ c.nombre_archivo }}</td>
                         <td>{{ c.registros_validos }}/{{ c.registros_total }}</td>
                         <td>
@@ -74,7 +113,7 @@
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="5" class="text-center text-muted">Aún no hay cargas.</td>
+                        <td colspan="7" class="text-center text-muted">Aún no hay cargas.</td>
                     </tr>
                     {% endfor %}
                 </tbody>

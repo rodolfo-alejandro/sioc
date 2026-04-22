@@ -12,6 +12,8 @@ class BilleteraCarga(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     unidad_id = db.Column(db.Integer, db.ForeignKey("unidades.id"), nullable=False, index=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    sujeto_id = db.Column(db.Integer, db.ForeignKey("sabana_sujetos.id"), nullable=True, index=True)
+    caso_id = db.Column(db.Integer, db.ForeignKey("ap_casos.id"), nullable=True, index=True)
 
     # movimientos | salidas
     tipo_archivo = db.Column(db.String(20), nullable=False, index=True)
@@ -25,6 +27,9 @@ class BilleteraCarga(db.Model):
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
 
+    sujeto = db.relationship("Sujeto", foreign_keys=[sujeto_id], backref="bv_cargas")
+    caso = db.relationship("AnalisisPuntoCaso", foreign_keys=[caso_id], backref="bv_cargas")
+
     movimientos = db.relationship(
         "BilleteraMovimiento",
         backref="carga",
@@ -33,6 +38,12 @@ class BilleteraCarga(db.Model):
     )
     salidas = db.relationship(
         "BilleteraSalida",
+        backref="carga",
+        lazy="dynamic",
+        cascade="all, delete-orphan",
+    )
+    compartidos = db.relationship(
+        "BilleteraCargaCompartida",
         backref="carga",
         lazy="dynamic",
         cascade="all, delete-orphan",
@@ -105,3 +116,16 @@ class BilleteraSalida(db.Model):
     entidad = db.Column(db.String(200), nullable=True, index=True)
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+
+class BilleteraCargaCompartida(db.Model):
+    """Comparte una carga de billetera con otro usuario de la misma unidad."""
+    __tablename__ = "bv_cargas_compartidas"
+
+    carga_id = db.Column(db.Integer, db.ForeignKey("bv_cargas.id"), primary_key=True, nullable=False)
+    shared_with_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), primary_key=True, nullable=False, index=True)
+    shared_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    shared_with = db.relationship("User", foreign_keys=[shared_with_user_id])
+    shared_by = db.relationship("User", foreign_keys=[shared_by_user_id])
