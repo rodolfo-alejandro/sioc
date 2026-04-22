@@ -19,6 +19,11 @@
             <li>Salidas: <strong>{{ sal_count|number_format }}</strong> (monto: <strong>$ {{ '%.2f'|format(sal_total or 0) }}</strong>)</li>
         </ul>
 
+        <h5>Informe redactado</h5>
+        <div class="p-3 mb-3" style="background:#f8f9fa;border-left:4px solid #0d6efd;">
+            {{ resumen_narrativo }}
+        </div>
+
         <h5>Alertas</h5>
         {% if alertas %}
         <ul>
@@ -66,6 +71,32 @@
                 </tbody>
             </table>
         </div>
+
+        <h5>Top vínculos (de → hacia)</h5>
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <thead><tr><th>De</th><th>Hacia</th><th>Transacciones</th><th>Monto total</th></tr></thead>
+                <tbody>
+                    {% for r in top_vinculos %}
+                    <tr>
+                        <td>{{ r.de or '—' }}</td>
+                        <td>{{ r.hacia or '—' }}</td>
+                        <td>{{ r.cantidad or 0 }}</td>
+                        <td>$ {{ '%.2f'|format(r.monto_total or 0) }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="4" class="text-muted text-center">Sin datos</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <h5>Recomendaciones operativas</h5>
+        <ul>
+            {% for r in recomendaciones %}
+            <li>{{ r }}</li>
+            {% endfor %}
+        </ul>
     </div>
 </div>
 {% endblock %}

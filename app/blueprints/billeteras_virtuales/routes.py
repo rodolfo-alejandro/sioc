@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import csv
+from collections import defaultdict
 from datetime import datetime
 from decimal import Decimal
 from io import BytesIO
@@ -38,6 +39,20 @@ _ESTADO_LABELS = {
     "cancelled": "Cancelado",
     "pending": "Pendiente",
 }
+_MESES_ES = [
+    "ene",
+    "feb",
+    "mar",
+    "abr",
+    "may",
+    "jun",
+    "jul",
+    "ago",
+    "sep",
+    "oct",
+    "nov",
+    "dic",
+]
 
 
 def _permiso_view():
@@ -297,6 +312,15 @@ def _parse_num(v):
         return Decimal(f"{float(n):.2f}")
     except Exception:
         return None
+
+
+def _fmt_fecha_es(d):
+    if not d:
+        return ""
+    try:
+        return f"{d.day:02d} {_MESES_ES[d.month - 1]} {d.year}"
+    except Exception:
+        return str(d)
 
 
 def _detect_tipo_archivo(df: pd.DataFrame) -> str | None:
@@ -570,10 +594,18 @@ def _build_analisis_context():
         .order_by(func.date(BilleteraSalida.fecha_operacion))
         .all()
     )
-    mov_daily = [{"fecha": str(r[0]), "total": float(r[1] or 0)} for r in mov_daily_raw if r[0]]
-    sal_daily = [{"fecha": str(r[0]), "total": float(r[1] or 0)} for r in sal_daily_raw if r[0]]
+    mov_daily = [
+        {"fecha": str(r[0]), "fecha_label": _fmt_fecha_es(r[0]), "total": float(r[1] or 0)}
+        for r in mov_daily_raw
+        if r[0]
+    ]
+    sal_daily = [
+        {"fecha": str(r[0]), "fecha_label": _fmt_fecha_es(r[0]), "total": float(r[1] or 0)}
+        for r in sal_daily_raw
+        if r[0]
+    ]
 
-    # Grafo simple: usuario central -> top buyers y top entidades
+    # Compatibilidad para secciones anteriores (informe)
     buyer_graph = []
     for r in top_buyer[:12]:
         nombre = (r[0] or "Sin nombre").strip()
@@ -584,6 +616,92 @@ def _build_analisis_context():
     for r in top_entidad[:12]:
         etiqueta = (r[0] or "Sin entidad").strip()
         entidad_graph.append({"label": etiqueta, "total": float(r[2] or 0)})
+
+    detalle_diario = []
+    vinculos = defaultdict(
+        lambda: {
+            "de": "—",
+            "hacia": "—",
+            "cantidad": 0,
+            "monto_total": 0.0,
+            "movimientos": 0,
+            "salidas": 0,
+        }
+    )
+    for item in mov_rows:
+        r = item["row"]
+        fecha_dia = r.fecha_operacion.date().isoformat() if r.fecha_operacion else ""
+        monto = float(r.total_pagado or 0)
+        de = item["origen_label"] or "—"
+        hacia = item["destino_label"] or "—"
+        detalle_diario.append(
+            {
+                "fecha_dia": fecha_dia,
+                "fecha": str(r.fecha_operacion) if r.fecha_operacion else "",
+                "tipo": "Movimiento",
+                "sentido": item["sentido_label"],
+                "estado": item["estado_label"],
+                "monto": monto,
+                "de": de,
+                "hacia": hacia,
+                "metodo": r.metodo_pago or "—",
+                "referencia": r.nombre_destino_account or r.documento_destino_account or r.nombre_seller or "—",
+                "entidad": "—",
+                "serie": "Movimientos",
+            }
+        )
+        key = (de, hacia)
+        v = vinculos[key]
+        v["de"] = de
+        v["hacia"] = hacia
+        v["cantidad"] += 1
+        v["monto_total"] += monto
+        v["movimientos"] += 1
+
+    for item in sal_rows:
+        r = item["row"]
+        fecha_dia = r.fecha_operacion.date().isoformat() if r.fecha_operacion else ""
+        monto = float(r.monto_retirado or 0)
+        de = item["origen_label"] or "—"
+        hacia = item["destino_label"] or "—"
+        detalle_diario.append(
+            {
+                "fecha_dia": fecha_dia,
+                "fecha": str(r.fecha_operacion) if r.fecha_operacion else "",
+                "tipo": "Salida",
+                "sentido": item["sentido_label"],
+                "estado": item["estado_label"],
+                "monto": monto,
+                "de": de,
+                "hacia": hacia,
+                "metodo": r.cuenta_destino or "—",
+                "referencia": r.detalle or "—",
+                "entidad": r.entidad or "—",
+                "serie": "Salidas",
+            }
+        )
+        key = (de, hacia)
+        v = vinculos[key]
+        v["de"] = de
+        v["hacia"] = hacia
+        v["cantidad"] += 1
+        v["monto_total"] += monto
+        v["salidas"] += 1
+
+    resumen_vinculos = sorted(
+        vinculos.values(),
+        key=lambda x: (float(x["monto_total"] or 0), int(x["cantidad"] or 0)),
+        reverse=True,
+    )
+    graph_edges = [
+        {
+            "source": v["de"],
+            "target": v["hacia"],
+            "cantidad": int(v["cantidad"] or 0),
+            "monto_total": float(v["monto_total"] or 0),
+        }
+        for v in resumen_vinculos[:140]
+    ]
 
     # Alertas automáticas básicas
     alertas = []
@@ -614,6 +732,50 @@ def _build_analisis_context():
     )
     if sin_doc_destino > 0:
         alertas.append(f"Existen {sin_doc_destino} salidas sin documento de destino informado.")
+
+    ratio_salidas = 0.0
+    if float(mov_total or 0) > 0:
+        ratio_salidas = float(sal_total or 0) / float(mov_total or 1)
+
+    contraparte_top_txt = "Sin contraparte dominante"
+    if top_buyer:
+        nom = (top_buyer[0][0] or "Sin nombre").strip()
+        doc = (top_buyer[0][1] or "").strip()
+        cant = int(top_buyer[0][2] or 0)
+        total = float(top_buyer[0][3] or 0)
+        contraparte_top_txt = f"{nom}{f' ({doc})' if doc else ''}: {cant} operaciones por $ {total:,.2f}"
+
+    entidad_top_txt = "Sin entidad dominante"
+    if top_entidad:
+        ent = (top_entidad[0][0] or "Sin entidad").strip()
+        cant_e = int(top_entidad[0][1] or 0)
+        tot_e = float(top_entidad[0][2] or 0)
+        entidad_top_txt = f"{ent}: {cant_e} salidas por $ {tot_e:,.2f}"
+
+    resumen_narrativo = (
+        f"Con los filtros aplicados se identificaron {int(mov_count or 0)} movimientos por un total de "
+        f"$ {float(mov_total or 0):,.2f} y {int(sal_count or 0)} salidas por $ {float(sal_total or 0):,.2f}. "
+        f"El nivel de egreso representa aproximadamente {ratio_salidas * 100:.1f}% del monto de movimientos. "
+        f"Principal contraparte: {contraparte_top_txt}. Principal entidad de salida: {entidad_top_txt}."
+    )
+
+    recomendaciones = []
+    if ratio_salidas >= 0.6:
+        recomendaciones.append(
+            "Priorizar trazabilidad de fondos en salidas y validar beneficiarios finales de los mayores egresos."
+        )
+    if top_buyer and float(mov_total or 0) > 0 and (float(top_buyer[0][3] or 0) / float(mov_total)) >= 0.35:
+        recomendaciones.append(
+            "Ampliar análisis sobre la contraparte principal por posible concentración operativa."
+        )
+    if sin_doc_destino > 0:
+        recomendaciones.append(
+            "Regularizar identificación de destinos sin documento para reducir riesgo de anonimización."
+        )
+    if not recomendaciones:
+        recomendaciones.append(
+            "Mantener monitoreo periódico y comparar contra nuevas cargas para detectar variaciones atípicas."
+        )
 
     tipo_mov_opts = (
         _q_movimientos()
@@ -673,8 +835,14 @@ def _build_analisis_context():
         "selected_estados": _get_str_list_arg("estados[]"),
         "selected_entidades": entidades,
         "alertas": alertas,
+        "resumen_narrativo": resumen_narrativo,
+        "recomendaciones": recomendaciones,
+        "top_vinculos": resumen_vinculos[:10],
         "mov_daily_json": json.dumps(mov_daily),
         "sal_daily_json": json.dumps(sal_daily),
+        "detalle_diario_json": json.dumps(detalle_diario),
+        "resumen_vinculos_json": json.dumps(resumen_vinculos[:500]),
+        "rel_graph_json": json.dumps(graph_edges),
         "buyer_graph_json": json.dumps(buyer_graph),
         "entidad_graph_json": json.dumps(entidad_graph),
     }

@@ -180,6 +180,17 @@
 
 <div class="tab-content" id="bv-analisis-tabs-content">
     <div class="tab-pane fade show active" id="tab-bv-tabla" role="tabpanel" aria-labelledby="tab-bv-tabla-tab">
+        <div class="d-flex justify-content-end mb-2">
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" role="switch" id="bv-switch-agrupado">
+                <label class="form-check-label" for="bv-switch-agrupado">Vista agrupada por vínculo</label>
+            </div>
+        </div>
+        <div class="mb-2">
+            <input type="text" id="bv-tabla-search" class="form-control form-control-sm" placeholder="Buscar en tablas de Billeteras...">
+        </div>
+
+        <div id="bv-tabla-detalle">
         <div class="card mb-3">
             <div class="card-header"><h6 class="mb-0">Movimientos (últimos 500)</h6></div>
             <div class="card-body">
@@ -187,16 +198,14 @@
                     <table class="table table-sm align-middle">
                         <thead>
                             <tr>
-                                <th>Fecha</th><th>Caso</th><th>Sujeto</th><th>Tipo</th><th>Sentido</th><th>Estado</th><th>Monto</th><th>De</th><th>Hacia</th><th>Método</th><th>Ref. destino</th>
+                                <th>Fecha</th><th>Tipo</th><th>Sentido</th><th>Estado</th><th>Monto</th><th>De</th><th>Hacia</th><th>Método</th><th>Ref. destino</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody id="bv-mov-body">
                             {% for item in mov_rows %}
                             {% set r = item.row %}
                             <tr>
                                 <td>{{ r.fecha_operacion|localtime if r.fecha_operacion else '' }}</td>
-                                <td>{{ r.carga.caso.codigo if r.carga and r.carga.caso else '—' }}</td>
-                                <td>{{ r.carga.sujeto.display_name() if r.carga and r.carga.sujeto else '—' }}</td>
                                 <td>{{ item.tipo_label }}</td>
                                 <td><span class="badge bg-light text-dark border">{{ item.sentido_label }}</span></td>
                                 <td>{{ item.estado_label }}</td>
@@ -207,7 +216,7 @@
                                 <td>{{ r.nombre_destino_account or r.documento_destino_account or r.nombre_seller or '—' }}</td>
                             </tr>
                             {% else %}
-                            <tr><td colspan="11" class="text-muted text-center">Sin movimientos.</td></tr>
+                            <tr><td colspan="9" class="text-muted text-center">Sin movimientos.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -222,16 +231,14 @@
                     <table class="table table-sm align-middle">
                         <thead>
                             <tr>
-                                <th>Fecha</th><th>Caso</th><th>Sujeto</th><th>Sentido</th><th>Estado</th><th>Monto</th><th>De</th><th>Hacia</th><th>Cuenta</th><th>Entidad</th>
+                                <th>Fecha</th><th>Sentido</th><th>Estado</th><th>Monto</th><th>De</th><th>Hacia</th><th>Cuenta</th><th>Entidad</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody id="bv-sal-body">
                             {% for item in sal_rows %}
                             {% set r = item.row %}
                             <tr>
                                 <td>{{ r.fecha_operacion|localtime if r.fecha_operacion else '' }}</td>
-                                <td>{{ r.carga.caso.codigo if r.carga and r.carga.caso else '—' }}</td>
-                                <td>{{ r.carga.sujeto.display_name() if r.carga and r.carga.sujeto else '—' }}</td>
                                 <td><span class="badge bg-warning text-dark">{{ item.sentido_label }}</span></td>
                                 <td>{{ item.estado_label }}</td>
                                 <td>$ {{ '%.2f'|format(r.monto_retirado or 0) }}</td>
@@ -241,9 +248,29 @@
                                 <td>{{ r.entidad or '—' }}</td>
                             </tr>
                             {% else %}
-                            <tr><td colspan="10" class="text-muted text-center">Sin salidas.</td></tr>
+                            <tr><td colspan="8" class="text-muted text-center">Sin salidas.</td></tr>
                             {% endfor %}
                         </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        </div>
+
+        <div class="card d-none" id="bv-tabla-agrupada">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">Vínculos agrupados (de → hacia)</h6>
+                <span class="text-muted small">Cantidad de transacciones y monto acumulado</span>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle">
+                        <thead>
+                            <tr>
+                                <th>De</th><th>Hacia</th><th>Transacciones</th><th>Mov.</th><th>Sal.</th><th>Monto total</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bv-tabla-agrupada-body"></tbody>
                     </table>
                 </div>
             </div>
@@ -252,9 +279,47 @@
 
     <div class="tab-pane fade" id="tab-bv-grafo" role="tabpanel" aria-labelledby="tab-bv-grafo-tab">
         <div class="card">
-            <div class="card-header"><h6 class="mb-0">Grafo de vínculos (top montos)</h6></div>
+            <div class="card-header"><h6 class="mb-0">Grafo de vínculos (quién, con quién y cuántas veces)</h6></div>
             <div class="card-body">
-                <div id="bv-chart-grafo" style="height:420px;"></div>
+                <div class="d-flex flex-wrap align-items-center gap-3 mb-2">
+                    <div class="d-flex align-items-center gap-2">
+                        <label class="small mb-0 text-nowrap" for="bv-rel-node-scale">Tamaño nodos</label>
+                        <input type="range" id="bv-rel-node-scale" min="80" max="150" value="100" class="form-range" style="width: 80px;">
+                        <span class="small text-muted" id="bv-rel-node-scale-val">100%</span>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <label class="small mb-0 text-nowrap" for="bv-rel-edge-label-size">Nº en líneas</label>
+                        <input type="range" id="bv-rel-edge-label-size" min="8" max="24" value="10" class="form-range" style="width: 80px;">
+                        <span class="small text-muted" id="bv-rel-edge-label-size-val">10</span>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <label class="small mb-0 text-nowrap" for="bv-rel-edge-min">Umbral</label>
+                        <input type="range" id="bv-rel-edge-min" min="1" max="50" value="1" class="form-range" style="width: 90px;">
+                        <span class="small text-muted" id="bv-rel-edge-min-val">>= 1</span>
+                    </div>
+                </div>
+                <div id="bv-relaciones-graph" style="height:420px;"></div>
+            </div>
+        </div>
+        <div class="card mt-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">Detalle de selección del grafo</h6>
+                <span id="bv-grafo-detalle-tag" class="badge bg-light text-dark border">Sin selección</span>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-2">Click en un nodo para ver todas sus operaciones; click en una arista para ver solo ese vínculo.</p>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th><th>Tipo</th><th>Sentido</th><th>Estado</th><th>Monto</th><th>De</th><th>Hacia</th><th>Método/Cuenta</th><th>Ref/Entidad</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bv-grafo-detalle-body">
+                            <tr><td colspan="9" class="text-muted text-center">Hacé click en un nodo o una arista para ver detalle.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
@@ -266,6 +331,26 @@
                 <div id="bv-chart-diario" style="height:420px;"></div>
             </div>
         </div>
+        <div class="card mt-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">Detalle del punto seleccionado</h6>
+                <span id="bv-detalle-fecha" class="badge bg-light text-dark border">Sin selección</span>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th><th>Tipo</th><th>Sentido</th><th>Estado</th><th>Monto</th><th>De</th><th>Hacia</th><th>Método/Cuenta</th><th>Ref/Entidad</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bv-detalle-dia-body">
+                            <tr><td colspan="9" class="text-muted text-center">Hacé click en un punto del gráfico para ver el detalle.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="tab-pane fade" id="tab-bv-informe" role="tabpanel" aria-labelledby="tab-bv-informe-tab">
@@ -273,6 +358,14 @@
             <strong>Guía rápida:</strong> <strong>Ingreso</strong> = dinero que entra a la cuenta investigada.
             <strong>Salida</strong> = dinero que sale de esa cuenta.
             <strong>Salida/Extracción</strong> = transferencias/retiros hacia cuentas o entidades externas.
+        </div>
+        <div class="card mb-3">
+            <div class="card-header"><h6 class="mb-0">Informe redactado automático</h6></div>
+            <div class="card-body">
+                <div class="p-3" style="background:#f8f9fa;border-left:4px solid #0d6efd;">
+                    {{ resumen_narrativo }}
+                </div>
+            </div>
         </div>
         <div class="card mb-3">
             <div class="card-header"><h6 class="mb-0">Alertas automáticas</h6></div>
@@ -286,6 +379,39 @@
                 {% else %}
                     <p class="text-muted mb-0">Sin alertas relevantes con los filtros actuales.</p>
                 {% endif %}
+            </div>
+        </div>
+        <div class="card mb-3">
+            <div class="card-header"><h6 class="mb-0">Recomendaciones operativas</h6></div>
+            <div class="card-body">
+                <ul class="mb-0">
+                    {% for r in recomendaciones %}
+                    <li>{{ r }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header"><h6 class="mb-0">Top vínculos (de → hacia)</h6></div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead><tr><th>De</th><th>Hacia</th><th>Transacciones</th><th>Total</th></tr></thead>
+                        <tbody>
+                            {% for r in top_vinculos %}
+                            <tr>
+                                <td>{{ r.de or '—' }}</td>
+                                <td>{{ r.hacia or '—' }}</td>
+                                <td>{{ r.cantidad or 0 }}</td>
+                                <td>$ {{ '%.2f'|format(r.monto_total or 0) }}</td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="4" class="text-muted text-center">Sin datos</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
@@ -348,11 +474,149 @@
 (function () {
     var movDaily = {{ mov_daily_json|safe }};
     var salDaily = {{ sal_daily_json|safe }};
-    var buyerGraph = {{ buyer_graph_json|safe }};
-    var entidadGraph = {{ entidad_graph_json|safe }};
+    var detalleDiario = {{ detalle_diario_json|safe }};
+    var resumenVinculos = {{ resumen_vinculos_json|safe }};
+    var relGraph = {{ rel_graph_json|safe }};
 
     var graphReady = false;
     var chartReady = false;
+    var chartWired = false;
+    var graphState = {
+        svg: null,
+        nodesMap: null,
+        links: [],
+        selectedNode: null,
+        selectedEdge: null,
+        focusMode: false,
+        focusNode: null,
+        focusEdge: null,
+        layoutKey: null,
+        graphOpts: {
+            nodeScale: 1,
+            edgeLabelFontSize: 10,
+            edgeMin: 1,
+        },
+    };
+
+    function fmtMoney(v) {
+        var n = Number(v || 0);
+        try {
+            return '$ ' + n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        } catch (e) {
+            return '$ ' + n.toFixed(2);
+        }
+    }
+
+    function shortLabel(txt) {
+        txt = (txt || '—').toString();
+        return txt.length > 28 ? txt.slice(0, 27) + '…' : txt;
+    }
+
+    function escapeHtml(txt) {
+        return (txt || '').toString()
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#39;');
+    }
+
+    function getGraphOpts() {
+        var nodeScaleEl = document.getElementById('bv-rel-node-scale');
+        var edgeLabelEl = document.getElementById('bv-rel-edge-label-size');
+        var edgeMinEl = document.getElementById('bv-rel-edge-min');
+        var nodeScalePct = (nodeScaleEl && parseInt(nodeScaleEl.value, 10)) || 100;
+        var edgeLabelFontSize = (edgeLabelEl && parseInt(edgeLabelEl.value, 10)) || 10;
+        var edgeMin = (edgeMinEl && parseInt(edgeMinEl.value, 10)) || 1;
+        return {
+            nodeScale: Math.max(0.8, Math.min(1.5, nodeScalePct / 100)),
+            edgeLabelFontSize: Math.max(8, Math.min(24, edgeLabelFontSize)),
+            edgeMin: Math.max(1, Math.min(50, edgeMin)),
+        };
+    }
+
+    function updateGraphControlLabels() {
+        var nodeScaleEl = document.getElementById('bv-rel-node-scale');
+        var edgeLabelEl = document.getElementById('bv-rel-edge-label-size');
+        var edgeMinEl = document.getElementById('bv-rel-edge-min');
+        var nodeScaleVal = document.getElementById('bv-rel-node-scale-val');
+        var edgeLabelVal = document.getElementById('bv-rel-edge-label-size-val');
+        var edgeMinVal = document.getElementById('bv-rel-edge-min-val');
+        if (nodeScaleEl && nodeScaleVal) nodeScaleVal.textContent = (parseInt(nodeScaleEl.value, 10) || 100) + '%';
+        if (edgeLabelEl && edgeLabelVal) edgeLabelVal.textContent = String(parseInt(edgeLabelEl.value, 10) || 10);
+        if (edgeMinEl && edgeMinVal) edgeMinVal.textContent = '>= ' + (parseInt(edgeMinEl.value, 10) || 1);
+    }
+
+    function graphLayoutKey() {
+        return 'bv_rel_graph_layout::' + (window.location.pathname || '') + '::' + (window.location.search || '');
+    }
+
+    function loadGraphLayout(key) {
+        if (!key) return null;
+        try {
+            var raw = localStorage.getItem(key);
+            if (!raw) return null;
+            var parsed = JSON.parse(raw);
+            return parsed && typeof parsed === 'object' ? parsed : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function saveGraphLayout() {
+        if (!graphState.layoutKey || !graphState.nodesMap) return;
+        try {
+            var payload = {};
+            Object.keys(graphState.nodesMap).forEach(function (id) {
+                var n = graphState.nodesMap[id];
+                if (!n) return;
+                payload[id] = { x: Number(n.x || 0), y: Number(n.y || 0) };
+            });
+            localStorage.setItem(graphState.layoutKey, JSON.stringify(payload));
+        } catch (e) {}
+    }
+
+    function renderTablaAgrupada() {
+        var tb = document.getElementById('bv-tabla-agrupada-body');
+        if (!tb) return;
+        if (!resumenVinculos.length) {
+            tb.innerHTML = '<tr><td colspan="6" class="text-muted text-center">Sin vínculos para agrupar.</td></tr>';
+            return;
+        }
+        tb.innerHTML = resumenVinculos.slice(0, 250).map(function (r) {
+            return '<tr>' +
+                '<td>' + escapeHtml(r.de || '—') + '</td>' +
+                '<td>' + escapeHtml(r.hacia || '—') + '</td>' +
+                '<td>' + Number(r.cantidad || 0) + '</td>' +
+                '<td>' + Number(r.movimientos || 0) + '</td>' +
+                '<td>' + Number(r.salidas || 0) + '</td>' +
+                '<td>' + fmtMoney(r.monto_total || 0) + '</td>' +
+            '</tr>';
+        }).join('');
+    }
+
+    function setVistaAgrupada(agrupada) {
+        var bloqueDetalle = document.getElementById('bv-tabla-detalle');
+        var bloqueAgrupada = document.getElementById('bv-tabla-agrupada');
+        if (!bloqueDetalle || !bloqueAgrupada) return;
+        bloqueDetalle.classList.toggle('d-none', !!agrupada);
+        bloqueAgrupada.classList.toggle('d-none', !agrupada);
+        applyTablaSearch();
+    }
+
+    function applyTablaSearch() {
+        var qEl = document.getElementById('bv-tabla-search');
+        var q = ((qEl && qEl.value) || '').toLowerCase().trim();
+        ['bv-mov-body', 'bv-sal-body', 'bv-tabla-agrupada-body'].forEach(function (id) {
+            var body = document.getElementById(id);
+            if (!body) return;
+            var rows = body.querySelectorAll('tr');
+            rows.forEach(function (tr) {
+                var txt = (tr.textContent || '').toLowerCase();
+                tr.style.display = (!q || txt.indexOf(q) !== -1) ? '' : 'none';
+            });
+        });
+    }
 
     function renderGrafico() {
         if (chartReady) {
@@ -361,53 +625,594 @@
         }
         var x1 = movDaily.map(function (r) { return r.fecha; });
         var y1 = movDaily.map(function (r) { return r.total; });
+        var x1Label = movDaily.map(function (r) { return r.fecha_label || r.fecha; });
         var x2 = salDaily.map(function (r) { return r.fecha; });
         var y2 = salDaily.map(function (r) { return r.total; });
+        var x2Label = salDaily.map(function (r) { return r.fecha_label || r.fecha; });
         Plotly.newPlot('bv-chart-diario', [
-            { x: x1, y: y1, type: 'scatter', mode: 'lines+markers', name: 'Movimientos', hovertemplate: 'Fecha: %{x}<br>Monto: $ %{y:,.2f}<extra></extra>' },
-            { x: x2, y: y2, type: 'scatter', mode: 'lines+markers', name: 'Salidas', hovertemplate: 'Fecha: %{x}<br>Monto: $ %{y:,.2f}<extra></extra>' }
+            {
+                x: x1,
+                y: y1,
+                text: x1Label,
+                customdata: x1,
+                type: 'scatter',
+                mode: 'lines+markers',
+                name: 'Movimientos',
+                hovertemplate: 'Fecha: %{text}<br>Monto: $ %{y:,.2f}<extra></extra>',
+            },
+            {
+                x: x2,
+                y: y2,
+                text: x2Label,
+                customdata: x2,
+                type: 'scatter',
+                mode: 'lines+markers',
+                name: 'Salidas',
+                hovertemplate: 'Fecha: %{text}<br>Monto: $ %{y:,.2f}<extra></extra>',
+            }
         ], {
             margin: { l: 50, r: 10, t: 10, b: 40 },
             legend: { orientation: 'h' },
-            xaxis: { title: 'Fecha' },
+            xaxis: { title: 'Fecha', tickformat: '%d/%m/%Y', hoverformat: '%d/%m/%Y' },
             yaxis: { title: 'Monto ($)' }
         }, { displayModeBar: false, responsive: true });
+        if (!chartWired) {
+            var chartEl = document.getElementById('bv-chart-diario');
+            if (chartEl) {
+                chartEl.on('plotly_click', function (ev) {
+                    if (!ev || !ev.points || !ev.points.length) return;
+                    var p = ev.points[0];
+                    var fechaKey = (p.customdata || p.x || '').toString();
+                    var serie = (p.data && p.data.name) || '';
+                    renderDetalleDia(fechaKey, serie);
+                });
+            }
+            chartWired = true;
+        }
         chartReady = true;
     }
 
-    function renderGrafo() {
-        if (graphReady) {
-            Plotly.Plots.resize('bv-chart-grafo');
+    function renderDetalleDia(fechaKey, serie) {
+        var badge = document.getElementById('bv-detalle-fecha');
+        var tb = document.getElementById('bv-detalle-dia-body');
+        if (!tb || !badge) return;
+
+        var encontrados = detalleDiario.filter(function (r) {
+            if ((r.fecha_dia || '') !== fechaKey) return false;
+            if (!serie) return true;
+            return (r.serie || '') === serie;
+        });
+
+        if (!encontrados.length) {
+            badge.textContent = fechaKey || 'Sin selección';
+            tb.innerHTML = '<tr><td colspan="9" class="text-muted text-center">No hay filas para ese punto.</td></tr>';
             return;
         }
-        var rel = [];
-        buyerGraph.forEach(function (r) { rel.push({ label: r.label, total: r.total, grupo: 'Contraparte' }); });
-        entidadGraph.forEach(function (r) { rel.push({ label: 'Entidad: ' + r.label, total: r.total, grupo: 'Entidad' }); });
-        rel.sort(function (a, b) { return (b.total || 0) - (a.total || 0); });
-        rel = rel.slice(0, 20);
+        badge.textContent = (fechaKey || '') + (serie ? ' · ' + serie : '');
+        tb.innerHTML = encontrados.slice(0, 200).map(function (r) {
+            return '<tr>' +
+                '<td>' + escapeHtml(r.fecha || '—') + '</td>' +
+                '<td>' + escapeHtml(r.tipo || '—') + '</td>' +
+                '<td>' + escapeHtml(r.sentido || '—') + '</td>' +
+                '<td>' + escapeHtml(r.estado || '—') + '</td>' +
+                '<td>' + fmtMoney(r.monto || 0) + '</td>' +
+                '<td>' + escapeHtml(r.de || '—') + '</td>' +
+                '<td>' + escapeHtml(r.hacia || '—') + '</td>' +
+                '<td>' + escapeHtml(r.metodo || '—') + '</td>' +
+                '<td>' + escapeHtml((r.referencia && r.referencia !== '—') ? r.referencia : (r.entidad || '—')) + '</td>' +
+            '</tr>';
+        }).join('');
+    }
 
-        if (!rel.length) {
-            document.getElementById('bv-chart-grafo').innerHTML = '<p class="text-muted mb-0">Sin datos para grafo con los filtros actuales.</p>';
+    function renderDetalleGrafo(rows, label) {
+        var badge = document.getElementById('bv-grafo-detalle-tag');
+        var tb = document.getElementById('bv-grafo-detalle-body');
+        if (!tb || !badge) return;
+        badge.textContent = label || 'Sin selección';
+        if (!rows || !rows.length) {
+            tb.innerHTML = '<tr><td colspan="9" class="text-muted text-center">Sin movimientos para la selección actual.</td></tr>';
+            return;
+        }
+        tb.innerHTML = rows.slice(0, 300).map(function (r) {
+            return '<tr>' +
+                '<td>' + escapeHtml(r.fecha || '—') + '</td>' +
+                '<td>' + escapeHtml(r.tipo || '—') + '</td>' +
+                '<td>' + escapeHtml(r.sentido || '—') + '</td>' +
+                '<td>' + escapeHtml(r.estado || '—') + '</td>' +
+                '<td>' + fmtMoney(r.monto || 0) + '</td>' +
+                '<td>' + escapeHtml(r.de || '—') + '</td>' +
+                '<td>' + escapeHtml(r.hacia || '—') + '</td>' +
+                '<td>' + escapeHtml(r.metodo || '—') + '</td>' +
+                '<td>' + escapeHtml((r.referencia && r.referencia !== '—') ? r.referencia : (r.entidad || '—')) + '</td>' +
+            '</tr>';
+        }).join('');
+    }
+
+    function applyFocusFilter() {
+        if (!graphState.svg) return;
+        if (!graphState.focusMode) {
+            graphState.svg.querySelectorAll('.bv-node,.bv-edge,.bv-edge-label').forEach(function (el) {
+                el.style.display = '';
+            });
+            return;
+        }
+
+        if (graphState.focusNode) {
+            var nodeId = graphState.focusNode;
+            var keepNodes = Object.create(null);
+            keepNodes[nodeId] = true;
+            graphState.links.forEach(function (l) {
+                if (l.source === nodeId) keepNodes[l.target] = true;
+                if (l.target === nodeId) keepNodes[l.source] = true;
+            });
+            graphState.svg.querySelectorAll('.bv-node').forEach(function (g) {
+                var id = g.getAttribute('data-id') || '';
+                g.style.display = keepNodes[id] ? '' : 'none';
+            });
+            graphState.svg.querySelectorAll('.bv-edge').forEach(function (line) {
+                var s = line.getAttribute('data-source') || '';
+                var t = line.getAttribute('data-target') || '';
+                line.style.display = (s === nodeId || t === nodeId) ? '' : 'none';
+            });
+            graphState.svg.querySelectorAll('.bv-edge-label').forEach(function (txt) {
+                var s = txt.getAttribute('data-source') || '';
+                var t = txt.getAttribute('data-target') || '';
+                txt.style.display = (s === nodeId || t === nodeId) ? '' : 'none';
+            });
+            return;
+        }
+
+        if (graphState.focusEdge) {
+            var fs = graphState.focusEdge.source;
+            var ft = graphState.focusEdge.target;
+            graphState.svg.querySelectorAll('.bv-node').forEach(function (g) {
+                var id = g.getAttribute('data-id') || '';
+                g.style.display = (id === fs || id === ft) ? '' : 'none';
+            });
+            graphState.svg.querySelectorAll('.bv-edge').forEach(function (line) {
+                var s = line.getAttribute('data-source') || '';
+                var t = line.getAttribute('data-target') || '';
+                line.style.display = (s === fs && t === ft) ? '' : 'none';
+            });
+            graphState.svg.querySelectorAll('.bv-edge-label').forEach(function (txt) {
+                var s = txt.getAttribute('data-source') || '';
+                var t = txt.getAttribute('data-target') || '';
+                txt.style.display = (s === fs && t === ft) ? '' : 'none';
+            });
+        }
+    }
+
+    function selectNodeInGraph(nodeId) {
+        if (!graphState.svg || !graphState.nodesMap) return;
+        graphState.selectedNode = nodeId || null;
+        graphState.selectedEdge = null;
+
+        var neighbors = Object.create(null);
+        graphState.links.forEach(function (l) {
+            if (l.source === nodeId) neighbors[l.target] = true;
+            if (l.target === nodeId) neighbors[l.source] = true;
+        });
+
+        graphState.svg.querySelectorAll('.bv-node').forEach(function (g) {
+            var id = g.getAttribute('data-id') || '';
+            var hit = (id === nodeId) || !!neighbors[id];
+            var circle = g.querySelector('circle');
+            var text = g.querySelector('text');
+            g.style.opacity = hit ? '1' : '0.22';
+            if (circle) {
+                circle.setAttribute('fill', id === nodeId ? '#0b5ed7' : '#0d6efd');
+                circle.setAttribute('stroke-width', id === nodeId ? '3' : '2');
+            }
+            if (text) text.setAttribute('font-weight', id === nodeId ? '700' : '500');
+        });
+
+        graphState.svg.querySelectorAll('.bv-edge').forEach(function (line) {
+            var s = line.getAttribute('data-source') || '';
+            var t = line.getAttribute('data-target') || '';
+            var linked = (s === nodeId || t === nodeId);
+            line.style.opacity = linked ? '1' : '0.16';
+            line.setAttribute('stroke', linked ? '#0d6efd' : '#ced4da');
+        });
+        graphState.svg.querySelectorAll('.bv-edge-label').forEach(function (txt) {
+            var s = txt.getAttribute('data-source') || '';
+            var t = txt.getAttribute('data-target') || '';
+            var linked = (s === nodeId || t === nodeId);
+            txt.style.opacity = linked ? '1' : '0.2';
+            txt.setAttribute('fill', linked ? '#0b5ed7' : '#6c757d');
+        });
+
+        var rows = detalleDiario.filter(function (r) {
+            return (r.de || '') === nodeId || (r.hacia || '') === nodeId;
+        });
+        renderDetalleGrafo(rows, 'Nodo: ' + nodeId + ' (' + rows.length + ' filas)' + (graphState.focusMode ? ' · foco' : ''));
+        applyFocusFilter();
+    }
+
+    function selectEdgeInGraph(source, target) {
+        if (!graphState.svg || !graphState.nodesMap) return;
+        graphState.selectedNode = null;
+        graphState.selectedEdge = { source: source, target: target };
+
+        graphState.svg.querySelectorAll('.bv-node').forEach(function (g) {
+            var id = g.getAttribute('data-id') || '';
+            var hit = id === source || id === target;
+            var circle = g.querySelector('circle');
+            var text = g.querySelector('text');
+            g.style.opacity = hit ? '1' : '0.22';
+            if (circle) {
+                circle.setAttribute('fill', hit ? '#0b5ed7' : '#0d6efd');
+                circle.setAttribute('stroke-width', hit ? '3' : '2');
+            }
+            if (text) text.setAttribute('font-weight', hit ? '700' : '500');
+        });
+
+        graphState.svg.querySelectorAll('.bv-edge').forEach(function (line) {
+            var s = line.getAttribute('data-source') || '';
+            var t = line.getAttribute('data-target') || '';
+            var selected = (s === source && t === target);
+            line.style.opacity = selected ? '1' : '0.16';
+            line.setAttribute('stroke', selected ? '#0d6efd' : '#ced4da');
+        });
+        graphState.svg.querySelectorAll('.bv-edge-label').forEach(function (txt) {
+            var s = txt.getAttribute('data-source') || '';
+            var t = txt.getAttribute('data-target') || '';
+            var selected = (s === source && t === target);
+            txt.style.opacity = selected ? '1' : '0.2';
+            txt.setAttribute('fill', selected ? '#0b5ed7' : '#6c757d');
+        });
+
+        var rows = detalleDiario.filter(function (r) {
+            return (r.de || '') === source && (r.hacia || '') === target;
+        });
+        renderDetalleGrafo(rows, 'Arista: ' + source + ' -> ' + target + ' (' + rows.length + ' filas)' + (graphState.focusMode ? ' · foco' : ''));
+        applyFocusFilter();
+    }
+
+    function clearGraphSelection() {
+        if (!graphState.svg) return;
+        graphState.selectedNode = null;
+        graphState.selectedEdge = null;
+
+        graphState.svg.querySelectorAll('.bv-node').forEach(function (g) {
+            var circle = g.querySelector('circle');
+            var text = g.querySelector('text');
+            g.style.opacity = '1';
+            if (circle) {
+                circle.setAttribute('fill', '#0d6efd');
+                circle.setAttribute('stroke-width', '2');
+            }
+            if (text) text.setAttribute('font-weight', '500');
+        });
+        graphState.svg.querySelectorAll('.bv-edge').forEach(function (line) {
+            line.style.opacity = '1';
+            line.setAttribute('stroke', '#ced4da');
+        });
+        graphState.svg.querySelectorAll('.bv-edge-label').forEach(function (txt) {
+            txt.style.opacity = '1';
+            txt.setAttribute('fill', '#6c757d');
+        });
+        graphState.focusMode = false;
+        graphState.focusNode = null;
+        graphState.focusEdge = null;
+        applyFocusFilter();
+        renderDetalleGrafo([], 'Sin selección');
+    }
+
+    function renderGrafo(force) {
+        if (graphReady && !force) return;
+        var container = document.getElementById('bv-relaciones-graph');
+        if (!container) return;
+        var prevSelectedNode = graphState.selectedNode;
+        var prevSelectedEdge = graphState.selectedEdge ? { source: graphState.selectedEdge.source, target: graphState.selectedEdge.target } : null;
+        var prevFocusMode = !!graphState.focusMode;
+        var prevFocusNode = graphState.focusNode;
+        var prevFocusEdge = graphState.focusEdge ? { source: graphState.focusEdge.source, target: graphState.focusEdge.target } : null;
+        var opts = getGraphOpts();
+        graphState.graphOpts = opts;
+
+        if (!relGraph.length) {
+            container.innerHTML = '<p class="text-muted mb-0">Sin datos para grafo con los filtros actuales.</p>';
             graphReady = true;
             return;
         }
 
-        var y = rel.map(function (r) { return r.label; }).reverse();
-        var x = rel.map(function (r) { return r.total || 0; }).reverse();
-        var c = rel.map(function (r) { return r.grupo === 'Entidad' ? '#f59f00' : '#0d6efd'; }).reverse();
+        var nodesMap = Object.create(null);
+        var links = [];
+        var maxCant = 1;
+        relGraph.forEach(function (e) {
+            if (!e || !e.source || !e.target) return;
+            var s = String(e.source);
+            var t = String(e.target);
+            var c = parseInt(e.cantidad || 0, 10) || 0;
+            if (c < opts.edgeMin) return;
+            if (!nodesMap[s]) nodesMap[s] = { id: s, degree: 0 };
+            if (!nodesMap[t]) nodesMap[t] = { id: t, degree: 0 };
+            nodesMap[s].degree += c;
+            nodesMap[t].degree += c;
+            links.push({ source: s, target: t, cantidad: c, monto: Number(e.monto_total || 0) });
+            if (c > maxCant) maxCant = c;
+        });
 
-        Plotly.newPlot('bv-chart-grafo', [{
-            type: 'bar',
-            orientation: 'h',
-            y: y,
-            x: x,
-            marker: { color: c },
-            hovertemplate: 'Relación: %{y}<br>Monto: $ %{x:,.2f}<extra></extra>'
-        }], {
-            margin: { l: 220, r: 20, t: 10, b: 40 },
-            xaxis: { title: 'Monto acumulado ($)' },
-            yaxis: { title: 'Relación' }
-        }, { displayModeBar: false, responsive: true });
+        var nodes = Object.keys(nodesMap).map(function (k) { return nodesMap[k]; });
+        if (!nodes.length || !links.length) {
+            container.innerHTML = '<p class="text-muted mb-0">Sin datos para grafo con el umbral actual (&gt;= ' + opts.edgeMin + ').</p>';
+            graphReady = true;
+            return;
+        }
+
+        var width = container.clientWidth || 1000;
+        var height = container.clientHeight || 420;
+        var cx = width / 2;
+        var cy = height / 2;
+        var radius = Math.max(120, Math.min(width, height) / 2 - 50);
+        var maxDegree = nodes.reduce(function (acc, n) { return Math.max(acc, n.degree || 0); }, 1);
+
+        function nodeR(n) {
+            return (10 + ((n.degree || 0) / maxDegree) * 12) * opts.nodeScale;
+        }
+        function edgeW(c) {
+            return 1 + (c / maxCant) * 5;
+        }
+
+        nodes.forEach(function (n, idx) {
+            var ang = (Math.PI * 2 * idx) / nodes.length;
+            n.x = cx + radius * Math.cos(ang);
+            n.y = cy + radius * Math.sin(ang);
+        });
+        var layoutKey = graphLayoutKey();
+        var savedLayout = loadGraphLayout(layoutKey);
+        if (savedLayout) {
+            nodes.forEach(function (n) {
+                var p = savedLayout[n.id];
+                if (!p) return;
+                var px = Number(p.x);
+                var py = Number(p.y);
+                if (!isFinite(px) || !isFinite(py)) return;
+                n.x = Math.max(16, Math.min(width - 16, px));
+                n.y = Math.max(16, Math.min(height - 16, py));
+            });
+        }
+
+        var svgNS = 'http://www.w3.org/2000/svg';
+        var svg = document.createElementNS(svgNS, 'svg');
+        svg.setAttribute('width', width);
+        svg.setAttribute('height', height);
+        svg.classList.add('w-100');
+
+        links.forEach(function (l) {
+            var a = nodesMap[l.source];
+            var b = nodesMap[l.target];
+            if (!a || !b) return;
+            var line = document.createElementNS(svgNS, 'line');
+            line.setAttribute('x1', a.x);
+            line.setAttribute('y1', a.y);
+            line.setAttribute('x2', b.x);
+            line.setAttribute('y2', b.y);
+            line.setAttribute('stroke', '#ced4da');
+            line.setAttribute('stroke-width', edgeW(l.cantidad));
+            line.setAttribute('class', 'bv-edge');
+            line.setAttribute('data-source', l.source);
+            line.setAttribute('data-target', l.target);
+            line.style.cursor = 'pointer';
+            var title = document.createElementNS(svgNS, 'title');
+            title.textContent = l.source + ' → ' + l.target + ' · ' + l.cantidad + ' transacciones · ' + fmtMoney(l.monto);
+            line.appendChild(title);
+            svg.appendChild(line);
+
+            var label = document.createElementNS(svgNS, 'text');
+            label.setAttribute('x', (a.x + b.x) / 2);
+            label.setAttribute('y', (a.y + b.y) / 2 - 4);
+            label.setAttribute('text-anchor', 'middle');
+            label.setAttribute('font-size', String(opts.edgeLabelFontSize || 10));
+            label.setAttribute('fill', '#6c757d');
+            label.setAttribute('font-weight', 'bold');
+            label.setAttribute('class', 'bv-edge-label');
+            label.setAttribute('data-source', l.source);
+            label.setAttribute('data-target', l.target);
+            label.style.pointerEvents = 'none';
+            label.textContent = String(l.cantidad);
+            svg.appendChild(label);
+        });
+
+        nodes.forEach(function (n) {
+            var g = document.createElementNS(svgNS, 'g');
+            g.setAttribute('class', 'bv-node');
+            g.setAttribute('data-id', n.id);
+            g.style.cursor = 'pointer';
+            var rNode = nodeR(n);
+            n._r = rNode;
+            var c = document.createElementNS(svgNS, 'circle');
+            c.setAttribute('cx', n.x);
+            c.setAttribute('cy', n.y);
+            c.setAttribute('r', rNode);
+            c.setAttribute('fill', '#0d6efd');
+            c.setAttribute('stroke', '#fff');
+            c.setAttribute('stroke-width', '2');
+            var title = document.createElementNS(svgNS, 'title');
+            title.textContent = n.id + ' · ' + (n.degree || 0) + ' interacciones';
+            c.appendChild(title);
+            g.appendChild(c);
+
+            var t = document.createElementNS(svgNS, 'text');
+            t.setAttribute('x', n.x);
+            t.setAttribute('y', n.y + rNode + 14);
+            t.setAttribute('text-anchor', 'middle');
+            t.setAttribute('font-size', String(Math.max(10, Math.round(11 * opts.nodeScale))));
+            t.setAttribute('fill', '#212529');
+            t.textContent = shortLabel(n.id);
+            g.appendChild(t);
+
+            svg.appendChild(g);
+        });
+
+        graphState.svg = svg;
+        graphState.nodesMap = nodesMap;
+        graphState.links = links;
+        graphState.selectedNode = null;
+        graphState.selectedEdge = null;
+        graphState.focusMode = false;
+        graphState.focusNode = null;
+        graphState.focusEdge = null;
+        graphState.layoutKey = layoutKey;
+
+        var drag = { active: false, nodeId: null, pointerId: null, startX: 0, startY: 0, moved: false, lastMoveAt: 0 };
+        try { svg.style.touchAction = 'none'; } catch (eTA) {}
+
+        svg.addEventListener('pointerdown', function (ev) {
+            if (!ev) return;
+            var node = ev.target && ev.target.closest ? ev.target.closest('.bv-node') : null;
+            if (!node) return;
+            var nodeId = node.getAttribute('data-id') || '';
+            if (!nodeId || !graphState.nodesMap[nodeId]) return;
+            ev.preventDefault();
+            drag.active = true;
+            drag.nodeId = nodeId;
+            drag.pointerId = ev.pointerId;
+            drag.startX = ev.clientX;
+            drag.startY = ev.clientY;
+            drag.moved = false;
+            try { svg.setPointerCapture(ev.pointerId); } catch (eCap) {}
+        });
+
+        svg.addEventListener('pointermove', function (ev) {
+            if (!ev || !drag.active || !drag.nodeId) return;
+            if (drag.pointerId != null && ev.pointerId !== drag.pointerId) return;
+            var n = graphState.nodesMap[drag.nodeId];
+            if (!n) return;
+            ev.preventDefault();
+            var dx = ev.clientX - drag.startX;
+            var dy = ev.clientY - drag.startY;
+            if (Math.abs(dx) > 3 || Math.abs(dy) > 3) drag.moved = true;
+            n.x += dx;
+            n.y += dy;
+            drag.startX = ev.clientX;
+            drag.startY = ev.clientY;
+            if (drag.moved) drag.lastMoveAt = Date.now();
+
+            svg.querySelectorAll('.bv-node').forEach(function (g) {
+                if ((g.getAttribute('data-id') || '') !== drag.nodeId) return;
+                var circle = g.querySelector('circle');
+                var text = g.querySelector('text');
+                if (circle) {
+                    circle.setAttribute('cx', n.x);
+                    circle.setAttribute('cy', n.y);
+                }
+                if (text) {
+                    text.setAttribute('x', n.x);
+                    text.setAttribute('y', n.y + (n._r || 10) + 14);
+                }
+            });
+
+            svg.querySelectorAll('.bv-edge').forEach(function (line) {
+                var s = line.getAttribute('data-source') || '';
+                var t = line.getAttribute('data-target') || '';
+                if (s === drag.nodeId) {
+                    line.setAttribute('x1', n.x);
+                    line.setAttribute('y1', n.y);
+                }
+                if (t === drag.nodeId) {
+                    line.setAttribute('x2', n.x);
+                    line.setAttribute('y2', n.y);
+                }
+            });
+            svg.querySelectorAll('.bv-edge-label').forEach(function (lbl) {
+                var s = lbl.getAttribute('data-source') || '';
+                var t = lbl.getAttribute('data-target') || '';
+                var a = graphState.nodesMap[s];
+                var b = graphState.nodesMap[t];
+                if (!a || !b) return;
+                lbl.setAttribute('x', (a.x + b.x) / 2);
+                lbl.setAttribute('y', (a.y + b.y) / 2 - 4);
+            });
+        });
+
+        function endDrag(ev) {
+            if (!drag.active) return;
+            if (drag.pointerId != null && ev && ev.pointerId !== drag.pointerId) return;
+            drag.active = false;
+            drag.nodeId = null;
+            drag.pointerId = null;
+            saveGraphLayout();
+        }
+        svg.addEventListener('pointerup', endDrag);
+        svg.addEventListener('pointercancel', endDrag);
+        svg.addEventListener('pointerleave', endDrag);
+
+        svg.addEventListener('click', function (ev) {
+            if (Date.now() - (drag.lastMoveAt || 0) < 180) return;
+            var node = ev.target && ev.target.closest ? ev.target.closest('.bv-node') : null;
+            if (node) {
+                var id = node.getAttribute('data-id') || '';
+                if (id) selectNodeInGraph(id);
+                return;
+            }
+            var edge = ev.target && ev.target.closest ? ev.target.closest('.bv-edge') : null;
+            if (edge) {
+                var s = edge.getAttribute('data-source') || '';
+                var t = edge.getAttribute('data-target') || '';
+                if (s && t) selectEdgeInGraph(s, t);
+                return;
+            }
+            clearGraphSelection();
+        });
+        svg.addEventListener('dblclick', function (ev) {
+            if (Date.now() - (drag.lastMoveAt || 0) < 180) return;
+            var node = ev.target && ev.target.closest ? ev.target.closest('.bv-node') : null;
+            if (node) {
+                var nodeId = node.getAttribute('data-id') || '';
+                if (!nodeId) return;
+                ev.preventDefault();
+                if (graphState.focusMode && graphState.focusNode === nodeId) {
+                    graphState.focusMode = false;
+                    graphState.focusNode = null;
+                } else {
+                    graphState.focusMode = true;
+                    graphState.focusNode = nodeId;
+                    graphState.focusEdge = null;
+                    selectNodeInGraph(nodeId);
+                }
+                applyFocusFilter();
+                return;
+            }
+            var edge = ev.target && ev.target.closest ? ev.target.closest('.bv-edge') : null;
+            if (edge) {
+                var s = edge.getAttribute('data-source') || '';
+                var t = edge.getAttribute('data-target') || '';
+                if (!s || !t) return;
+                ev.preventDefault();
+                if (graphState.focusMode && graphState.focusEdge && graphState.focusEdge.source === s && graphState.focusEdge.target === t) {
+                    graphState.focusMode = false;
+                    graphState.focusEdge = null;
+                } else {
+                    graphState.focusMode = true;
+                    graphState.focusNode = null;
+                    graphState.focusEdge = { source: s, target: t };
+                    selectEdgeInGraph(s, t);
+                }
+                applyFocusFilter();
+                return;
+            }
+            graphState.focusMode = false;
+            graphState.focusNode = null;
+            graphState.focusEdge = null;
+            applyFocusFilter();
+        });
+
+        container.innerHTML = '';
+        container.appendChild(svg);
+        if (prevSelectedEdge) {
+            selectEdgeInGraph(prevSelectedEdge.source, prevSelectedEdge.target);
+        } else if (prevSelectedNode) {
+            selectNodeInGraph(prevSelectedNode);
+        } else {
+            renderDetalleGrafo([], 'Sin selección');
+        }
+        if (prevFocusMode) {
+            graphState.focusMode = true;
+            graphState.focusNode = prevFocusNode || null;
+            graphState.focusEdge = prevFocusEdge || null;
+            applyFocusFilter();
+        }
         graphReady = true;
     }
 
@@ -417,7 +1222,7 @@
             var target = ev.target.getAttribute('data-bs-target');
             localStorage.setItem('bv-analisis-active-tab', target || '#tab-bv-tabla');
             if (target === '#tab-bv-grafico') setTimeout(renderGrafico, 40);
-            if (target === '#tab-bv-grafo') setTimeout(renderGrafo, 40);
+            if (target === '#tab-bv-grafo') setTimeout(function () { renderGrafo(true); }, 40);
         });
     });
 
@@ -433,7 +1238,37 @@
     if (activeNow) {
         var targetNow = activeNow.getAttribute('data-bs-target');
         if (targetNow === '#tab-bv-grafico') renderGrafico();
-        if (targetNow === '#tab-bv-grafo') renderGrafo();
+        if (targetNow === '#tab-bv-grafo') renderGrafo(true);
+    }
+
+    renderTablaAgrupada();
+    var swAgrupado = document.getElementById('bv-switch-agrupado');
+    if (swAgrupado) {
+        swAgrupado.addEventListener('change', function () {
+            setVistaAgrupada(swAgrupado.checked);
+        });
+        setVistaAgrupada(swAgrupado.checked);
+    }
+
+    var nodeScaleEl = document.getElementById('bv-rel-node-scale');
+    var edgeLabelEl = document.getElementById('bv-rel-edge-label-size');
+    var edgeMinEl = document.getElementById('bv-rel-edge-min');
+    [nodeScaleEl, edgeLabelEl, edgeMinEl].forEach(function (el) {
+        if (!el) return;
+        el.addEventListener('input', function () {
+            updateGraphControlLabels();
+        });
+        el.addEventListener('change', function () {
+            updateGraphControlLabels();
+            renderGrafo(true);
+        });
+    });
+    updateGraphControlLabels();
+
+    var tablaSearch = document.getElementById('bv-tabla-search');
+    if (tablaSearch) {
+        tablaSearch.addEventListener('input', applyTablaSearch);
+        applyTablaSearch();
     }
 })();
 </script>
