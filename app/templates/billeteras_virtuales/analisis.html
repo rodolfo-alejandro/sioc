@@ -1,13 +1,13 @@
 {% extends "layouts/base.html" %}
 
-{% block title %}Análisis Billeteras - SIOC{% endblock %}
+{% block title %}Relaciones Billeteras - SIOC{% endblock %}
 {% block extra_head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sabana_mapa.css') }}">
 {% endblock %}
 
 {% block content %}
 <div class="page-header">
-    <h1><i class="bi bi-graph-up"></i> Análisis · Billeteras Virtuales</h1>
+    <h1><i class="bi bi-diagram-3"></i> Relaciones · Billeteras Virtuales</h1>
     <p class="text-muted">Vista estilo Sábana/Record con pestañas separadas: Tabla, Grafo, Gráfico e Informe.</p>
 </div>
 
@@ -187,25 +187,27 @@
                     <table class="table table-sm align-middle">
                         <thead>
                             <tr>
-                                <th>Fecha</th><th>Caso</th><th>Sujeto</th><th>Tipo</th><th>Estado</th><th>Monto</th><th>Buyer</th><th>Doc</th><th>Método</th><th>Destino</th>
+                                <th>Fecha</th><th>Caso</th><th>Sujeto</th><th>Tipo</th><th>Sentido</th><th>Estado</th><th>Monto</th><th>De</th><th>Hacia</th><th>Método</th><th>Ref. destino</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {% for r in mov_items %}
+                            {% for item in mov_rows %}
+                            {% set r = item.row %}
                             <tr>
                                 <td>{{ r.fecha_operacion|localtime if r.fecha_operacion else '' }}</td>
                                 <td>{{ r.carga.caso.codigo if r.carga and r.carga.caso else '—' }}</td>
                                 <td>{{ r.carga.sujeto.display_name() if r.carga and r.carga.sujeto else '—' }}</td>
-                                <td>{{ r.tipo_movimiento or '—' }}</td>
-                                <td>{{ r.estado_payment or '—' }}</td>
+                                <td>{{ item.tipo_label }}</td>
+                                <td><span class="badge bg-light text-dark border">{{ item.sentido_label }}</span></td>
+                                <td>{{ item.estado_label }}</td>
                                 <td>$ {{ '%.2f'|format(r.total_pagado or 0) }}</td>
-                                <td>{{ r.nombre_buyer or '—' }}</td>
-                                <td>{{ r.documento_buyer or '—' }}</td>
+                                <td>{{ item.origen_label }}</td>
+                                <td>{{ item.destino_label }}</td>
                                 <td>{{ r.metodo_pago or '—' }}</td>
-                                <td>{{ r.nombre_destino_account or r.documento_destino_account or '—' }}</td>
+                                <td>{{ r.nombre_destino_account or r.documento_destino_account or r.nombre_seller or '—' }}</td>
                             </tr>
                             {% else %}
-                            <tr><td colspan="10" class="text-muted text-center">Sin movimientos.</td></tr>
+                            <tr><td colspan="11" class="text-muted text-center">Sin movimientos.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -220,24 +222,26 @@
                     <table class="table table-sm align-middle">
                         <thead>
                             <tr>
-                                <th>Fecha</th><th>Caso</th><th>Sujeto</th><th>Estado</th><th>Monto</th><th>Titular destino</th><th>Documento</th><th>Cuenta</th><th>Entidad</th>
+                                <th>Fecha</th><th>Caso</th><th>Sujeto</th><th>Sentido</th><th>Estado</th><th>Monto</th><th>De</th><th>Hacia</th><th>Cuenta</th><th>Entidad</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {% for r in sal_items %}
+                            {% for item in sal_rows %}
+                            {% set r = item.row %}
                             <tr>
                                 <td>{{ r.fecha_operacion|localtime if r.fecha_operacion else '' }}</td>
                                 <td>{{ r.carga.caso.codigo if r.carga and r.carga.caso else '—' }}</td>
                                 <td>{{ r.carga.sujeto.display_name() if r.carga and r.carga.sujeto else '—' }}</td>
-                                <td>{{ r.estado or '—' }}</td>
+                                <td><span class="badge bg-warning text-dark">{{ item.sentido_label }}</span></td>
+                                <td>{{ item.estado_label }}</td>
                                 <td>$ {{ '%.2f'|format(r.monto_retirado or 0) }}</td>
-                                <td>{{ r.titular_destino or '—' }}</td>
-                                <td>{{ r.documento_destino or '—' }}</td>
+                                <td>{{ item.origen_label }}</td>
+                                <td>{{ item.destino_label }}</td>
                                 <td>{{ r.cuenta_destino or '—' }}</td>
                                 <td>{{ r.entidad or '—' }}</td>
                             </tr>
                             {% else %}
-                            <tr><td colspan="9" class="text-muted text-center">Sin salidas.</td></tr>
+                            <tr><td colspan="10" class="text-muted text-center">Sin salidas.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -265,6 +269,11 @@
     </div>
 
     <div class="tab-pane fade" id="tab-bv-informe" role="tabpanel" aria-labelledby="tab-bv-informe-tab">
+        <div class="alert alert-info">
+            <strong>Guía rápida:</strong> <strong>Ingreso</strong> = dinero que entra a la cuenta investigada.
+            <strong>Salida</strong> = dinero que sale de esa cuenta.
+            <strong>Salida/Extracción</strong> = transferencias/retiros hacia cuentas o entidades externas.
+        </div>
         <div class="card mb-3">
             <div class="card-header"><h6 class="mb-0">Alertas automáticas</h6></div>
             <div class="card-body">
@@ -355,11 +364,13 @@
         var x2 = salDaily.map(function (r) { return r.fecha; });
         var y2 = salDaily.map(function (r) { return r.total; });
         Plotly.newPlot('bv-chart-diario', [
-            { x: x1, y: y1, type: 'scatter', mode: 'lines+markers', name: 'Movimientos' },
-            { x: x2, y: y2, type: 'scatter', mode: 'lines+markers', name: 'Salidas' }
+            { x: x1, y: y1, type: 'scatter', mode: 'lines+markers', name: 'Movimientos', hovertemplate: 'Fecha: %{x}<br>Monto: $ %{y:,.2f}<extra></extra>' },
+            { x: x2, y: y2, type: 'scatter', mode: 'lines+markers', name: 'Salidas', hovertemplate: 'Fecha: %{x}<br>Monto: $ %{y:,.2f}<extra></extra>' }
         ], {
             margin: { l: 50, r: 10, t: 10, b: 40 },
-            legend: { orientation: 'h' }
+            legend: { orientation: 'h' },
+            xaxis: { title: 'Fecha' },
+            yaxis: { title: 'Monto ($)' }
         }, { displayModeBar: false, responsive: true });
         chartReady = true;
     }
@@ -369,27 +380,33 @@
             Plotly.Plots.resize('bv-chart-grafo');
             return;
         }
-        var labels = ['Usuario investigado'];
-        var parents = [''];
-        var values = [1];
-        buyerGraph.forEach(function (r) {
-            labels.push(r.label);
-            parents.push('Usuario investigado');
-            values.push(Math.max(1, r.total));
-        });
-        entidadGraph.forEach(function (r) {
-            labels.push('Entidad: ' + r.label);
-            parents.push('Usuario investigado');
-            values.push(Math.max(1, r.total));
-        });
+        var rel = [];
+        buyerGraph.forEach(function (r) { rel.push({ label: r.label, total: r.total, grupo: 'Contraparte' }); });
+        entidadGraph.forEach(function (r) { rel.push({ label: 'Entidad: ' + r.label, total: r.total, grupo: 'Entidad' }); });
+        rel.sort(function (a, b) { return (b.total || 0) - (a.total || 0); });
+        rel = rel.slice(0, 20);
+
+        if (!rel.length) {
+            document.getElementById('bv-chart-grafo').innerHTML = '<p class="text-muted mb-0">Sin datos para grafo con los filtros actuales.</p>';
+            graphReady = true;
+            return;
+        }
+
+        var y = rel.map(function (r) { return r.label; }).reverse();
+        var x = rel.map(function (r) { return r.total || 0; }).reverse();
+        var c = rel.map(function (r) { return r.grupo === 'Entidad' ? '#f59f00' : '#0d6efd'; }).reverse();
+
         Plotly.newPlot('bv-chart-grafo', [{
-            type: 'treemap',
-            labels: labels,
-            parents: parents,
-            values: values,
-            branchvalues: 'total'
+            type: 'bar',
+            orientation: 'h',
+            y: y,
+            x: x,
+            marker: { color: c },
+            hovertemplate: 'Relación: %{y}<br>Monto: $ %{x:,.2f}<extra></extra>'
         }], {
-            margin: { l: 0, r: 0, t: 10, b: 0 }
+            margin: { l: 220, r: 20, t: 10, b: 40 },
+            xaxis: { title: 'Monto acumulado ($)' },
+            yaxis: { title: 'Relación' }
         }, { displayModeBar: false, responsive: true });
         graphReady = true;
     }
@@ -399,8 +416,8 @@
         btn.addEventListener('shown.bs.tab', function (ev) {
             var target = ev.target.getAttribute('data-bs-target');
             localStorage.setItem('bv-analisis-active-tab', target || '#tab-bv-tabla');
-            if (target === '#tab-bv-grafico') renderGrafico();
-            if (target === '#tab-bv-grafo') renderGrafo();
+            if (target === '#tab-bv-grafico') setTimeout(renderGrafico, 40);
+            if (target === '#tab-bv-grafo') setTimeout(renderGrafo, 40);
         });
     });
 

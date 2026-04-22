@@ -136,6 +136,13 @@
                                         </button>
                                     </li>
                                     {% endif %}
+                                    {% if current_user.has_permission('SABANA_LLAMADAS_UPLOAD') and c.user_id == current_user.id %}
+                                    <li>
+                                        <a class="dropdown-item" href="{{ url_for('billeteras_virtuales.cargas_vincular', carga_id=c.id) }}">
+                                            <i class="bi bi-link-45deg me-2"></i>Vincular
+                                        </a>
+                                    </li>
+                                    {% endif %}
                                     <li>
                                         <button type="button" class="dropdown-item"
                                                 data-bv-share data-share-type="carga" data-share-id="{{ c.id }}"
@@ -143,6 +150,19 @@
                                             <i class="bi bi-share me-2"></i>Compartir carga
                                         </button>
                                     </li>
+                                    {% if current_user.has_permission('SABANA_LLAMADAS_UPLOAD') and c.user_id == current_user.id %}
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li>
+                                        <button type="button"
+                                                class="dropdown-item text-danger"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#modalEliminarBvCarga"
+                                                data-eliminar-url="{{ url_for('billeteras_virtuales.cargas_eliminar', carga_id=c.id) }}"
+                                                data-eliminar-label="{{ (c.nombre_archivo or ('Carga #' ~ c.id))|e }}">
+                                            <i class="bi bi-trash me-2"></i>Eliminar
+                                        </button>
+                                    </li>
+                                    {% endif %}
                                 </ul>
                             </div>
                         </td>
@@ -156,6 +176,28 @@
             </table>
         </div>
     </div>
+</div>
+
+<div class="modal fade" id="modalEliminarBvCarga" tabindex="-1" aria-labelledby="modalEliminarBvCargaLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-danger">
+      <div class="modal-header border-danger bg-danger text-white">
+        <h5 class="modal-title" id="modalEliminarBvCargaLabel"><i class="bi bi-exclamation-triangle-fill me-2"></i>Eliminar carga</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-2">¿Eliminar definitivamente esta carga de billetera y todos sus movimientos/salidas asociados?</p>
+        <p class="small text-muted mb-0 font-monospace" id="modalEliminarBvCargaNombre"></p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <form method="post" id="formEliminarBvCarga" class="d-inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-danger"><i class="bi bi-trash"></i> Sí, eliminar</button>
+        </form>
+      </div>
+    </div>
+  </div>
 </div>
 
 <div class="modal fade" id="bvShareModal" tabindex="-1" aria-labelledby="bv-share-title" aria-hidden="true">
@@ -187,4 +229,20 @@
 
 {% block extra_scripts %}
 <script src="{{ url_for('static', filename='js/bv_share.js') }}"></script>
+<script>
+(function () {
+  var modalEl = document.getElementById('modalEliminarBvCarga');
+  var formEl = document.getElementById('formEliminarBvCarga');
+  var nombreEl = document.getElementById('modalEliminarBvCargaNombre');
+  if (!modalEl || !formEl || !window.bootstrap) return;
+  modalEl.addEventListener('show.bs.modal', function (ev) {
+    var btn = ev.relatedTarget;
+    if (!btn || !formEl) return;
+    var url = btn.getAttribute('data-eliminar-url');
+    var label = btn.getAttribute('data-eliminar-label') || '';
+    if (url) formEl.setAttribute('action', url);
+    if (nombreEl) nombreEl.textContent = label;
+  });
+})();
+</script>
 {% endblock %}

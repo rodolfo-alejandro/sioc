@@ -1,0 +1,65 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Vincular carga - Billeteras Virtuales{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-link-45deg"></i> Vincular carga</h1>
+    <p class="text-muted">Asigne/corrija el <strong>caso</strong> y el <strong>sujeto</strong> de una carga de billetera virtual.</p>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <dl class="row mb-0">
+            <dt class="col-sm-2">Tipo</dt>
+            <dd class="col-sm-10"><span class="badge bg-{{ 'primary' if carga.tipo_archivo == 'movimientos' else 'warning text-dark' }}">{{ carga.tipo_archivo }}</span></dd>
+            <dt class="col-sm-2">Archivo</dt>
+            <dd class="col-sm-10">{{ carga.nombre_archivo or 'Sin nombre' }}</dd>
+            <dt class="col-sm-2">Caso actual</dt>
+            <dd class="col-sm-10">
+                {% if carga.caso %}
+                    {{ carga.caso.codigo }} — {{ carga.caso.titulo }}
+                {% else %}
+                    <span class="badge bg-warning text-dark">Sin caso</span>
+                {% endif %}
+            </dd>
+            <dt class="col-sm-2">Sujeto actual</dt>
+            <dd class="col-sm-10">
+                {% if carga.sujeto %}
+                    {{ carga.sujeto.display_name() }}
+                {% else %}
+                    <span class="text-muted">Sin vincular</span>
+                {% endif %}
+            </dd>
+        </dl>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST" action="{{ request.url }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="mb-3">
+                <label class="form-label">Caso <span class="text-danger">*</span></label>
+                <select name="caso_id" class="form-select" required>
+                    <option value="">Seleccionar caso...</option>
+                    {% for c in casos_opts %}
+                    <option value="{{ c.id }}" {% if carga.caso_id == c.id %}selected{% endif %}>{{ c.codigo }} — {{ c.titulo }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Sujeto</label>
+                <select name="sujeto_id" class="form-select">
+                    <option value="">-- Sin vincular --</option>
+                    {% for s in sujetos_opts %}
+                    <option value="{{ s.id }}" {% if carga.sujeto_id == s.id %}selected{% endif %}>{{ s.display_name() }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary">Guardar</button>
+            <a href="{{ url_for('billeteras_virtuales.cargas') }}" class="btn btn-secondary">Volver</a>
+        </form>
+    </div>
+</div>
+{% endblock %}

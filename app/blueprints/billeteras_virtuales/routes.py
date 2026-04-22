@@ -8,7 +8,7 @@ from decimal import Decimal
 from io import BytesIO
 
 import pandas as pd
-from flask import Response, flash, redirect, render_template, request, url_for
+from flask import Response, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
 from sqlalchemy import and_, exists, func, inspect, or_, text
@@ -27,6 +27,17 @@ from app.models.user import User
 
 
 _bv_schema_checked = False
+_TIPO_MOV_LABELS = {
+    "money_transfer": "Transferencia",
+    "regular_payment": "Pago",
+    "account_fund": "Ingreso de dinero",
+}
+_ESTADO_LABELS = {
+    "approved": "Aprobado",
+    "rejected": "Rechazado",
+    "cancelled": "Cancelado",
+    "pending": "Pendiente",
+}
 
 
 def _permiso_view():
@@ -107,6 +118,14 @@ def _q_cargas():
     if pred is not True:
         q = q.filter(pred)
     return q
+
+
+def _assert_owner_or_404(obj):
+    if _is_superadmin():
+        return obj
+    if not obj or getattr(obj, "user_id", None) != current_user.id:
+        abort(404)
+    return obj
 
 
 def _q_movimientos():
@@ -207,6 +226,55 @@ def _clean_str(v):
     if not s or s.lower() == "nan":
         return None
     return s
+
+
+def _label_tipo_mov(v):
+    k = (_clean_str(v) or "").lower()
+    return _TIPO_MOV_LABELS.get(k, v or "—")
+
+
+def _label_estado(v):
+    k = (_clean_str(v) or "").lower()
+    return _ESTADO_LABELS.get(k, v or "—")
+
+
+def _infer_sentido_mov(r: BilleteraMovimiento):
+    """
+    Intenta inferir sentido respecto al usuario consultado:
+    - Ingreso: entra dinero a la cuenta consultada
+    - Salida: sale dinero de la cuenta consultada
+    """
+    sujeto = _clean_str(r.dato)
+    buyer = _clean_str(r.id_buyer)
+    seller = _clean_str(r.id_seller)
+    tipo = (_clean_str(r.tipo_movimiento) or "").lower()
+
+    if sujeto and buyer and seller:
+        if seller == sujeto and buyer != sujeto:
+            return "Ingreso"
+        if buyer == sujeto and seller != sujeto:
+            return "Salida"
+
+    # Fallback por tipo cuando no alcanza la metadata
+    if tipo == "account_fund":
+        return "Ingreso"
+    if tipo == "regular_payment":
+        return "Salida"
+    if tipo == "money_transfer":
+        return "Transferencia"
+    return "Sin clasificar"
+
+
+def _display_persona(nombre, doc, fallback=None):
+    n = _clean_str(nombre)
+    d = _clean_str(doc)
+    if n and d:
+        return f"{n} ({d})"
+    if n:
+        return n
+    if d:
+        return d
+    return fallback or "—"
 
 
 def _parse_dt(v):
@@ -404,6 +472,51 @@ def _build_analisis_context():
         .all()
     )
 
+    mov_rows = []
+    for r in mov_items:
+        sujeto_id = _clean_str(r.dato)
+        buyer_id = _clean_str(r.id_buyer)
+        seller_id = _clean_str(r.id_seller)
+        cuenta_investigada = _clean_str(r.apodo) or (f"Cuenta {sujeto_id}" if sujeto_id else "Cuenta investigada")
+        buyer_lbl = _display_persona(r.nombre_buyer, r.documento_buyer, _clean_str(r.apodo_buyer) or buyer_id or "—")
+        seller_lbl = _display_persona(r.nombre_seller, None, _clean_str(r.apodo_seller) or seller_id or "—")
+        destino_lbl = _display_persona(r.nombre_destino_account, r.documento_destino_account, seller_lbl)
+        origen_lbl = buyer_lbl
+        hacia_lbl = destino_lbl
+        if sujeto_id and seller_id and seller_id == sujeto_id:
+            # Ingreso: contraparte -> cuenta investigada
+            origen_lbl = buyer_lbl
+            hacia_lbl = cuenta_investigada
+        elif sujeto_id and buyer_id and buyer_id == sujeto_id:
+            # Salida: cuenta investigada -> contraparte
+            origen_lbl = cuenta_investigada
+            hacia_lbl = destino_lbl
+
+        mov_rows.append(
+            {
+                "row": r,
+                "tipo_label": _label_tipo_mov(r.tipo_movimiento),
+                "estado_label": _label_estado(r.estado_payment),
+                "sentido_label": _infer_sentido_mov(r),
+                "origen_label": origen_lbl,
+                "destino_label": hacia_lbl,
+            }
+        )
+
+    sal_rows = []
+    for r in sal_items:
+        origen_sal = _display_persona(r.titular_origen, None, _clean_str(r.id_usuario_origen) or "Cuenta investigada")
+        destino_sal = _display_persona(r.titular_destino, r.documento_destino, _clean_str(r.entidad) or "Destino externo")
+        sal_rows.append(
+            {
+                "row": r,
+                "estado_label": _label_estado(r.estado),
+                "sentido_label": "Salida / Extracción",
+                "origen_label": origen_sal,
+                "destino_label": destino_sal,
+            }
+        )
+
     mov_count, mov_total = mov_q.with_entities(
         func.count(BilleteraMovimiento.id), func.coalesce(func.sum(BilleteraMovimiento.total_pagado), 0)
     ).first()
@@ -541,6 +654,8 @@ def _build_analisis_context():
     return {
         "mov_items": mov_items,
         "sal_items": sal_items,
+        "mov_rows": mov_rows,
+        "sal_rows": sal_rows,
         "mov_count": int(mov_count or 0),
         "mov_total": float(mov_total or 0),
         "sal_count": int(sal_count or 0),
@@ -692,6 +807,59 @@ def cargas():
         casos_opts=casos_opts,
         sujetos_opts=sujetos_opts,
     )
+
+
+@bp.route("/cargas/<int:carga_id>/vincular", methods=["GET", "POST"])
+def cargas_vincular(carga_id):
+    if not _permiso_upload():
+        flash("Sin permiso para vincular cargas.", "warning")
+        return redirect(url_for("billeteras_virtuales.cargas"))
+
+    carga = _q_cargas().filter(BilleteraCarga.id == carga_id).first_or_404()
+    _assert_owner_or_404(carga)
+
+    casos_opts = _q_casos_accesibles().order_by(AnalisisPuntoCaso.created_at.desc()).limit(300).all()
+    sujetos_opts = _q_sujetos_accesibles().order_by(Sujeto.apodo, Sujeto.nombre).limit(500).all()
+
+    if request.method == "POST":
+        caso = _get_caso_accesible(request.form.get("caso_id"))
+        if not caso:
+            flash("Debe seleccionar un caso válido.", "warning")
+            return render_template(
+                "billeteras_virtuales/carga_vincular.html",
+                carga=carga,
+                casos_opts=casos_opts,
+                sujetos_opts=sujetos_opts,
+            )
+        sujeto = _get_sujeto_accesible(request.form.get("sujeto_id"))
+        carga.caso_id = caso.id
+        carga.sujeto_id = sujeto.id if sujeto else None
+        db.session.commit()
+        flash("Vinculación actualizada.", "success")
+        return redirect(url_for("billeteras_virtuales.cargas"))
+
+    return render_template(
+        "billeteras_virtuales/carga_vincular.html",
+        carga=carga,
+        casos_opts=casos_opts,
+        sujetos_opts=sujetos_opts,
+    )
+
+
+@bp.route("/cargas/<int:carga_id>/eliminar", methods=["POST"])
+def cargas_eliminar(carga_id):
+    if not _permiso_upload():
+        flash("Sin permiso para eliminar cargas.", "warning")
+        return redirect(url_for("billeteras_virtuales.cargas"))
+
+    carga = _q_cargas().filter(BilleteraCarga.id == carga_id).first_or_404()
+    _assert_owner_or_404(carga)
+    nombre = carga.nombre_archivo or f"Carga #{carga.id}"
+
+    db.session.delete(carga)
+    db.session.commit()
+    flash(f"Carga eliminada: {nombre}", "success")
+    return redirect(url_for("billeteras_virtuales.cargas"))
 
 
 @bp.route("/analisis")
