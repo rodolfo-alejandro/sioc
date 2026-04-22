@@ -1,0 +1,71 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Informe Billeteras - SIOC{% endblock %}
+
+{% block content %}
+<div class="d-print-none mb-3">
+    <button class="btn btn-primary btn-sm" onclick="window.print()"><i class="bi bi-printer"></i> Imprimir / Guardar PDF</button>
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('billeteras_virtuales.analisis', **request.args) }}">Volver</a>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <h3 class="mb-1">Informe de Billeteras Virtuales</h3>
+        <p class="text-muted mb-3">Fecha de emisión: {{ emitido_en|localtime('%d/%m/%Y %H:%M') if emitido_en else '' }}</p>
+
+        <h5>Resumen cuantitativo</h5>
+        <ul>
+            <li>Movimientos: <strong>{{ mov_count|number_format }}</strong> (monto: <strong>$ {{ '%.2f'|format(mov_total or 0) }}</strong>)</li>
+            <li>Salidas: <strong>{{ sal_count|number_format }}</strong> (monto: <strong>$ {{ '%.2f'|format(sal_total or 0) }}</strong>)</li>
+        </ul>
+
+        <h5>Alertas</h5>
+        {% if alertas %}
+        <ul>
+            {% for a in alertas %}
+            <li>{{ a }}</li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-muted">Sin alertas relevantes con el filtro aplicado.</p>
+        {% endif %}
+
+        <h5>Top contrapartes (movimientos)</h5>
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <thead><tr><th>Nombre</th><th>Documento</th><th>Cantidad</th><th>Total</th></tr></thead>
+                <tbody>
+                    {% for r in top_buyer %}
+                    <tr>
+                        <td>{{ r[0] or '—' }}</td>
+                        <td>{{ r[1] or '—' }}</td>
+                        <td>{{ r[2] }}</td>
+                        <td>$ {{ '%.2f'|format(r[3] or 0) }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="4" class="text-muted text-center">Sin datos</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <h5>Top entidades destino (salidas)</h5>
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <thead><tr><th>Entidad</th><th>Cantidad</th><th>Total</th></tr></thead>
+                <tbody>
+                    {% for r in top_entidad %}
+                    <tr>
+                        <td>{{ r[0] or '—' }}</td>
+                        <td>{{ r[1] }}</td>
+                        <td>$ {{ '%.2f'|format(r[2] or 0) }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="3" class="text-muted text-center">Sin datos</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

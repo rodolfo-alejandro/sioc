@@ -1,0 +1,85 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Billeteras Virtuales - SIOC{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-wallet2"></i> Billeteras Virtuales</h1>
+    <p class="text-muted">Flujo simple: <strong>Cargar Excel</strong> → <strong>Revisar tabla</strong> → <strong>Analizar patrones</strong>.</p>
+</div>
+
+<div class="row g-3 mb-3">
+    <div class="col-md-4">
+        <div class="card h-100 border-success border-opacity-25">
+            <div class="card-body text-center">
+                <i class="bi bi-cloud-upload display-5 text-success"></i>
+                <h5 class="mt-2">Cargas</h5>
+                <p class="text-muted">Suba archivos de movimientos o extracciones/salidas.</p>
+                <a class="btn btn-success" href="{{ url_for('billeteras_virtuales.cargas') }}">Abrir cargas</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100 border-primary border-opacity-25">
+            <div class="card-body text-center">
+                <i class="bi bi-table display-5 text-primary"></i>
+                <h5 class="mt-2">Tabla y filtros</h5>
+                <p class="text-muted">Filtre por fecha, estado, tipo de movimiento y persona.</p>
+                <a class="btn btn-primary" href="{{ url_for('billeteras_virtuales.analisis') }}">Abrir análisis</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100 border-warning border-opacity-25">
+            <div class="card-body text-center">
+                <i class="bi bi-bar-chart-line display-5 text-warning"></i>
+                <h5 class="mt-2">Resumen rápido</h5>
+                <p class="text-muted mb-1"><strong>{{ mov_count|number_format }}</strong> movimientos · $ {{ '%.2f'|format(mov_total or 0) }}</p>
+                <p class="text-muted mb-0"><strong>{{ sal_count|number_format }}</strong> salidas · $ {{ '%.2f'|format(sal_total or 0) }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-clock-history"></i> Cargas recientes</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-sm align-middle">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Tipo</th>
+                        <th>Archivo</th>
+                        <th>Registros</th>
+                        <th>Rango fechas</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in cargas %}
+                    <tr>
+                        <td>{{ c.created_at|localtime if c.created_at else '' }}</td>
+                        <td><span class="badge bg-{{ 'primary' if c.tipo_archivo == 'movimientos' else 'warning text-dark' }}">{{ c.tipo_archivo }}</span></td>
+                        <td>{{ c.nombre_archivo }}</td>
+                        <td>{{ c.registros_validos }}/{{ c.registros_total }}</td>
+                        <td>
+                            {% if c.fecha_min and c.fecha_max %}
+                                {{ c.fecha_min|localtime('%d/%m/%Y') }} - {{ c.fecha_max|localtime('%d/%m/%Y') }}
+                            {% else %}
+                                <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="text-center text-muted">Aún no hay cargas.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

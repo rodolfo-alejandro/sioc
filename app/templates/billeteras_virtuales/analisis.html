@@ -1,0 +1,277 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Análisis Billeteras - SIOC{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-graph-up"></i> Análisis · Billeteras Virtuales</h1>
+    <p class="text-muted">Vista unificada para movimientos y salidas, con filtros simples y resumen investigativo.</p>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="GET" class="row g-2">
+            <div class="col-md-2">
+                <label class="form-label">Desde</label>
+                <input type="date" name="desde" value="{{ request.args.get('desde','') }}" class="form-control">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Hasta</label>
+                <input type="date" name="hasta" value="{{ request.args.get('hasta','') }}" class="form-control">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Estado</label>
+                <input type="text" name="estado" value="{{ request.args.get('estado','') }}" class="form-control" placeholder="approved">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Tipo movimiento</label>
+                <select name="tipo_movimiento" class="form-select">
+                    <option value="">Todos</option>
+                    {% for opt in tipo_mov_opts %}
+                    <option value="{{ opt }}" {{ opt == request.args.get('tipo_movimiento','') and 'selected' or '' }}>{{ opt }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Entidad (salidas)</label>
+                <input type="text" name="entidad" value="{{ request.args.get('entidad','') }}" class="form-control" placeholder="Naranja, Macro, Brubank...">
+            </div>
+            <div class="col-md-10">
+                <label class="form-label">Búsqueda libre</label>
+                <input type="text" name="q" value="{{ request.args.get('q','') }}" class="form-control" placeholder="Nombre, documento, destino, método de pago...">
+            </div>
+            <div class="col-md-2 d-grid">
+                <label class="form-label">&nbsp;</label>
+                <button class="btn btn-primary" type="submit"><i class="bi bi-funnel"></i> Aplicar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="d-flex gap-2 mb-3">
+    <a class="btn btn-outline-success btn-sm" href="{{ url_for('billeteras_virtuales.analisis_export_csv', **request.args) }}">
+        <i class="bi bi-filetype-csv"></i> Exportar CSV
+    </a>
+    <a class="btn btn-outline-primary btn-sm" href="{{ url_for('billeteras_virtuales.analisis_informe', **request.args) }}" target="_blank">
+        <i class="bi bi-file-earmark-text"></i> Informe imprimible
+    </a>
+</div>
+
+<div class="row g-3 mb-3">
+    <div class="col-md-3">
+        <div class="card"><div class="card-body">
+            <div class="text-muted">Movimientos</div>
+            <div class="fs-4">{{ mov_count|number_format }}</div>
+        </div></div>
+    </div>
+    <div class="col-md-3">
+        <div class="card"><div class="card-body">
+            <div class="text-muted">Monto movimientos</div>
+            <div class="fs-5">$ {{ '%.2f'|format(mov_total or 0) }}</div>
+        </div></div>
+    </div>
+    <div class="col-md-3">
+        <div class="card"><div class="card-body">
+            <div class="text-muted">Salidas</div>
+            <div class="fs-4">{{ sal_count|number_format }}</div>
+        </div></div>
+    </div>
+    <div class="col-md-3">
+        <div class="card"><div class="card-body">
+            <div class="text-muted">Monto salidas</div>
+            <div class="fs-5">$ {{ '%.2f'|format(sal_total or 0) }}</div>
+        </div></div>
+    </div>
+</div>
+
+<div class="row g-3 mb-3">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header"><h6 class="mb-0">Serie temporal (montos por día)</h6></div>
+            <div class="card-body">
+                <div id="bv-chart-diario" style="height:280px;"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header"><h6 class="mb-0">Grafo simple de vínculos (top montos)</h6></div>
+            <div class="card-body">
+                <div id="bv-chart-grafo" style="height:280px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header"><h6 class="mb-0">Alertas automáticas</h6></div>
+    <div class="card-body">
+        {% if alertas %}
+            <ul class="mb-0">
+                {% for a in alertas %}
+                <li>{{ a }}</li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="text-muted mb-0">Sin alertas relevantes con los filtros actuales.</p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="row g-3 mb-3">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header"><h6 class="mb-0">Top contrapartes (movimientos)</h6></div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead><tr><th>Nombre</th><th>Documento</th><th>Cant.</th><th>Total</th></tr></thead>
+                        <tbody>
+                            {% for r in top_buyer %}
+                            <tr>
+                                <td>{{ r[0] or '—' }}</td>
+                                <td>{{ r[1] or '—' }}</td>
+                                <td>{{ r[2] }}</td>
+                                <td>$ {{ '%.2f'|format(r[3] or 0) }}</td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="4" class="text-muted text-center">Sin datos</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header"><h6 class="mb-0">Top entidades destino (salidas)</h6></div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead><tr><th>Entidad</th><th>Cant.</th><th>Total</th></tr></thead>
+                        <tbody>
+                            {% for r in top_entidad %}
+                            <tr>
+                                <td>{{ r[0] or '—' }}</td>
+                                <td>{{ r[1] }}</td>
+                                <td>$ {{ '%.2f'|format(r[2] or 0) }}</td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="3" class="text-muted text-center">Sin datos</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header"><h6 class="mb-0">Movimientos (últimos 500)</h6></div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-sm align-middle">
+                <thead>
+                    <tr>
+                        <th>Fecha</th><th>Tipo</th><th>Estado</th><th>Monto</th><th>Buyer</th><th>Doc</th><th>Método</th><th>Destino</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in mov_items %}
+                    <tr>
+                        <td>{{ r.fecha_operacion|localtime if r.fecha_operacion else '' }}</td>
+                        <td>{{ r.tipo_movimiento or '—' }}</td>
+                        <td>{{ r.estado_payment or '—' }}</td>
+                        <td>$ {{ '%.2f'|format(r.total_pagado or 0) }}</td>
+                        <td>{{ r.nombre_buyer or '—' }}</td>
+                        <td>{{ r.documento_buyer or '—' }}</td>
+                        <td>{{ r.metodo_pago or '—' }}</td>
+                        <td>{{ r.nombre_destino_account or r.documento_destino_account or '—' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="8" class="text-muted text-center">Sin movimientos.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><h6 class="mb-0">Salidas / Extracciones (últimas 300)</h6></div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-sm align-middle">
+                <thead>
+                    <tr>
+                        <th>Fecha</th><th>Estado</th><th>Monto</th><th>Titular destino</th><th>Documento</th><th>Cuenta</th><th>Entidad</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in sal_items %}
+                    <tr>
+                        <td>{{ r.fecha_operacion|localtime if r.fecha_operacion else '' }}</td>
+                        <td>{{ r.estado or '—' }}</td>
+                        <td>$ {{ '%.2f'|format(r.monto_retirado or 0) }}</td>
+                        <td>{{ r.titular_destino or '—' }}</td>
+                        <td>{{ r.documento_destino or '—' }}</td>
+                        <td>{{ r.cuenta_destino or '—' }}</td>
+                        <td>{{ r.entidad or '—' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="7" class="text-muted text-center">Sin salidas.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+    var movDaily = {{ mov_daily_json|safe }};
+    var salDaily = {{ sal_daily_json|safe }};
+    var buyerGraph = {{ buyer_graph_json|safe }};
+    var entidadGraph = {{ entidad_graph_json|safe }};
+
+    var x1 = movDaily.map(function (r) { return r.fecha; });
+    var y1 = movDaily.map(function (r) { return r.total; });
+    var x2 = salDaily.map(function (r) { return r.fecha; });
+    var y2 = salDaily.map(function (r) { return r.total; });
+    Plotly.newPlot('bv-chart-diario', [
+        { x: x1, y: y1, type: 'scatter', mode: 'lines+markers', name: 'Movimientos' },
+        { x: x2, y: y2, type: 'scatter', mode: 'lines+markers', name: 'Salidas' }
+    ], {
+        margin: { l: 50, r: 10, t: 10, b: 40 },
+        legend: { orientation: 'h' }
+    }, { displayModeBar: false, responsive: true });
+
+    var labels = ['Usuario investigado'];
+    var parents = [''];
+    var values = [1];
+    buyerGraph.forEach(function (r) {
+        labels.push(r.label);
+        parents.push('Usuario investigado');
+        values.push(Math.max(1, r.total));
+    });
+    entidadGraph.forEach(function (r) {
+        labels.push('Entidad: ' + r.label);
+        parents.push('Usuario investigado');
+        values.push(Math.max(1, r.total));
+    });
+    Plotly.newPlot('bv-chart-grafo', [{
+        type: 'treemap',
+        labels: labels,
+        parents: parents,
+        values: values,
+        branchvalues: 'total'
+    }], {
+        margin: { l: 0, r: 0, t: 10, b: 0 }
+    }, { displayModeBar: false, responsive: true });
+})();
+</script>
+{% endblock %}

@@ -71,6 +71,9 @@ def create_app(config_class=Config):
     from app.blueprints.analisis_puntos import bp as analisis_puntos_bp
     app.register_blueprint(analisis_puntos_bp)
 
+    from app.blueprints.billeteras_virtuales import bp as billeteras_virtuales_bp
+    app.register_blueprint(billeteras_virtuales_bp)
+
     # Crear directorios necesarios
     upload_folder = app.config.get('UPLOAD_FOLDER', 'instance/uploads')
     os.makedirs(upload_folder, exist_ok=True)

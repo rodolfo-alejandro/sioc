@@ -49,6 +49,11 @@ from app.models.analisis_puntos import (
     AnalisisPuntoCasoNumero,
     AnalisisPuntoCasoMapaPunto,
 )
+from app.models.billeteras_virtuales import (
+    BilleteraCarga,
+    BilleteraMovimiento,
+    BilleteraSalida,
+)
 
 __all__ = [
     'User', 'Role', 'Permission', 'Unidad', 'AuditLog', 'Dataset', 'DenunciaWeb',
@@ -69,5 +74,6 @@ __all__ = [
     'AnalisisPuntoCaso', 'AnalisisPuntoCasoCompartido', 'AnalisisPuntoFuente', 'AnalisisPuntoCelda', 'AnalisisPuntoEvento',
     'AnalisisPuntoTitular', 'AnalisisPuntoCasoSujeto', 'AnalisisPuntoCasoFuente', 'AnalisisPuntoCasoNumero',
     'AnalisisPuntoCasoMapaPunto',
+    'BilleteraCarga', 'BilleteraMovimiento', 'BilleteraSalida',
 ]
 
