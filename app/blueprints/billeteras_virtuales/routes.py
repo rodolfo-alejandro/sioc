@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import csv
+import re
 from collections import defaultdict
 from datetime import datetime
 from decimal import Decimal
@@ -28,6 +29,9 @@ from app.models.user import User
 
 
 _bv_schema_checked = False
+# Máximo de filas en JSON para drill-down del gráfico (evita respuestas enormes).
+_BV_DETALLE_JSON_CAP = 5000
+_BV_FECHA_ARG_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _TIPO_MOV_LABELS = {
     "money_transfer": "Transferencia",
     "regular_payment": "Pago",
@@ -243,6 +247,109 @@ def _clean_str(v):
     return s
 
 
+def _carga_meta_dict(carga: BilleteraCarga | None) -> dict:
+    """Metadatos de carga para tablas, JSON de detalle e informes."""
+    if not carga:
+        return {
+            "id": None,
+            "archivo": "",
+            "hash_corto": "",
+            "caso_codigo": "",
+            "sujeto": "",
+            "label": "—",
+            "title": "",
+        }
+    h = (carga.archivo_hash or "")[:12]
+    caso = getattr(carga, "caso", None)
+    suj = getattr(carga, "sujeto", None)
+    caso_c = (caso.codigo or "").strip() if caso else ""
+    suj_s = ""
+    if suj and hasattr(suj, "display_name"):
+        suj_s = (suj.display_name() or "").strip()
+    nom = (carga.nombre_archivo or "").strip()
+    label = f"#{carga.id}"
+    if nom:
+        label = f"{label} · {nom[:48]}{'…' if len(nom) > 48 else ''}"
+    title_bits = [f"Carga #{carga.id}", nom or "(sin nombre)", f"SHA-256: {carga.archivo_hash or '—'}"]
+    if caso_c:
+        title_bits.append(f"Caso: {caso_c}")
+    if suj_s:
+        title_bits.append(f"Sujeto: {suj_s}")
+    return {
+        "id": carga.id,
+        "archivo": nom,
+        "hash_corto": h,
+        "caso_codigo": caso_c,
+        "sujeto": suj_s,
+        "label": label,
+        "title": " · ".join(title_bits),
+    }
+
+
+def _aporte_por_carga_filtrado(mov_q, sal_q, limit: int = 15) -> list[dict]:
+    """Agrupa operaciones y montos por archivo de carga dentro del filtro actual."""
+    agg: dict[int, dict] = defaultdict(lambda: {"mov_n": 0, "mov_monto": 0.0, "sal_n": 0, "sal_monto": 0.0})
+    for cid, n, m in (
+        mov_q.with_entities(
+            BilleteraMovimiento.carga_id,
+            func.count(BilleteraMovimiento.id),
+            func.coalesce(func.sum(BilleteraMovimiento.total_pagado), 0),
+        )
+        .group_by(BilleteraMovimiento.carga_id)
+        .all()
+    ):
+        agg[int(cid)]["mov_n"] = int(n or 0)
+        agg[int(cid)]["mov_monto"] = float(m or 0)
+    for cid, n, m in (
+        sal_q.with_entities(
+            BilleteraSalida.carga_id,
+            func.count(BilleteraSalida.id),
+            func.coalesce(func.sum(BilleteraSalida.monto_retirado), 0),
+        )
+        .group_by(BilleteraSalida.carga_id)
+        .all()
+    ):
+        agg[int(cid)]["sal_n"] = int(n or 0)
+        agg[int(cid)]["sal_monto"] = float(m or 0)
+    if not agg:
+        return []
+    pred = _carga_access_predicate()
+    cq = BilleteraCarga.query.filter(
+        BilleteraCarga.unidad_id == current_user.unidad_id,
+        BilleteraCarga.id.in_(list(agg.keys())),
+    )
+    if pred is not True:
+        cq = cq.filter(pred)
+    cargas = {
+        c.id: c
+        for c in cq.options(joinedload(BilleteraCarga.caso), joinedload(BilleteraCarga.sujeto)).all()
+    }
+    tot_ops = sum(int(x["mov_n"] + x["sal_n"]) for x in agg.values())
+    tot_monto = sum(float(x["mov_monto"] + x["sal_monto"]) for x in agg.values())
+    rows_out: list[dict] = []
+    for cid, data in agg.items():
+        meta = _carga_meta_dict(cargas.get(cid))
+        ops = int(data["mov_n"] + data["sal_n"])
+        mon = float(data["mov_monto"] + data["sal_monto"])
+        pct_ops = (100.0 * ops / tot_ops) if tot_ops else 0.0
+        pct_mon = (100.0 * mon / tot_monto) if tot_monto else 0.0
+        rows_out.append(
+            {
+                **meta,
+                "mov_n": int(data["mov_n"]),
+                "sal_n": int(data["sal_n"]),
+                "ops": ops,
+                "mov_monto": float(data["mov_monto"]),
+                "sal_monto": float(data["sal_monto"]),
+                "monto": mon,
+                "pct_ops": round(pct_ops, 1),
+                "pct_monto": round(pct_mon, 1),
+            }
+        )
+    rows_out.sort(key=lambda x: x["monto"], reverse=True)
+    return rows_out[:limit]
+
+
 def _label_tipo_mov(v):
     k = (_clean_str(v) or "").lower()
     return _TIPO_MOV_LABELS.get(k, v or "—")
@@ -292,6 +399,155 @@ def _display_persona(nombre, doc, fallback=None):
     return fallback or "—"
 
 
+def _pair_labels_movimiento(r: BilleteraMovimiento) -> tuple[str, str]:
+    """Etiquetas De/Hacia alineadas con la vista de tabla (origen/destino inferidos)."""
+    sujeto_id = _clean_str(r.dato)
+    buyer_id = _clean_str(r.id_buyer)
+    seller_id = _clean_str(r.id_seller)
+    cuenta_investigada = _clean_str(r.apodo) or (f"Cuenta {sujeto_id}" if sujeto_id else "Cuenta investigada")
+    buyer_lbl = _display_persona(r.nombre_buyer, r.documento_buyer, _clean_str(r.apodo_buyer) or buyer_id or "—")
+    seller_lbl = _display_persona(r.nombre_seller, None, _clean_str(r.apodo_seller) or seller_id or "—")
+    destino_lbl = _display_persona(r.nombre_destino_account, r.documento_destino_account, seller_lbl)
+    origen_lbl = buyer_lbl
+    hacia_lbl = destino_lbl
+    if sujeto_id and seller_id and seller_id == sujeto_id:
+        origen_lbl = buyer_lbl
+        hacia_lbl = cuenta_investigada
+    elif sujeto_id and buyer_id and buyer_id == sujeto_id:
+        origen_lbl = cuenta_investigada
+        hacia_lbl = destino_lbl
+    return origen_lbl, hacia_lbl
+
+
+def _pair_labels_salida(r: BilleteraSalida) -> tuple[str, str]:
+    origen_sal = _display_persona(r.titular_origen, None, _clean_str(r.id_usuario_origen) or "Cuenta investigada")
+    destino_sal = _display_persona(r.titular_destino, r.documento_destino, _clean_str(r.entidad) or "Destino externo")
+    return origen_sal, destino_sal
+
+
+def _detalle_mov_dict(r: BilleteraMovimiento) -> dict:
+    de, hacia = _pair_labels_movimiento(r)
+    fecha_dia = r.fecha_operacion.date().isoformat() if r.fecha_operacion else ""
+    cmeta = _carga_meta_dict(getattr(r, "carga", None))
+    return {
+        "fecha_dia": fecha_dia,
+        "fecha": str(r.fecha_operacion) if r.fecha_operacion else "",
+        "tipo": "Movimiento",
+        "sentido": _infer_sentido_mov(r),
+        "estado": _label_estado(r.estado_payment),
+        "monto": float(r.total_pagado or 0),
+        "de": de,
+        "hacia": hacia,
+        "metodo": r.metodo_pago or "—",
+        "referencia": r.nombre_destino_account or r.documento_destino_account or r.nombre_seller or "—",
+        "entidad": "—",
+        "serie": "Movimientos",
+        "carga_id": cmeta["id"],
+        "carga_label": cmeta["label"],
+        "carga_title": cmeta["title"],
+    }
+
+
+def _detalle_sal_dict(r: BilleteraSalida) -> dict:
+    de, hacia = _pair_labels_salida(r)
+    fecha_dia = r.fecha_operacion.date().isoformat() if r.fecha_operacion else ""
+    cmeta = _carga_meta_dict(getattr(r, "carga", None))
+    return {
+        "fecha_dia": fecha_dia,
+        "fecha": str(r.fecha_operacion) if r.fecha_operacion else "",
+        "tipo": "Salida",
+        "sentido": "Salida / Extracción",
+        "estado": _label_estado(r.estado),
+        "monto": float(r.monto_retirado or 0),
+        "de": de,
+        "hacia": hacia,
+        "metodo": r.cuenta_destino or "—",
+        "referencia": r.detalle or "—",
+        "entidad": r.entidad or "—",
+        "serie": "Salidas",
+        "carga_id": cmeta["id"],
+        "carga_label": cmeta["label"],
+        "carga_title": cmeta["title"],
+    }
+
+
+def _stream_vinculos_totales(mov_q, sal_q):
+    """Agrega vínculos De→Hacia sobre **todo** el conjunto filtrado (no solo la tabla paginada)."""
+    vinculos = defaultdict(
+        lambda: {
+            "de": "—",
+            "hacia": "—",
+            "cantidad": 0,
+            "monto_total": 0.0,
+            "movimientos": 0,
+            "salidas": 0,
+        }
+    )
+    mq = mov_q.order_by(None)
+    for r in mq.yield_per(800):
+        de, hacia = _pair_labels_movimiento(r)
+        monto = float(r.total_pagado or 0)
+        key = (de, hacia)
+        v = vinculos[key]
+        v["de"] = de
+        v["hacia"] = hacia
+        v["cantidad"] += 1
+        v["monto_total"] += monto
+        v["movimientos"] += 1
+    sq = sal_q.order_by(None)
+    for r in sq.yield_per(800):
+        de, hacia = _pair_labels_salida(r)
+        monto = float(r.monto_retirado or 0)
+        key = (de, hacia)
+        v = vinculos[key]
+        v["de"] = de
+        v["hacia"] = hacia
+        v["cantidad"] += 1
+        v["monto_total"] += monto
+        v["salidas"] += 1
+    return vinculos
+
+
+def _detalle_diario_capped(mov_q, sal_q, cap: int):
+    """Muestra reciente para interacción en gráfico; el total filtrado está en los KPI."""
+    out = []
+    lim_mov_det = max(0, min(cap, int(cap * 0.65)))
+    lim_sal_det = max(0, cap - lim_mov_det)
+    mov_ld = joinedload(BilleteraMovimiento.carga).joinedload(BilleteraCarga.caso)
+    mov_ls = joinedload(BilleteraMovimiento.carga).joinedload(BilleteraCarga.sujeto)
+    sal_ld = joinedload(BilleteraSalida.carga).joinedload(BilleteraCarga.caso)
+    sal_ls = joinedload(BilleteraSalida.carga).joinedload(BilleteraCarga.sujeto)
+    if lim_mov_det:
+        for r in (
+            mov_q.options(mov_ld, mov_ls)
+            .order_by(BilleteraMovimiento.fecha_operacion.desc())
+            .limit(lim_mov_det)
+        ):
+            out.append(_detalle_mov_dict(r))
+    if lim_sal_det:
+        for r in (
+            sal_q.options(sal_ld, sal_ls)
+            .order_by(BilleteraSalida.fecha_operacion.desc())
+            .limit(lim_sal_det)
+        ):
+            out.append(_detalle_sal_dict(r))
+    return out
+
+
+def _tab_limit(name: str, default: int, hard_max: int) -> int:
+    v = request.args.get(name, type=int)
+    if v is None:
+        return default
+    return max(1, min(hard_max, int(v)))
+
+
+def _min_tx_vinculo() -> int:
+    v = request.args.get("min_tx_vinculo", type=int)
+    if v is None:
+        return 1
+    return max(1, min(50, int(v)))
+
+
 def _parse_dt(v):
     if v is None:
         return None
@@ -335,7 +591,15 @@ def _detect_tipo_archivo(df: pd.DataFrame) -> str | None:
 def _ingestar_movimientos(df: pd.DataFrame, carga: BilleteraCarga):
     validos = 0
     fechas = []
+    seen_payment: set[str] = set()
+    omit_dup = 0
     for _, row in df.iterrows():
+        pid = _clean_str(row.get("PAYMENT ID"))
+        if pid and pid in seen_payment:
+            omit_dup += 1
+            continue
+        if pid:
+            seen_payment.add(pid)
         fecha = _parse_dt(row.get("FECHA CREACION PAGO"))
         monto = _parse_num(row.get("TOTAL PAGADO"))
         if fecha:
@@ -375,12 +639,21 @@ def _ingestar_movimientos(df: pd.DataFrame, carga: BilleteraCarga):
     carga.registros_validos = validos
     carga.fecha_min = min(fechas) if fechas else None
     carga.fecha_max = max(fechas) if fechas else None
+    return omit_dup
 
 
 def _ingestar_salidas(df: pd.DataFrame, carga: BilleteraCarga):
     validos = 0
     fechas = []
+    seen_retiro: set[str] = set()
+    omit_dup = 0
     for _, row in df.iterrows():
+        rid = _clean_str(row.get("ID RETIRO"))
+        if rid and rid in seen_retiro:
+            omit_dup += 1
+            continue
+        if rid:
+            seen_retiro.add(rid)
         fecha = _parse_dt(row.get("FECHA CREACION"))
         monto = _parse_num(row.get("MONTO RETIRADO"))
         if fecha:
@@ -410,14 +683,18 @@ def _ingestar_salidas(df: pd.DataFrame, carga: BilleteraCarga):
     carga.registros_validos = validos
     carga.fecha_min = min(fechas) if fechas else None
     carga.fecha_max = max(fechas) if fechas else None
+    return omit_dup
 
 
 def _apply_common_filters(q, model):
     desde = _parse_dt(request.args.get("desde"))
-    hasta = _parse_dt(request.args.get("hasta"))
+    hasta_raw = request.args.get("hasta")
+    hasta = _parse_dt(hasta_raw)
     estado = _clean_str(request.args.get("estado"))
     estados = _get_str_list_arg("estados[]")
     qtxt = _clean_str(request.args.get("q"))
+    de_q = _clean_str(request.args.get("de_q"))
+    hacia_q = _clean_str(request.args.get("hacia_q"))
     caso_ids = _get_int_list_arg("caso_ids[]")
     sujeto_ids = _get_int_list_arg("sujeto_ids[]")
     carga_ids = _get_int_list_arg("carga_ids[]")
@@ -437,6 +714,13 @@ def _apply_common_filters(q, model):
     if desde:
         q = q.filter(model.fecha_operacion >= desde)
     if hasta:
+        # Incluir todo el día "hasta" cuando viene solo como fecha (YYYY-MM-DD).
+        hs = (hasta_raw or "").strip()
+        if _BV_FECHA_ARG_RE.match(hs):
+            try:
+                hasta = hasta.replace(hour=23, minute=59, second=59, microsecond=999999)
+            except Exception:
+                pass
         q = q.filter(model.fecha_operacion <= hasta)
     if estados:
         if model is BilleteraMovimiento:
@@ -463,6 +747,51 @@ def _apply_common_filters(q, model):
                 | (BilleteraSalida.documento_destino.ilike(f"%{qtxt}%"))
                 | (BilleteraSalida.entidad.ilike(f"%{qtxt}%"))
             )
+    if de_q:
+        pat = f"%{de_q}%"
+        if model is BilleteraMovimiento:
+            q = q.filter(
+                or_(
+                    BilleteraMovimiento.nombre_buyer.ilike(pat),
+                    BilleteraMovimiento.apodo_buyer.ilike(pat),
+                    BilleteraMovimiento.documento_buyer.ilike(pat),
+                    BilleteraMovimiento.id_buyer.ilike(pat),
+                    BilleteraMovimiento.apodo.ilike(pat),
+                    BilleteraMovimiento.dato.ilike(pat),
+                )
+            )
+        else:
+            q = q.filter(
+                or_(
+                    BilleteraSalida.titular_origen.ilike(pat),
+                    BilleteraSalida.id_usuario_origen.ilike(pat),
+                    BilleteraSalida.apodo.ilike(pat),
+                    BilleteraSalida.dato.ilike(pat),
+                )
+            )
+    if hacia_q:
+        hp = f"%{hacia_q}%"
+        if model is BilleteraMovimiento:
+            q = q.filter(
+                or_(
+                    BilleteraMovimiento.nombre_destino_account.ilike(hp),
+                    BilleteraMovimiento.documento_destino_account.ilike(hp),
+                    BilleteraMovimiento.nombre_seller.ilike(hp),
+                    BilleteraMovimiento.apodo_seller.ilike(hp),
+                    BilleteraMovimiento.id_seller.ilike(hp),
+                    BilleteraMovimiento.metodo_pago.ilike(hp),
+                )
+            )
+        else:
+            q = q.filter(
+                or_(
+                    BilleteraSalida.titular_destino.ilike(hp),
+                    BilleteraSalida.documento_destino.ilike(hp),
+                    BilleteraSalida.entidad.ilike(hp),
+                    BilleteraSalida.detalle.ilike(hp),
+                    BilleteraSalida.cuenta_destino.ilike(hp),
+                )
+            )
     return q
 
 
@@ -483,39 +812,26 @@ def _build_analisis_context():
     if entidades:
         sal_q = sal_q.filter(BilleteraSalida.entidad.in_(entidades))
 
+    lim_mov = _tab_limit("lim_mov", 500, 2000)
+    lim_sal = _tab_limit("lim_sal", 300, 2000)
+    min_tx = _min_tx_vinculo()
+
     mov_items = (
         mov_q.options(joinedload(BilleteraMovimiento.carga).joinedload(BilleteraCarga.caso), joinedload(BilleteraMovimiento.carga).joinedload(BilleteraCarga.sujeto))
         .order_by(BilleteraMovimiento.fecha_operacion.desc())
-        .limit(500)
+        .limit(lim_mov)
         .all()
     )
     sal_items = (
         sal_q.options(joinedload(BilleteraSalida.carga).joinedload(BilleteraCarga.caso), joinedload(BilleteraSalida.carga).joinedload(BilleteraCarga.sujeto))
         .order_by(BilleteraSalida.fecha_operacion.desc())
-        .limit(300)
+        .limit(lim_sal)
         .all()
     )
 
     mov_rows = []
     for r in mov_items:
-        sujeto_id = _clean_str(r.dato)
-        buyer_id = _clean_str(r.id_buyer)
-        seller_id = _clean_str(r.id_seller)
-        cuenta_investigada = _clean_str(r.apodo) or (f"Cuenta {sujeto_id}" if sujeto_id else "Cuenta investigada")
-        buyer_lbl = _display_persona(r.nombre_buyer, r.documento_buyer, _clean_str(r.apodo_buyer) or buyer_id or "—")
-        seller_lbl = _display_persona(r.nombre_seller, None, _clean_str(r.apodo_seller) or seller_id or "—")
-        destino_lbl = _display_persona(r.nombre_destino_account, r.documento_destino_account, seller_lbl)
-        origen_lbl = buyer_lbl
-        hacia_lbl = destino_lbl
-        if sujeto_id and seller_id and seller_id == sujeto_id:
-            # Ingreso: contraparte -> cuenta investigada
-            origen_lbl = buyer_lbl
-            hacia_lbl = cuenta_investigada
-        elif sujeto_id and buyer_id and buyer_id == sujeto_id:
-            # Salida: cuenta investigada -> contraparte
-            origen_lbl = cuenta_investigada
-            hacia_lbl = destino_lbl
-
+        origen_lbl, destino_lbl = _pair_labels_movimiento(r)
         mov_rows.append(
             {
                 "row": r,
@@ -523,14 +839,14 @@ def _build_analisis_context():
                 "estado_label": _label_estado(r.estado_payment),
                 "sentido_label": _infer_sentido_mov(r),
                 "origen_label": origen_lbl,
-                "destino_label": hacia_lbl,
+                "destino_label": destino_lbl,
+                "carga_meta": _carga_meta_dict(getattr(r, "carga", None)),
             }
         )
 
     sal_rows = []
     for r in sal_items:
-        origen_sal = _display_persona(r.titular_origen, None, _clean_str(r.id_usuario_origen) or "Cuenta investigada")
-        destino_sal = _display_persona(r.titular_destino, r.documento_destino, _clean_str(r.entidad) or "Destino externo")
+        origen_sal, destino_sal = _pair_labels_salida(r)
         sal_rows.append(
             {
                 "row": r,
@@ -538,6 +854,7 @@ def _build_analisis_context():
                 "sentido_label": "Salida / Extracción",
                 "origen_label": origen_sal,
                 "destino_label": destino_sal,
+                "carga_meta": _carga_meta_dict(getattr(r, "carga", None)),
             }
         )
 
@@ -617,82 +934,20 @@ def _build_analisis_context():
         etiqueta = (r[0] or "Sin entidad").strip()
         entidad_graph.append({"label": etiqueta, "total": float(r[2] or 0)})
 
-    detalle_diario = []
-    vinculos = defaultdict(
-        lambda: {
-            "de": "—",
-            "hacia": "—",
-            "cantidad": 0,
-            "monto_total": 0.0,
-            "movimientos": 0,
-            "salidas": 0,
-        }
-    )
-    for item in mov_rows:
-        r = item["row"]
-        fecha_dia = r.fecha_operacion.date().isoformat() if r.fecha_operacion else ""
-        monto = float(r.total_pagado or 0)
-        de = item["origen_label"] or "—"
-        hacia = item["destino_label"] or "—"
-        detalle_diario.append(
-            {
-                "fecha_dia": fecha_dia,
-                "fecha": str(r.fecha_operacion) if r.fecha_operacion else "",
-                "tipo": "Movimiento",
-                "sentido": item["sentido_label"],
-                "estado": item["estado_label"],
-                "monto": monto,
-                "de": de,
-                "hacia": hacia,
-                "metodo": r.metodo_pago or "—",
-                "referencia": r.nombre_destino_account or r.documento_destino_account or r.nombre_seller or "—",
-                "entidad": "—",
-                "serie": "Movimientos",
-            }
-        )
-        key = (de, hacia)
-        v = vinculos[key]
-        v["de"] = de
-        v["hacia"] = hacia
-        v["cantidad"] += 1
-        v["monto_total"] += monto
-        v["movimientos"] += 1
-
-    for item in sal_rows:
-        r = item["row"]
-        fecha_dia = r.fecha_operacion.date().isoformat() if r.fecha_operacion else ""
-        monto = float(r.monto_retirado or 0)
-        de = item["origen_label"] or "—"
-        hacia = item["destino_label"] or "—"
-        detalle_diario.append(
-            {
-                "fecha_dia": fecha_dia,
-                "fecha": str(r.fecha_operacion) if r.fecha_operacion else "",
-                "tipo": "Salida",
-                "sentido": item["sentido_label"],
-                "estado": item["estado_label"],
-                "monto": monto,
-                "de": de,
-                "hacia": hacia,
-                "metodo": r.cuenta_destino or "—",
-                "referencia": r.detalle or "—",
-                "entidad": r.entidad or "—",
-                "serie": "Salidas",
-            }
-        )
-        key = (de, hacia)
-        v = vinculos[key]
-        v["de"] = de
-        v["hacia"] = hacia
-        v["cantidad"] += 1
-        v["monto_total"] += monto
-        v["salidas"] += 1
-
+    # Vínculos y grafo: todo el universo filtrado (alineado con KPI). Tabla: solo últimos N.
+    vinculos_map = _stream_vinculos_totales(mov_q, sal_q)
     resumen_vinculos = sorted(
-        vinculos.values(),
+        vinculos_map.values(),
         key=lambda x: (float(x["monto_total"] or 0), int(x["cantidad"] or 0)),
         reverse=True,
     )
+    resumen_vinculos_filtrado = [v for v in resumen_vinculos if int(v.get("cantidad") or 0) >= min_tx]
+    sum_ops_vinculos = sum(int(v.get("cantidad") or 0) for v in resumen_vinculos)
+    sum_monto_vinculos = sum(float(v.get("monto_total") or 0) for v in resumen_vinculos)
+    expected_ops = int(mov_count or 0) + int(sal_count or 0)
+    expected_monto = float(mov_total or 0) + float(sal_total or 0)
+    vinculos_match_ops = sum_ops_vinculos == expected_ops
+    vinculos_match_monto = abs(sum_monto_vinculos - expected_monto) < 0.05
     graph_edges = [
         {
             "source": v["de"],
@@ -700,8 +955,11 @@ def _build_analisis_context():
             "cantidad": int(v["cantidad"] or 0),
             "monto_total": float(v["monto_total"] or 0),
         }
-        for v in resumen_vinculos[:140]
+        for v in resumen_vinculos_filtrado[:140]
     ]
+    detalle_diario = _detalle_diario_capped(mov_q, sal_q, _BV_DETALLE_JSON_CAP)
+    aporte_cargas = _aporte_por_carga_filtrado(mov_q, sal_q, limit=15)
+    vinculos_delta_monto = float(sum_monto_vinculos) - float(expected_monto)
 
     # Alertas automáticas básicas
     alertas = []
@@ -837,14 +1095,30 @@ def _build_analisis_context():
         "alertas": alertas,
         "resumen_narrativo": resumen_narrativo,
         "recomendaciones": recomendaciones,
-        "top_vinculos": resumen_vinculos[:10],
+        "top_vinculos": resumen_vinculos_filtrado[:10],
         "mov_daily_json": json.dumps(mov_daily),
         "sal_daily_json": json.dumps(sal_daily),
         "detalle_diario_json": json.dumps(detalle_diario),
-        "resumen_vinculos_json": json.dumps(resumen_vinculos[:500]),
+        "resumen_vinculos_json": json.dumps(resumen_vinculos_filtrado[:500]),
         "rel_graph_json": json.dumps(graph_edges),
         "buyer_graph_json": json.dumps(buyer_graph),
         "entidad_graph_json": json.dumps(entidad_graph),
+        "lim_mov_tabla": lim_mov,
+        "lim_sal_tabla": lim_sal,
+        "min_tx_vinculo": min_tx,
+        "selected_de_q": _clean_str(request.args.get("de_q")) or "",
+        "selected_hacia_q": _clean_str(request.args.get("hacia_q")) or "",
+        "detalle_json_cap": _BV_DETALLE_JSON_CAP,
+        "mov_mostrados": len(mov_items),
+        "sal_mostrados": len(sal_items),
+        "sum_ops_vinculos": int(sum_ops_vinculos),
+        "sum_monto_vinculos": float(sum_monto_vinculos),
+        "vinculos_expected_ops": int(expected_ops),
+        "vinculos_expected_monto": float(expected_monto),
+        "vinculos_match_ops": vinculos_match_ops,
+        "vinculos_match_monto": vinculos_match_monto,
+        "vinculos_delta_monto": float(vinculos_delta_monto),
+        "aporte_cargas": aporte_cargas,
     }
 
 
@@ -912,6 +1186,18 @@ def cargas():
             return redirect(url_for("billeteras_virtuales.cargas"))
         file_hash = hashlib.sha256(raw).hexdigest()
 
+        dup = BilleteraCarga.query.filter(
+            BilleteraCarga.unidad_id == current_user.unidad_id,
+            BilleteraCarga.archivo_hash == file_hash,
+        ).first()
+        if dup:
+            flash(
+                f"Este archivo ya fue cargado (mismo contenido, hash SHA-256). "
+                f"Carga #{dup.id}: {dup.nombre_archivo or 'sin nombre'}. No se duplicó.",
+                "warning",
+            )
+            return redirect(url_for("billeteras_virtuales.cargas"))
+
         try:
             df = pd.read_excel(BytesIO(raw))
         except Exception as exc:
@@ -942,16 +1228,19 @@ def cargas():
         db.session.add(carga)
         db.session.flush()
 
+        omit_dup = 0
         if tipo == "movimientos":
-            _ingestar_movimientos(df, carga)
+            omit_dup = _ingestar_movimientos(df, carga)
         else:
-            _ingestar_salidas(df, carga)
+            omit_dup = _ingestar_salidas(df, carga)
 
         db.session.commit()
-        flash(
-            f"Carga procesada: {carga.registros_validos}/{carga.registros_total} registros ({tipo}).",
-            "success",
+        msg = (
+            f"Carga procesada: {carga.registros_validos}/{carga.registros_total} registros insertados ({tipo})."
         )
+        if omit_dup:
+            msg += f" Omitidas {omit_dup} filas por ID repetido (PAYMENT ID / ID RETIRO) dentro del Excel."
+        flash(msg, "success")
         return redirect(url_for("billeteras_virtuales.cargas"))
 
     cargas_q = _q_cargas().order_by(BilleteraCarga.created_at.desc())
@@ -1082,13 +1371,33 @@ def analisis_export_csv():
             self.parts.append(s)
     w = _W()
     cw = csv.writer(w)
-    cw.writerow(["tipo", "caso", "sujeto", "fecha", "estado", "monto", "nombre", "documento", "detalle", "entidad"])
+    cw.writerow(
+        [
+            "tipo",
+            "carga_id",
+            "archivo_carga",
+            "hash_sha256",
+            "caso",
+            "sujeto",
+            "fecha",
+            "estado",
+            "monto",
+            "nombre",
+            "documento",
+            "detalle",
+            "entidad",
+        ]
+    )
     for r in mov_items:
+        cg = r.carga
         cw.writerow(
             [
                 "movimiento",
-                r.carga.caso.codigo if r.carga and r.carga.caso else "",
-                r.carga.sujeto.display_name() if r.carga and r.carga.sujeto else "",
+                cg.id if cg else "",
+                (cg.nombre_archivo or "") if cg else "",
+                (cg.archivo_hash or "") if cg else "",
+                cg.caso.codigo if cg and cg.caso else "",
+                cg.sujeto.display_name() if cg and cg.sujeto else "",
                 r.fecha_operacion.isoformat() if r.fecha_operacion else "",
                 r.estado_payment or "",
                 float(r.total_pagado or 0),
@@ -1099,11 +1408,15 @@ def analisis_export_csv():
             ]
         )
     for r in sal_items:
+        cg = r.carga
         cw.writerow(
             [
                 "salida",
-                r.carga.caso.codigo if r.carga and r.carga.caso else "",
-                r.carga.sujeto.display_name() if r.carga and r.carga.sujeto else "",
+                cg.id if cg else "",
+                (cg.nombre_archivo or "") if cg else "",
+                (cg.archivo_hash or "") if cg else "",
+                cg.caso.codigo if cg and cg.caso else "",
+                cg.sujeto.display_name() if cg and cg.sujeto else "",
                 r.fecha_operacion.isoformat() if r.fecha_operacion else "",
                 r.estado or "",
                 float(r.monto_retirado or 0),

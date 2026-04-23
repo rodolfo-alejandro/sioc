@@ -17,7 +17,38 @@
         <ul>
             <li>Movimientos: <strong>{{ mov_count|number_format }}</strong> (monto: <strong>$ {{ '%.2f'|format(mov_total or 0) }}</strong>)</li>
             <li>Salidas: <strong>{{ sal_count|number_format }}</strong> (monto: <strong>$ {{ '%.2f'|format(sal_total or 0) }}</strong>)</li>
+            <li>Suma de operaciones en todos los vínculos De→Hacia: <strong>{{ sum_ops_vinculos|number_format }}</strong> (debe coincidir con movimientos + salidas: <strong>{{ vinculos_expected_ops|number_format }}</strong>).</li>
+            <li>Suma de montos en vínculos: <strong>$ {{ '%.2f'|format(sum_monto_vinculos or 0) }}</strong> (debe coincidir con $ {{ '%.2f'|format(vinculos_expected_monto or 0) }}).</li>
         </ul>
+        {% if vinculos_match_ops and vinculos_match_monto %}
+        <p class="text-success small"><strong>Comprobación:</strong> totales de vínculos alineados con los KPI.</p>
+        {% else %}
+        <p class="text-warning small"><strong>Atención:</strong> discrepancia entre vínculos y KPI (delta monto vínculos − totales: $ {{ '%.2f'|format(vinculos_delta_monto) }}).</p>
+        {% endif %}
+
+        <h5>Aporte por archivo de carga</h5>
+        {% if aporte_cargas %}
+        <div class="table-responsive mb-3">
+            <table class="table table-sm">
+                <thead><tr><th>Carga</th><th>Caso</th><th>Mov.</th><th>Sal.</th><th>Ops</th><th>% monto</th><th>Monto</th></tr></thead>
+                <tbody>
+                    {% for a in aporte_cargas %}
+                    <tr>
+                        <td>{{ a.label }}</td>
+                        <td>{{ a.caso_codigo or '—' }}</td>
+                        <td>{{ a.mov_n|number_format }}</td>
+                        <td>{{ a.sal_n|number_format }}</td>
+                        <td>{{ a.ops|number_format }}</td>
+                        <td>{{ a.pct_monto }}%</td>
+                        <td>$ {{ '%.2f'|format(a.monto or 0) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted">Sin datos por carga con el filtro aplicado.</p>
+        {% endif %}
 
         <h5>Informe redactado</h5>
         <div class="p-3 mb-3" style="background:#f8f9fa;border-left:4px solid #0d6efd;">
