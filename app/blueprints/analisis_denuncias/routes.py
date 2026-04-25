@@ -613,9 +613,47 @@ def dashboard():
         abort(403)
     q = _apply_filters(_base_q())
     datos = _calc_dashboard(q)
+    rows_plot = []
+    for r in q.with_entities(
+        DenunciaWeb.fecha_denuncia,
+        DenunciaWeb.fecha_recepcion,
+        DenunciaWeb.causa_estado,
+        DenunciaWeb.barrio,
+        DenunciaWeb.localidad,
+        DenunciaWeb.desc_dep_padre,
+        DenunciaWeb.desc_dep_registro,
+        DenunciaWeb.desc_dep_actuario,
+        DenunciaWeb.actuario_grado,
+        DenunciaWeb.actuario_apenom,
+        DenunciaWeb.investigados,
+        DenunciaWeb.latitud,
+        DenunciaWeb.longitud,
+        DenunciaWeb.fecha_sol_allanamiento,
+        DenunciaWeb.fecha_desestimada,
+    ).all():
+        rows_plot.append(
+            {
+                "fecha_denuncia": r[0].isoformat() if r[0] else "",
+                "fecha_recepcion": r[1].isoformat() if r[1] else "",
+                "causa_estado": r[2] or "",
+                "barrio": r[3] or "",
+                "localidad": r[4] or "",
+                "departamento": r[5] or "",
+                "division": r[6] or "",
+                "dep_actuario": r[7] or "",
+                "actuario_grado": r[8] or "",
+                "actuario_apenom": r[9] or "",
+                "investigados": r[10] or "",
+                "latitud": r[11],
+                "longitud": r[12],
+                "fecha_sol_allanamiento": r[13].isoformat() if r[13] else "",
+                "fecha_desestimada": r[14].isoformat() if r[14] else "",
+            }
+        )
     return render_template(
         "analisis_denuncias/dashboard.html",
         datos_json=json.dumps(datos),
+        rows_plot_json=json.dumps(rows_plot),
         kpis=datos["kpis"],
         filtros=_filter_options(),
         selected=_selected_filters(),

@@ -22,23 +22,46 @@
 </div>
 
 <div class="row g-3 mb-3">
-    <div class="col-md-2"><div class="card ad-kpi-card"><div class="card-body"><div>Total</div><div class="value">{{ kpis.total|number_format }}</div></div></div></div>
-    <div class="col-md-2"><div class="card ad-kpi-card"><div class="card-body"><div>Con coords</div><div class="value">{{ kpis.con_coords|number_format }}</div></div></div></div>
-    <div class="col-md-2"><div class="card ad-kpi-card"><div class="card-body"><div>Sin coords</div><div class="value">{{ kpis.sin_coords|number_format }}</div></div></div></div>
-    <div class="col-md-2"><div class="card ad-kpi-card"><div class="card-body"><div>Allanamiento</div><div class="value">{{ kpis.con_allanamiento|number_format }}</div></div></div></div>
-    <div class="col-md-2"><div class="card ad-kpi-card"><div class="card-body"><div>Desestimadas</div><div class="value">{{ kpis.desestimadas|number_format }}</div></div></div></div>
-    <div class="col-md-2"><div class="card ad-kpi-card"><div class="card-body"><div>Con investigados</div><div class="value">{{ kpis.con_investigados|number_format }}</div></div></div></div>
+    <div class="col-md-2"><div class="card ad-kpi-card"><div class="card-body"><div>Total</div><div class="value" id="ad-kpi-total">{{ kpis.total|number_format }}</div></div></div></div>
+    <div class="col-md-2"><div class="card ad-kpi-card"><div class="card-body"><div>Con coords</div><div class="value" id="ad-kpi-concoords">{{ kpis.con_coords|number_format }}</div></div></div></div>
+    <div class="col-md-2"><div class="card ad-kpi-card"><div class="card-body"><div>Sin coords</div><div class="value" id="ad-kpi-sincoords">{{ kpis.sin_coords|number_format }}</div></div></div></div>
+    <div class="col-md-2"><div class="card ad-kpi-card"><div class="card-body"><div>Allanamiento</div><div class="value" id="ad-kpi-allanamiento">{{ kpis.con_allanamiento|number_format }}</div></div></div></div>
+    <div class="col-md-2"><div class="card ad-kpi-card"><div class="card-body"><div>Desestimadas</div><div class="value" id="ad-kpi-desestimadas">{{ kpis.desestimadas|number_format }}</div></div></div></div>
+    <div class="col-md-2"><div class="card ad-kpi-card"><div class="card-body"><div>Con investigados</div><div class="value" id="ad-kpi-investigados">{{ kpis.con_investigados|number_format }}</div></div></div></div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div>
+                <strong>Interacción:</strong> hacé click en barras o porciones para filtrar cruzado entre gráficos.
+            </div>
+            <button class="btn btn-outline-secondary btn-sm" id="ad-clear-chart-filters" type="button">Limpiar selección de gráficos</button>
+        </div>
+        <div id="ad-active-chart-filters" class="mt-2 small text-muted"></div>
+    </div>
 </div>
 
 <div class="row g-3">
-    <div class="col-md-6"><div class="card"><div class="card-header">Denuncias por mes</div><div class="card-body"><div id="ad-chart-mensual" style="height:320px;"></div></div></div></div>
-    <div class="col-md-6"><div class="card"><div class="card-header">Top 10 barrios</div><div class="card-body"><div id="ad-chart-barrios" style="height:320px;"></div></div></div></div>
-    <div class="col-md-6"><div class="card"><div class="card-header">Top 10 dependencias</div><div class="card-body"><div id="ad-chart-deps" style="height:320px;"></div></div></div></div>
-    <div class="col-md-3"><div class="card"><div class="card-header">Estados de causa</div><div class="card-body"><div id="ad-chart-estados" style="height:320px;"></div></div></div></div>
-    <div class="col-md-3"><div class="card"><div class="card-header">Con/Sin coordenadas</div><div class="card-body"><div id="ad-chart-coords" style="height:320px;"></div></div></div></div>
+    <div class="col-12"><div class="card"><div class="card-header">Meses (ES)</div><div class="card-body"><div id="ad-chart-mes" style="height:300px;"></div></div></div></div>
+    <div class="col-12"><div class="card"><div class="card-header">Días de la semana</div><div class="card-body"><div id="ad-chart-dia" style="height:300px;"></div></div></div></div>
+    <div class="col-12"><div class="card"><div class="card-header">Hora</div><div class="card-body"><div id="ad-chart-hora" style="height:300px;"></div></div></div></div>
+    <div class="col-12"><div class="card"><div class="card-header">Estados</div><div class="card-body"><div id="ad-chart-estado" style="height:320px;"></div></div></div></div>
+    <div class="col-12"><div class="card"><div class="card-header">Barrios</div><div class="card-body"><div id="ad-chart-barrio" style="height:340px;"></div></div></div></div>
+    <div class="col-12"><div class="card"><div class="card-header">Departamento</div><div class="card-body"><div id="ad-chart-departamento" style="height:320px;"></div></div></div></div>
+    <div class="col-12"><div class="card"><div class="card-header">División</div><div class="card-body"><div id="ad-chart-division" style="height:320px;"></div></div></div></div>
+    <div class="col-12"><div class="card"><div class="card-header">Dependencia Actuario</div><div class="card-body"><div id="ad-chart-dep-actuario" style="height:320px;"></div></div></div></div>
+    <div class="col-12"><div class="card"><div class="card-header">Actuario</div><div class="card-body"><div id="ad-chart-actuario" style="height:360px;"></div></div></div></div>
+    <div class="col-12"><div class="card"><div class="card-header">Tortas (con/sin)</div><div class="card-body"><div class="row g-3">
+        <div class="col-md-3"><div id="ad-chart-coords" style="height:300px;"></div></div>
+        <div class="col-md-3"><div id="ad-chart-investigados" style="height:300px;"></div></div>
+        <div class="col-md-3"><div id="ad-chart-allanamiento" style="height:300px;"></div></div>
+        <div class="col-md-3"><div id="ad-chart-desestimada" style="height:300px;"></div></div>
+    </div></div></div></div>
 </div>
 
 <textarea id="ad-dashboard-data" class="d-none">{{ datos_json }}</textarea>
+<textarea id="ad-dashboard-rows" class="d-none">{{ rows_plot_json }}</textarea>
 {% endblock %}
 {% block extra_scripts %}
 <script src="{{ url_for('static', filename='js/analisis_denuncias_filtros.js') }}"></script>
