@@ -26,11 +26,34 @@
 <div class="alert alert-secondary py-2 small">
     Total de denuncias georreferenciadas filtradas: <strong>{{ total_filtrado|number_format }}</strong>
 </div>
+<div class="card mb-2">
+    <div class="card-body py-2">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div class="d-flex align-items-center gap-2">
+                <strong class="small mb-0">Visualización:</strong>
+                <div class="btn-group btn-group-sm" role="group" aria-label="Modo de mapa">
+                    <input type="radio" class="btn-check" name="ad-map-mode" id="ad-map-mode-markers" value="markers" checked>
+                    <label class="btn btn-outline-primary" for="ad-map-mode-markers">Marcadores</label>
+                    <input type="radio" class="btn-check" name="ad-map-mode" id="ad-map-mode-heat" value="heat">
+                    <label class="btn btn-outline-primary" for="ad-map-mode-heat">Mapa de calor</label>
+                </div>
+            </div>
+            <div class="small ad-map-legend">
+                <span><i class="ad-dot" style="background:#198754"></i> Allanadas</span>
+                <span><i class="ad-dot" style="background:#6c757d"></i> Desestimada</span>
+                <span><i class="ad-dot" style="background:#0d6efd"></i> Etapa investigativa</span>
+                <span><i class="ad-dot" style="background:#ffc107"></i> Vinculadas</span>
+                <span><i class="ad-dot" style="background:#6f42c1"></i> Con pedido de allanamiento</span>
+            </div>
+        </div>
+    </div>
+</div>
 <div id="ad-map" class="ad-map"></div>
 <textarea id="ad-map-markers" class="d-none">{{ markers_json }}</textarea>
 {% endblock %}
 {% block extra_scripts %}
 <script src="{{ url_for('static', filename='js/analisis_denuncias_filtros.js') }}"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
 <script src="{{ url_for('static', filename='js/analisis_denuncias_mapa.js') }}"></script>
 {% endblock %}

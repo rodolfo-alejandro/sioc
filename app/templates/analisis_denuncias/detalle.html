@@ -13,6 +13,12 @@
     {% if can_map and row.latitud is not none and row.longitud is not none %}
     <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_denuncias.mapa', causas_id=row.causas_id) }}"><i class="bi bi-geo-alt"></i> Ver en mapa</a>
     {% endif %}
+    <button type="button" class="btn btn-outline-danger btn-sm" id="ad-det-export-pdf">
+        <i class="bi bi-file-earmark-pdf"></i> Exportar PDF
+    </button>
+    <button type="button" class="btn btn-outline-primary btn-sm" id="ad-det-export-word">
+        <i class="bi bi-file-earmark-word"></i> Exportar Word
+    </button>
 </div>
 
 <div class="row g-3">
@@ -62,4 +68,44 @@
         </div>
     </div>
 </div>
+
+<div id="ad-detalle-export" class="d-none">
+    <div class="head">
+        <div class="title">SIOC - Informe individual de denuncia web</div>
+        <div class="sub">Causa ID: {{ row.causas_id or '—' }} | Nro actuación: {{ row.nro_actuacion or '—' }}</div>
+        <div class="sub">Generado: <span id="ad-det-export-date"></span></div>
+    </div>
+    <div class="box">
+        <h4>Datos administrativos</h4>
+        <p><strong>Estado:</strong> {{ row.causa_estado or '—' }}</p>
+        <p><strong>Dependencia registro:</strong> {{ row.desc_dep_registro or '—' }}</p>
+        <p><strong>Dependencia actuario:</strong> {{ row.desc_dep_actuario or '—' }}</p>
+        <p><strong>Actuario:</strong> {{ row.actuario_grado or '' }} {{ row.actuario_apenom or '—' }}</p>
+    </div>
+    <div class="box">
+        <h4>Fechas y ubicación</h4>
+        <p><strong>Denuncia:</strong> {{ row.fecha_denuncia|localtime('%d/%m/%Y') if row.fecha_denuncia else '—' }}</p>
+        <p><strong>Recepción:</strong> {{ row.fecha_recepcion|localtime('%d/%m/%Y') if row.fecha_recepcion else '—' }}</p>
+        <p><strong>Apertura:</strong> {{ row.fecha_apertura|localtime('%d/%m/%Y') if row.fecha_apertura else '—' }}</p>
+        <p><strong>Desestimada:</strong> {{ row.fecha_desestimada|localtime('%d/%m/%Y') if row.fecha_desestimada else '—' }}</p>
+        <p><strong>Solicitud allanamiento:</strong> {{ row.fecha_sol_allanamiento|localtime('%d/%m/%Y') if row.fecha_sol_allanamiento else '—' }}</p>
+        <p><strong>Localidad/Barrio:</strong> {{ row.localidad or '—' }} / {{ row.barrio or '—' }}</p>
+        <p><strong>Coordenadas:</strong> {{ row.latitud if row.latitud is not none else '—' }}, {{ row.longitud if row.longitud is not none else '—' }}</p>
+    </div>
+    <div class="box">
+        <h4>Relato completo</h4>
+        <p class="pre">{{ row.relato_original or row.relato or '—' }}</p>
+    </div>
+    <div class="box">
+        <h4>Investigados</h4>
+        <p class="pre">{{ row.investigados or '—' }}</p>
+    </div>
+    <div class="box">
+        <h4>Observación interna</h4>
+        <p class="pre">{{ row.observacion_interna or '—' }}</p>
+    </div>
+</div>
+{% endblock %}
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/analisis_denuncias_detalle.js') }}"></script>
 {% endblock %}
