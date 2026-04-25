@@ -1,123 +1,191 @@
-<div class="card mb-3 ad-filtros">
-    <div class="card-body">
-        <form method="GET" class="row g-2">
-            <div class="col-md-4">
-                <label class="form-label">Superbuscador</label>
-                <input type="text" name="q" value="{{ request.args.get('q','') }}" class="form-control" placeholder="relato, barrio, localidad, investigados, actuario, dependencia, estado, actuación, causa">
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">Año</label>
-                <select class="form-select" name="anio">
-                    <option value="">Todos</option>
-                    {% for x in filtros.anios %}
-                    <option value="{{ x }}" {% if request.args.get('anio','') == (x|string) %}selected{% endif %}>{{ x }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">Fecha denuncia desde</label>
-                <input type="date" class="form-control" name="fecha_desde" value="{{ request.args.get('fecha_desde','') }}">
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">Fecha denuncia hasta</label>
-                <input type="date" class="form-control" name="fecha_hasta" value="{{ request.args.get('fecha_hasta','') }}">
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">Estado</label>
-                <select class="form-select" name="causa_estado">
-                    <option value="">Todos</option>
-                    {% for x in filtros.estados %}
-                    <option value="{{ x }}" {% if request.args.get('causa_estado','') == x %}selected{% endif %}>{{ x }}</option>
-                    {% endfor %}
-                </select>
-            </div>
+<div class="card mb-3 ad-filtros sabana-filtros-top">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0">Filtros avanzados</h6>
+        <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#ad-filtros-collapse" aria-expanded="false" aria-controls="ad-filtros-collapse">
+            Mostrar / Ocultar
+        </button>
+    </div>
+    <div class="collapse" id="ad-filtros-collapse">
+        <div class="card-body">
+            <form method="GET" class="row g-2" id="ad-form-filtros">
+                <div class="col-md-4">
+                    <label class="form-label">Superbuscador</label>
+                    <input type="text" name="q" value="{{ selected.q }}" class="form-control" placeholder="relato, barrio, localidad, investigados, actuario, dependencia, estado, actuación, causa">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Investigados (búsqueda específica)</label>
+                    <input type="text" name="investigados_q" value="{{ selected.investigados_q }}" class="form-control" placeholder="nombre, apodo, DNI, domicilio...">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">N° actuación</label>
+                    <input type="text" name="nro_actuacion_q" value="{{ selected.nro_actuacion_q }}" class="form-control" placeholder="ej: 91, 180, 358">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Año</label>
+                    <select class="form-select" name="anio">
+                        <option value="">Todos</option>
+                        {% for x in filtros.anios %}
+                        <option value="{{ x }}" {% if selected.anio == x %}selected{% endif %}>{{ x }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Fecha denuncia desde</label>
+                    <input type="date" class="form-control" name="fecha_desde" value="{{ selected.fecha_desde }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Fecha denuncia hasta</label>
+                    <input type="date" class="form-control" name="fecha_hasta" value="{{ selected.fecha_hasta }}">
+                </div>
 
-            <div class="col-md-3">
-                <label class="form-label">Dependencia registro</label>
-                <select class="form-select" name="dep_registro">
-                    <option value="">Todas</option>
-                    {% for x in filtros.deps_registro %}
-                    <option value="{{ x }}" {% if request.args.get('dep_registro','') == x %}selected{% endif %}>{{ x }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Dependencia actuario</label>
-                <select class="form-select" name="dep_actuario">
-                    <option value="">Todas</option>
-                    {% for x in filtros.deps_actuario %}
-                    <option value="{{ x }}" {% if request.args.get('dep_actuario','') == x %}selected{% endif %}>{{ x }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">Localidad</label>
-                <select class="form-select" name="localidad">
-                    <option value="">Todas</option>
-                    {% for x in filtros.localidades %}
-                    <option value="{{ x }}" {% if request.args.get('localidad','') == x %}selected{% endif %}>{{ x }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">Barrio</label>
-                <select class="form-select" name="barrio">
-                    <option value="">Todos</option>
-                    {% for x in filtros.barrios %}
-                    <option value="{{ x }}" {% if request.args.get('barrio','') == x %}selected{% endif %}>{{ x }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">Actuario</label>
-                <select class="form-select" name="actuario">
-                    <option value="">Todos</option>
-                    {% for x in filtros.actuarios %}
-                    <option value="{{ x }}" {% if request.args.get('actuario','') == x %}selected{% endif %}>{{ x }}</option>
-                    {% endfor %}
-                </select>
-            </div>
+                <div class="col-md-3">
+                    <label class="form-label">Departamento (DOZC / Norte / Sur / Centro)</label>
+                    <button class="btn btn-outline-secondary btn-sm w-100 sabana-dd-btn text-start text-truncate" type="button" id="dd-ad-departamentos" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">Departamentos...</button>
+                    <div class="dropdown-menu p-2 sabana-dd-menu w-100" aria-labelledby="dd-ad-departamentos">
+                        <input type="text" class="form-control form-control-sm mb-1 sabana-dd-search" placeholder="Buscar departamento..." data-target="ad-filtro-departamentos">
+                        <div id="ad-filtro-departamentos" class="sabana-filtro-checkboxes sabana-dd-list">
+                            {% for x in filtros.departamentos %}
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="{{ x }}" id="ad-departamento-{{ loop.index }}" {% if x in selected.departamentos %}checked{% endif %}>
+                                <label class="form-check-label" for="ad-departamento-{{ loop.index }}">{{ x }}</label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Dependencia registro</label>
+                    <button class="btn btn-outline-secondary btn-sm w-100 sabana-dd-btn text-start text-truncate" type="button" id="dd-ad-dep-reg" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">Dependencias...</button>
+                    <div class="dropdown-menu p-2 sabana-dd-menu w-100" aria-labelledby="dd-ad-dep-reg">
+                        <input type="text" class="form-control form-control-sm mb-1 sabana-dd-search" placeholder="Buscar..." data-target="ad-filtro-dep-reg">
+                        <div id="ad-filtro-dep-reg" class="sabana-filtro-checkboxes sabana-dd-list">
+                            {% for x in filtros.deps_registro %}
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="{{ x }}" id="ad-depreg-{{ loop.index }}" {% if x in selected.deps_registro %}checked{% endif %}>
+                                <label class="form-check-label" for="ad-depreg-{{ loop.index }}">{{ x }}</label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Dependencia actuario</label>
+                    <button class="btn btn-outline-secondary btn-sm w-100 sabana-dd-btn text-start text-truncate" type="button" id="dd-ad-dep-act" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">Dependencias...</button>
+                    <div class="dropdown-menu p-2 sabana-dd-menu w-100" aria-labelledby="dd-ad-dep-act">
+                        <input type="text" class="form-control form-control-sm mb-1 sabana-dd-search" placeholder="Buscar..." data-target="ad-filtro-dep-act">
+                        <div id="ad-filtro-dep-act" class="sabana-filtro-checkboxes sabana-dd-list">
+                            {% for x in filtros.deps_actuario %}
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="{{ x }}" id="ad-depact-{{ loop.index }}" {% if x in selected.deps_actuario %}checked{% endif %}>
+                                <label class="form-check-label" for="ad-depact-{{ loop.index }}">{{ x }}</label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Estado de causa</label>
+                    <button class="btn btn-outline-secondary btn-sm w-100 sabana-dd-btn text-start text-truncate" type="button" id="dd-ad-estados" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">Estados...</button>
+                    <div class="dropdown-menu p-2 sabana-dd-menu w-100" aria-labelledby="dd-ad-estados">
+                        <input type="text" class="form-control form-control-sm mb-1 sabana-dd-search" placeholder="Buscar estado..." data-target="ad-filtro-estados">
+                        <div id="ad-filtro-estados" class="sabana-filtro-checkboxes sabana-dd-list">
+                            {% for x in filtros.estados %}
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="{{ x }}" id="ad-estado-{{ loop.index }}" {% if x in selected.estados %}checked{% endif %}>
+                                <label class="form-check-label" for="ad-estado-{{ loop.index }}">{{ x }}</label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
 
-            <div class="col-md-2">
-                <label class="form-label">Coordenadas</label>
-                <select class="form-select" name="coords">
-                    <option value="">Todas</option>
-                    <option value="con" {% if request.args.get('coords','') == 'con' %}selected{% endif %}>Con</option>
-                    <option value="sin" {% if request.args.get('coords','') == 'sin' %}selected{% endif %}>Sin</option>
-                </select>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">Investigados</label>
-                <select class="form-select" name="investigados_mode">
-                    <option value="">Todos</option>
-                    <option value="con" {% if request.args.get('investigados_mode','') == 'con' %}selected{% endif %}>Con</option>
-                    <option value="sin" {% if request.args.get('investigados_mode','') == 'sin' %}selected{% endif %}>Sin</option>
-                </select>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">Solicitud allanamiento</label>
-                <select class="form-select" name="allanamiento_mode">
-                    <option value="">Todas</option>
-                    <option value="con" {% if request.args.get('allanamiento_mode','') == 'con' %}selected{% endif %}>Con</option>
-                    <option value="sin" {% if request.args.get('allanamiento_mode','') == 'sin' %}selected{% endif %}>Sin</option>
-                </select>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">Desestimada</label>
-                <select class="form-select" name="desestimada_mode">
-                    <option value="">Todas</option>
-                    <option value="con" {% if request.args.get('desestimada_mode','') == 'con' %}selected{% endif %}>Sí</option>
-                    <option value="sin" {% if request.args.get('desestimada_mode','') == 'sin' %}selected{% endif %}>No</option>
-                </select>
-            </div>
-            <div class="col-md-2 d-grid">
-                <label class="form-label">&nbsp;</label>
-                <button class="btn btn-primary" type="submit"><i class="bi bi-funnel"></i> Aplicar</button>
-            </div>
-            <div class="col-md-2 d-grid">
-                <label class="form-label">&nbsp;</label>
-                <a class="btn btn-outline-secondary" href="{{ request.path }}">Limpiar filtros</a>
-            </div>
-        </form>
+                <div class="col-md-2">
+                    <label class="form-label">Localidad</label>
+                    <button class="btn btn-outline-secondary btn-sm w-100 sabana-dd-btn text-start text-truncate" type="button" id="dd-ad-localidades" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">Localidades...</button>
+                    <div class="dropdown-menu p-2 sabana-dd-menu w-100" aria-labelledby="dd-ad-localidades">
+                        <input type="text" class="form-control form-control-sm mb-1 sabana-dd-search" placeholder="Buscar localidad..." data-target="ad-filtro-localidades">
+                        <div id="ad-filtro-localidades" class="sabana-filtro-checkboxes sabana-dd-list">
+                            {% for x in filtros.localidades %}
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="{{ x }}" id="ad-localidad-{{ loop.index }}" {% if x in selected.localidades %}checked{% endif %}>
+                                <label class="form-check-label" for="ad-localidad-{{ loop.index }}">{{ x }}</label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Barrio (con localidad)</label>
+                    <button class="btn btn-outline-secondary btn-sm w-100 sabana-dd-btn text-start text-truncate" type="button" id="dd-ad-barrios" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">Barrios...</button>
+                    <div class="dropdown-menu p-2 sabana-dd-menu w-100" aria-labelledby="dd-ad-barrios">
+                        <input type="text" class="form-control form-control-sm mb-1 sabana-dd-search" placeholder="Buscar barrio/localidad..." data-target="ad-filtro-barrios">
+                        <div id="ad-filtro-barrios" class="sabana-filtro-checkboxes sabana-dd-list">
+                            {% for x in filtros.barrios %}
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="{{ x.value }}" id="ad-barrio-{{ loop.index }}" {% if x.value in selected.barrios %}checked{% endif %}>
+                                <label class="form-check-label" for="ad-barrio-{{ loop.index }}">{{ x.label }}</label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Actuario (jerarquía + nombre)</label>
+                    <button class="btn btn-outline-secondary btn-sm w-100 sabana-dd-btn text-start text-truncate" type="button" id="dd-ad-actuarios" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">Actuarios...</button>
+                    <div class="dropdown-menu p-2 sabana-dd-menu w-100" aria-labelledby="dd-ad-actuarios">
+                        <input type="text" class="form-control form-control-sm mb-1 sabana-dd-search" placeholder="Buscar actuario..." data-target="ad-filtro-actuarios">
+                        <div id="ad-filtro-actuarios" class="sabana-filtro-checkboxes sabana-dd-list">
+                            {% for x in filtros.actuarios %}
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="{{ x.value }}" id="ad-actuario-{{ loop.index }}" {% if x.value in selected.actuarios %}checked{% endif %}>
+                                <label class="form-check-label" for="ad-actuario-{{ loop.index }}">{{ x.label }}</label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label">Coordenadas</label>
+                    <select class="form-select" name="coords">
+                        <option value="">Todas</option>
+                        <option value="con" {% if selected.coords == 'con' %}selected{% endif %}>Con</option>
+                        <option value="sin" {% if selected.coords == 'sin' %}selected{% endif %}>Sin</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Investigados (cargados)</label>
+                    <select class="form-select" name="investigados_mode">
+                        <option value="">Todos</option>
+                        <option value="con" {% if selected.investigados_mode == 'con' %}selected{% endif %}>Con</option>
+                        <option value="sin" {% if selected.investigados_mode == 'sin' %}selected{% endif %}>Sin</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Solicitud allanamiento</label>
+                    <select class="form-select" name="allanamiento_mode">
+                        <option value="">Todas</option>
+                        <option value="con" {% if selected.allanamiento_mode == 'con' %}selected{% endif %}>Con</option>
+                        <option value="sin" {% if selected.allanamiento_mode == 'sin' %}selected{% endif %}>Sin</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Desestimada</label>
+                    <select class="form-select" name="desestimada_mode">
+                        <option value="">Todas</option>
+                        <option value="con" {% if selected.desestimada_mode == 'con' %}selected{% endif %}>Sí</option>
+                        <option value="sin" {% if selected.desestimada_mode == 'sin' %}selected{% endif %}>No</option>
+                    </select>
+                </div>
+                <div class="col-md-2 d-grid">
+                    <label class="form-label">&nbsp;</label>
+                    <button class="btn btn-primary" type="submit"><i class="bi bi-funnel"></i> Aplicar</button>
+                </div>
+                <div class="col-md-2 d-grid">
+                    <label class="form-label">&nbsp;</label>
+                    <a class="btn btn-outline-secondary" href="{{ request.path }}">Limpiar filtros</a>
+                </div>
+            </form>
+        </div>
     </div>
 </div>

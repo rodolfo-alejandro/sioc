@@ -1,6 +1,7 @@
 {% extends "layouts/base.html" %}
 {% block title %}Listado Denuncias Web - SIOC{% endblock %}
 {% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/sabana_mapa.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/analisis_denuncias.css') }}">
 {% endblock %}
 {% block content %}
@@ -72,12 +73,15 @@
         {% set prev_page = page - 1 %}
         {% set next_page = page + 1 %}
         <li class="page-item {% if page <= 1 %}disabled{% endif %}">
-            <a class="page-link" href="{{ url_for('analisis_denuncias.listado', **args_no_page, page=prev_page) }}">Anterior</a>
+            <a class="page-link" href="{{ url_for('analisis_denuncias.listado') }}?{{ qs_no_page }}{% if qs_no_page %}&{% endif %}page={{ prev_page }}">Anterior</a>
         </li>
         <li class="page-item disabled"><span class="page-link">Página {{ page }} / {{ pages }}</span></li>
         <li class="page-item {% if page >= pages %}disabled{% endif %}">
-            <a class="page-link" href="{{ url_for('analisis_denuncias.listado', **args_no_page, page=next_page) }}">Siguiente</a>
+            <a class="page-link" href="{{ url_for('analisis_denuncias.listado') }}?{{ qs_no_page }}{% if qs_no_page %}&{% endif %}page={{ next_page }}">Siguiente</a>
         </li>
     </ul>
 </nav>
+{% endblock %}
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/analisis_denuncias_filtros.js') }}"></script>
 {% endblock %}

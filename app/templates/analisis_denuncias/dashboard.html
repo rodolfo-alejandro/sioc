@@ -1,6 +1,7 @@
 {% extends "layouts/base.html" %}
 {% block title %}Dashboard Denuncias Web - SIOC{% endblock %}
 {% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/sabana_mapa.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/analisis_denuncias.css') }}">
 {% endblock %}
 {% block content %}
@@ -40,5 +41,6 @@
 <textarea id="ad-dashboard-data" class="d-none">{{ datos_json }}</textarea>
 {% endblock %}
 {% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/analisis_denuncias_filtros.js') }}"></script>
 <script src="{{ url_for('static', filename='js/analisis_denuncias_dashboard.js') }}"></script>
 {% endblock %}

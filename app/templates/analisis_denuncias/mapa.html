@@ -1,6 +1,7 @@
 {% extends "layouts/base.html" %}
 {% block title %}Mapa Denuncias Web - SIOC{% endblock %}
 {% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/sabana_mapa.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/analisis_denuncias.css') }}">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 {% endblock %}
@@ -29,6 +30,7 @@
 <textarea id="ad-map-markers" class="d-none">{{ markers_json }}</textarea>
 {% endblock %}
 {% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/analisis_denuncias_filtros.js') }}"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="{{ url_for('static', filename='js/analisis_denuncias_mapa.js') }}"></script>
 {% endblock %}

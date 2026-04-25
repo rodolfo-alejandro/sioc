@@ -6,6 +6,7 @@ import re
 from datetime import datetime
 from io import BytesIO, StringIO
 from pathlib import Path
+from urllib.parse import urlencode
 
 import pandas as pd
 from flask import Response, abort, flash, redirect, render_template, request, url_for
@@ -125,18 +126,91 @@ def _base_q():
     return DenunciaWeb.query.filter(DenunciaWeb.unidad_id == current_user.unidad_id, DenunciaWeb.activo.is_(True))
 
 
+def _split_search_tokens(raw: str | None) -> list[str]:
+    s = _clean(raw)
+    if not s:
+        return []
+    tokens = re.split(r"[,\s;]+", s)
+    out = []
+    for t in tokens:
+        tt = _clean(t)
+        if tt:
+            out.append(tt)
+    return sorted(set(out))
+
+
+def _get_list_arg(name: str) -> list[str]:
+    vals: list[str] = []
+    for raw in request.args.getlist(name):
+        s = _clean(raw)
+        if s:
+            vals.append(s)
+    return sorted(set(vals))
+
+
+def _split_pair(v: str) -> tuple[str | None, str | None]:
+    if "||" not in v:
+        return None, None
+    a, b = v.split("||", 1)
+    return _clean(a), _clean(b)
+
+
+def _selected_filters() -> dict:
+    return {
+        "anio": request.args.get("anio", type=int),
+        "q": _clean(request.args.get("q")) or "",
+        "nro_actuacion_q": _clean(request.args.get("nro_actuacion_q")) or "",
+        "investigados_q": _clean(request.args.get("investigados_q")) or "",
+        "fecha_desde": _clean(request.args.get("fecha_desde")) or "",
+        "fecha_hasta": _clean(request.args.get("fecha_hasta")) or "",
+        "coords": _clean(request.args.get("coords")) or "",
+        "investigados_mode": _clean(request.args.get("investigados_mode")) or "",
+        "allanamiento_mode": _clean(request.args.get("allanamiento_mode")) or "",
+        "desestimada_mode": _clean(request.args.get("desestimada_mode")) or "",
+        "departamentos": _get_list_arg("departamentos[]"),
+        "deps_registro": _get_list_arg("dep_registro[]"),
+        "deps_actuario": _get_list_arg("dep_actuario[]"),
+        "estados": _get_list_arg("causa_estado[]"),
+        "localidades": _get_list_arg("localidad[]"),
+        "barrios": _get_list_arg("barrio[]"),
+        "actuarios": _get_list_arg("actuario[]"),
+    }
+
+
 def _apply_filters(q):
     search = _clean(request.args.get("q"))
     causas_id = _clean(request.args.get("causas_id"))
+    nro_actuacion_q = _clean(request.args.get("nro_actuacion_q"))
     anio = request.args.get("anio", type=int)
     fd = _parse_dt(request.args.get("fecha_desde"))
     fh = _parse_dt(request.args.get("fecha_hasta"))
+    investigados_q = _clean(request.args.get("investigados_q"))
+    departamentos = _get_list_arg("departamentos[]")
+    dep_reg_list = _get_list_arg("dep_registro[]")
+    dep_act_list = _get_list_arg("dep_actuario[]")
+    estado_list = _get_list_arg("causa_estado[]")
+    localidad_list = _get_list_arg("localidad[]")
+    barrio_list = _get_list_arg("barrio[]")
+    actuario_list = _get_list_arg("actuario[]")
+    # backward compatibility con filtro único
     dep_reg = _clean(request.args.get("dep_registro"))
     dep_act = _clean(request.args.get("dep_actuario"))
     estado = _clean(request.args.get("causa_estado"))
     localidad = _clean(request.args.get("localidad"))
     barrio = _clean(request.args.get("barrio"))
     actuario = _clean(request.args.get("actuario"))
+    if dep_reg and dep_reg not in dep_reg_list:
+        dep_reg_list.append(dep_reg)
+    if dep_act and dep_act not in dep_act_list:
+        dep_act_list.append(dep_act)
+    if estado and estado not in estado_list:
+        estado_list.append(estado)
+    if localidad and localidad not in localidad_list:
+        localidad_list.append(localidad)
+    if barrio and barrio not in barrio_list:
+        barrio_list.append(barrio)
+    if actuario and actuario not in actuario_list:
+        actuario_list.append(actuario)
     coord_mode = _clean(request.args.get("coords"))
     inv_mode = _clean(request.args.get("investigados_mode"))
     all_mode = _clean(request.args.get("allanamiento_mode"))
@@ -160,6 +234,12 @@ def _apply_filters(q):
         )
     if causas_id:
         q = q.filter(DenunciaWeb.causas_id == causas_id)
+    if nro_actuacion_q:
+        toks = _split_search_tokens(nro_actuacion_q)
+        if len(toks) <= 1:
+            q = q.filter(DenunciaWeb.nro_actuacion.ilike(f"%{nro_actuacion_q}%"))
+        else:
+            q = q.filter(or_(*[DenunciaWeb.nro_actuacion.ilike(f"%{tk}%") for tk in toks]))
     if anio:
         q = q.filter(DenunciaWeb.anio_actuacion == anio)
     if fd:
@@ -170,18 +250,33 @@ def _apply_filters(q):
         except Exception:
             pass
         q = q.filter(DenunciaWeb.fecha_denuncia <= fh)
-    if dep_reg:
-        q = q.filter(DenunciaWeb.desc_dep_registro == dep_reg)
-    if dep_act:
-        q = q.filter(DenunciaWeb.desc_dep_actuario == dep_act)
-    if estado:
-        q = q.filter(DenunciaWeb.causa_estado == estado)
-    if localidad:
-        q = q.filter(DenunciaWeb.localidad == localidad)
-    if barrio:
-        q = q.filter(DenunciaWeb.barrio == barrio)
-    if actuario:
-        q = q.filter(DenunciaWeb.actuario_apenom == actuario)
+    if departamentos:
+        q = q.filter(DenunciaWeb.desc_dep_padre.in_(departamentos))
+    if dep_reg_list:
+        q = q.filter(DenunciaWeb.desc_dep_registro.in_(dep_reg_list))
+    if dep_act_list:
+        q = q.filter(DenunciaWeb.desc_dep_actuario.in_(dep_act_list))
+    if estado_list:
+        q = q.filter(DenunciaWeb.causa_estado.in_(estado_list))
+    if localidad_list:
+        q = q.filter(DenunciaWeb.localidad.in_(localidad_list))
+    if barrio_list:
+        barrio_pairs = [_split_pair(x) for x in barrio_list]
+        barrio_pairs = [(loc, bar) for (loc, bar) in barrio_pairs if loc and bar]
+        if barrio_pairs:
+            q = q.filter(or_(*[(DenunciaWeb.localidad == loc) & (DenunciaWeb.barrio == bar) for (loc, bar) in barrio_pairs]))
+        else:
+            q = q.filter(DenunciaWeb.barrio.in_(barrio_list))
+    if actuario_list:
+        act_pairs = [_split_pair(x) for x in actuario_list]
+        act_pairs = [(g, n) for (g, n) in act_pairs if g and n]
+        if act_pairs:
+            q = q.filter(or_(*[(DenunciaWeb.actuario_grado == g) & (DenunciaWeb.actuario_apenom == n) for (g, n) in act_pairs]))
+        else:
+            q = q.filter(DenunciaWeb.actuario_apenom.in_(actuario_list))
+    if investigados_q:
+        ip = f"%{investigados_q}%"
+        q = q.filter(DenunciaWeb.investigados.ilike(ip))
     if coord_mode == "con":
         q = q.filter(DenunciaWeb.latitud.isnot(None), DenunciaWeb.longitud.isnot(None))
     elif coord_mode == "sin":
@@ -202,15 +297,44 @@ def _apply_filters(q):
 
 
 def _filter_options():
-    bq = _base_q()
+    # Opciones en cascada: se calculan sobre el subconjunto ya filtrado.
+    bq = _apply_filters(_base_q())
+    barrio_rows = (
+        bq.with_entities(DenunciaWeb.localidad, DenunciaWeb.barrio)
+        .filter(DenunciaWeb.localidad.isnot(None), DenunciaWeb.localidad != "", DenunciaWeb.barrio.isnot(None), DenunciaWeb.barrio != "")
+        .distinct()
+        .order_by(DenunciaWeb.localidad.asc(), DenunciaWeb.barrio.asc())
+        .all()
+    )
+    act_rows = (
+        bq.with_entities(DenunciaWeb.actuario_grado, DenunciaWeb.actuario_apenom)
+        .filter(DenunciaWeb.actuario_apenom.isnot(None), DenunciaWeb.actuario_apenom != "")
+        .distinct()
+        .order_by(DenunciaWeb.actuario_apenom.asc())
+        .all()
+    )
     return {
         "anios": [r[0] for r in bq.with_entities(DenunciaWeb.anio_actuacion).distinct().order_by(DenunciaWeb.anio_actuacion.desc()).all() if r[0]],
+        "departamentos": [r[0] for r in bq.with_entities(DenunciaWeb.desc_dep_padre).distinct().order_by(DenunciaWeb.desc_dep_padre.asc()).all() if r[0]],
         "deps_registro": [r[0] for r in bq.with_entities(DenunciaWeb.desc_dep_registro).distinct().order_by(DenunciaWeb.desc_dep_registro.asc()).all() if r[0]],
         "deps_actuario": [r[0] for r in bq.with_entities(DenunciaWeb.desc_dep_actuario).distinct().order_by(DenunciaWeb.desc_dep_actuario.asc()).all() if r[0]],
         "estados": [r[0] for r in bq.with_entities(DenunciaWeb.causa_estado).distinct().order_by(DenunciaWeb.causa_estado.asc()).all() if r[0]],
         "localidades": [r[0] for r in bq.with_entities(DenunciaWeb.localidad).distinct().order_by(DenunciaWeb.localidad.asc()).all() if r[0]],
-        "barrios": [r[0] for r in bq.with_entities(DenunciaWeb.barrio).distinct().order_by(DenunciaWeb.barrio.asc()).all() if r[0]],
-        "actuarios": [r[0] for r in bq.with_entities(DenunciaWeb.actuario_apenom).distinct().order_by(DenunciaWeb.actuario_apenom.asc()).all() if r[0]],
+        "barrios": [
+            {
+                "value": f"{r[0]}||{r[1]}",
+                "label": f"{r[1]} ({r[0]})",
+            }
+            for r in barrio_rows
+        ],
+        "actuarios": [
+            {
+                "value": f"{(r[0] or '').strip()}||{(r[1] or '').strip()}",
+                "label": f"{(r[0] or '').strip()} {(r[1] or '').strip()}".strip(),
+            }
+            for r in act_rows
+            if (r[1] or "").strip()
+        ],
     }
 
 
@@ -289,7 +413,7 @@ def _calc_dashboard(q):
     }
 
 
-def _import_from_text(text: str) -> dict:
+def _import_from_text(text: str, replace_all: bool = False) -> dict:
     if not text.strip():
         return {"error": "El archivo está vacío."}
     reader = csv.DictReader(StringIO(text), delimiter=";")
@@ -303,6 +427,11 @@ def _import_from_text(text: str) -> dict:
     missing = sorted([c for c in expected if c not in fields])
     if missing:
         return {"error": f"Columnas faltantes: {', '.join(missing)}"}
+
+    deleted = 0
+    if replace_all:
+        deleted = DenunciaWeb.query.filter(DenunciaWeb.unidad_id == current_user.unidad_id).delete()
+        db.session.commit()
 
     imported = 0
     updated = 0
@@ -359,7 +488,7 @@ def _import_from_text(text: str) -> dict:
             updated += 1
 
     db.session.commit()
-    return {"importados": imported, "actualizados": updated, "omitidos": skipped}
+    return {"importados": imported, "actualizados": updated, "omitidos": skipped, "eliminados_previos": deleted}
 
 
 def _import_from_csv(file_storage) -> dict:
@@ -395,14 +524,17 @@ def importar():
         if not f.filename.lower().endswith(".csv"):
             flash("Formato inválido. Debe ser CSV.", "danger")
             return redirect(url_for("analisis_denuncias.importar"))
-        res = _import_from_csv(f)
+        replace_all = bool(request.form.get("replace_all"))
+        res = _import_from_csv(f) if not replace_all else _import_from_text(f.read().decode("utf-8-sig", errors="replace"), True)
         if res.get("error"):
             flash(res["error"], "danger")
         else:
-            flash(
-                f"Importación finalizada. Importados: {res['importados']}, actualizados: {res['actualizados']}, omitidos: {res['omitidos']}.",
-                "success",
+            msg = (
+                f"Importación finalizada. Importados: {res['importados']}, actualizados: {res['actualizados']}, omitidos: {res['omitidos']}."
             )
+            if int(res.get("eliminados_previos") or 0) > 0:
+                msg = f"Se eliminaron {res['eliminados_previos']} registros previos. " + msg
+            flash(msg, "success")
         return redirect(url_for("analisis_denuncias.importar"))
 
     total = _base_q().count()
@@ -423,7 +555,8 @@ def importar_base():
     except Exception as exc:
         flash(f"No se pudo leer el archivo base: {exc}", "danger")
         return redirect(url_for("analisis_denuncias.importar"))
-    res = _import_from_text(text)
+    replace_all = bool(request.form.get("replace_all"))
+    res = _import_from_text(text, replace_all=replace_all)
     if res.get("error"):
         flash(res["error"], "danger")
     else:
@@ -431,6 +564,16 @@ def importar_base():
             f"Archivo base importado. Importados: {res['importados']}, actualizados: {res['actualizados']}, omitidos: {res['omitidos']}.",
             "success",
         )
+    return redirect(url_for("analisis_denuncias.importar"))
+
+
+@bp.route("/importar/limpiar", methods=["POST"])
+def limpiar_importado():
+    if not _can_import():
+        abort(403)
+    deleted = DenunciaWeb.query.filter(DenunciaWeb.unidad_id == current_user.unidad_id).delete()
+    db.session.commit()
+    flash(f"Se eliminaron {deleted} denuncias cargadas en esta unidad.", "success")
     return redirect(url_for("analisis_denuncias.importar"))
 
 
@@ -444,8 +587,9 @@ def listado():
     total = q.count()
     rows = q.order_by(DenunciaWeb.fecha_denuncia.desc(), DenunciaWeb.id.desc()).offset((page - 1) * per_page).limit(per_page).all()
     pages = max(1, (total + per_page - 1) // per_page)
-    args_no_page = request.args.to_dict(flat=True)
+    args_no_page = request.args.to_dict(flat=False)
     args_no_page.pop("page", None)
+    qs_no_page = urlencode(args_no_page, doseq=True)
     return render_template(
         "analisis_denuncias/listado.html",
         rows=rows,
@@ -454,7 +598,8 @@ def listado():
         per_page=per_page,
         pages=pages,
         filtros=_filter_options(),
-        args_no_page=args_no_page,
+        qs_no_page=qs_no_page,
+        selected=_selected_filters(),
         can_import=_can_import(),
         can_export=_can_export(),
         can_dashboard=_can_dashboard(),
@@ -473,6 +618,7 @@ def dashboard():
         datos_json=json.dumps(datos),
         kpis=datos["kpis"],
         filtros=_filter_options(),
+        selected=_selected_filters(),
         can_map=_can_map(),
         can_view=_can_view(),
     )
@@ -489,6 +635,7 @@ def mapa():
         markers_json=json.dumps(markers),
         total_filtrado=q.count(),
         filtros=_filter_options(),
+        selected=_selected_filters(),
         can_dashboard=_can_dashboard(),
         can_view=_can_view(),
     )
