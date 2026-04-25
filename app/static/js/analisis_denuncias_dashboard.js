@@ -11,16 +11,32 @@
         }
     }
 
-    function plotBar(elId, labels, values, color, onClick) {
+    function labelValues(values, mode) {
+        var total = values.reduce(function (a, b) { return a + (Number(b) || 0); }, 0);
+        if (mode === 'porcentaje') {
+            return values.map(function (v) {
+                var p = total ? (100 * Number(v || 0) / total) : 0;
+                return p.toFixed(1) + '%';
+            });
+        }
+        return values.map(function (v) { return Number(v || 0).toLocaleString('es-AR'); });
+    }
+
+    function plotBar(elId, labels, values, color, onClick, mode) {
         var el = document.getElementById(elId);
         if (!el || !window.Plotly) return;
+        var textVals = labelValues(values, mode || 'cantidad');
         window.Plotly.newPlot(el, [{
             type: 'bar',
             x: labels,
             y: values,
-            marker: { color: color || '#0d6efd' }
+            marker: { color: color || '#0d6efd' },
+            text: textVals,
+            textposition: 'outside',
+            cliponaxis: false,
         }], {
-            margin: { l: 40, r: 10, t: 10, b: 80 }
+            margin: { l: 40, r: 10, t: 20, b: 95 },
+            uniformtext: { minsize: 10, mode: 'hide' }
         }, { displayModeBar: false, responsive: true });
         if (onClick && el.removeAllListeners) {
             el.removeAllListeners('plotly_click');
@@ -32,14 +48,16 @@
         }
     }
 
-    function plotPie(elId, labels, values, onClick) {
+    function plotPie(elId, labels, values, onClick, mode) {
         var el = document.getElementById(elId);
         if (!el || !window.Plotly) return;
         window.Plotly.newPlot(el, [{
             type: 'pie',
             labels: labels,
             values: values,
-            textinfo: 'label+percent',
+            textinfo: mode === 'porcentaje' ? 'label+percent' : 'label+value',
+            texttemplate: mode === 'porcentaje' ? '%{label}<br>%{percent}' : '%{label}<br>%{value}',
+            textposition: 'inside',
         }], {
             margin: { l: 10, r: 10, t: 10, b: 10 }
         }, { displayModeBar: false, responsive: true });
@@ -87,6 +105,38 @@
         return String(d.getHours()).padStart(2, '0') + ':00';
     }
 
+    function parseIsoDate(iso) {
+        if (!iso) return null;
+        var d = new Date(iso);
+        return isNaN(d.getTime()) ? null : d;
+    }
+
+    function daysRangeLabel(days) {
+        if (days == null || days < 0) return 'Sin fecha de inicio';
+        if (days <= 15) return '1-15 días';
+        if (days <= 30) return '16-30 días';
+        if (days <= 60) return '31-60 días';
+        if (days <= 90) return '61-90 días';
+        if (days <= 180) return '91-180 días';
+        return '181+ días';
+    }
+
+    function normalizeText(x) {
+        return String(x || '').toLowerCase()
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .trim();
+    }
+
+    function isUnresolvedEstado(estado) {
+        var s = normalizeText(estado);
+        if (!s) return true;
+        var unresolvedTokens = ['pend', 'investig', 'tramite', 'curso', 'abierta', 'iniciad', 'proceso', 'analisis'];
+        var closedTokens = ['desestim', 'archiv', 'resuel', 'cerrad', 'finaliz', 'elevad', 'conden', 'sentenc'];
+        if (closedTokens.some(function (t) { return s.indexOf(t) >= 0; })) return false;
+        if (unresolvedTokens.some(function (t) { return s.indexOf(t) >= 0; })) return true;
+        return true;
+    }
+
     function toActuario(gr, ap) {
         var g = String(gr || '').trim();
         var a = String(ap || '').trim();
@@ -121,22 +171,211 @@
         el.textContent = parts.length ? ('Filtros gráficos activos → ' + parts.join(' | ')) : 'Sin filtros gráficos activos';
     }
 
+    function reportHtml(rows, state) {
+        var total = rows.length;
+        if (!total) return '<p class="text-muted mb-0">Sin datos para el filtro actual.</p>';
+        function topLabel(arr) { return (arr[0] && arr[0].label) ? arr[0].label : 'Sin dato'; }
+        function topValue(arr) { return (arr[0] && arr[0].value) ? arr[0].value : 0; }
+        var est = byCount(rows, function (r) { return r.estado; }, 5);
+        var dep = byCount(rows, function (r) { return r.departamento; }, 5);
+        var div = byCount(rows, function (r) { return r.division; }, 5);
+        var bar = byCount(rows, function (r) { return r.barrio; }, 5);
+        var act = byCount(rows, function (r) { return r.actuario; }, 5);
+        var conCoords = rows.filter(function (r) { return r.coords === 'Con coordenadas'; }).length;
+        var conInv = rows.filter(function (r) { return r.investigados === 'Con investigados'; }).length;
+        var conAlla = rows.filter(function (r) { return r.allanamiento === 'Con allanamiento'; }).length;
+        var desest = rows.filter(function (r) { return r.desestimada === 'Desestimada'; }).length;
+        var dias = byCount(rows, function (r) { return r.rango_dias; });
+        var actRows = rows.filter(function (r) { return r.actuario !== 'Sin actuario'; });
+        var unresolvedByAct = Object.create(null);
+        var totalByAct = Object.create(null);
+        actRows.forEach(function (r) {
+            totalByAct[r.actuario] = (totalByAct[r.actuario] || 0) + 1;
+            if (r.estado_pendiente) unresolvedByAct[r.actuario] = (unresolvedByAct[r.actuario] || 0) + 1;
+        });
+        var actRisk = Object.keys(totalByAct).map(function (a) {
+            var tot = totalByAct[a] || 0;
+            var pend = unresolvedByAct[a] || 0;
+            var pct = tot ? (100 * pend / tot) : 0;
+            return { label: a, total: tot, pendientes: pend, pct: pct };
+        }).sort(function (a, b) { return b.pct - a.pct || b.total - a.total; }).slice(0, 5);
+        var rawKeys = Object.keys((rows[0] && rows[0].raw) || {});
+        var ignored = { id: true, unidad_id: true, created_at: true, updated_at: true, fecha_importacion: true };
+        var fieldsToAudit = rawKeys.filter(function (k) { return !ignored[k]; });
+        var bajas = fieldsToAudit.map(function (k) {
+            var filled = rows.filter(function (r) {
+                var v = r.raw[k];
+                if (v === null || v === undefined) return false;
+                if (typeof v === 'string' && !v.trim()) return false;
+                return true;
+            }).length;
+            return { k: k, pct: total ? (100 * filled / total) : 0 };
+        }).sort(function (a, b) { return a.pct - b.pct; }).slice(0, 5);
+        var active = [];
+        Object.keys(state).forEach(function (k) { if (state[k]) active.push(k + ': ' + state[k]); });
+        return [
+            '<h6>Resumen ejecutivo</h6>',
+            '<p>Con los filtros actuales se analizan <strong>' + total.toLocaleString('es-AR') + '</strong> denuncias. ',
+            'Predomina el estado <strong>' + topLabel(est) + '</strong> (' + topValue(est).toLocaleString('es-AR') + '). ',
+            'El foco territorial principal se concentra en <strong>' + topLabel(dep) + '</strong> y la división <strong>' + topLabel(div) + '</strong>.</p>',
+            '<h6>Evaluación operativa por zona y personal</h6>',
+            '<ul>',
+            '<li><strong>Zona crítica:</strong> ' + topLabel(bar) + ' (' + topValue(bar).toLocaleString('es-AR') + ' denuncias en este recorte).</li>',
+            '<li><strong>Actuario con mayor carga:</strong> ' + topLabel(act) + ' (' + topValue(act).toLocaleString('es-AR') + ').</li>',
+            '<li><strong>Cobertura georreferenciada:</strong> ' + conCoords.toLocaleString('es-AR') + ' con coordenadas (' + (100 * conCoords / total).toFixed(1) + '%).</li>',
+            '<li><strong>Calidad de datos investigativos:</strong> ' + conInv.toLocaleString('es-AR') + ' con investigados (' + (100 * conInv / total).toFixed(1) + '%).</li>',
+            '<li><strong>Acciones judiciales:</strong> ' + conAlla.toLocaleString('es-AR') + ' con solicitud de allanamiento; ' + desest.toLocaleString('es-AR') + ' desestimadas.</li>',
+            '<li><strong>Antigüedad de investigación dominante:</strong> ' + topLabel(dias) + ' (' + topValue(dias).toLocaleString('es-AR') + ').</li>',
+            '</ul>',
+            '<h6>Observaciones y recomendaciones sobre actuarios</h6>',
+            '<ul>',
+            (actRisk.length ? actRisk.map(function (a) {
+                var rec = a.pct >= 70
+                    ? 'Requiere seguimiento prioritario y descarga de casos.'
+                    : (a.pct >= 50 ? 'Conviene reforzar apoyo operativo y control semanal.' : 'Carga manejable, sostener ritmo actual.');
+                return '<li><strong>' + a.label + ':</strong> ' + a.pendientes.toLocaleString('es-AR') + '/' + a.total.toLocaleString('es-AR') + ' sin resolver (' + a.pct.toFixed(1) + '%). ' + rec + '</li>';
+            }).join('') : '<li>No hay actuarios con datos suficientes en este recorte.</li>'),
+            '</ul>',
+            '<h6>Control de cobertura de campos (análisis integral)</h6>',
+            '<p>El informe usa todos los campos disponibles en el dataset filtrado. Los campos con menor completitud en este recorte son:</p>',
+            '<ul>',
+            (bajas.length ? bajas.map(function (x) {
+                return '<li><strong>' + x.k + ':</strong> ' + x.pct.toFixed(1) + '% de registros con dato.</li>';
+            }).join('') : '<li>Sin observaciones de completitud.</li>'),
+            '</ul>',
+            '<h6>Interpretación</h6>',
+            '<p>La combinación zona-personal sugiere priorizar supervisión y reasignación de recursos en los sectores con mayor densidad. ',
+            'Sostener trazabilidad de investigados y georreferenciación mejora la capacidad de respuesta y la evaluación del desempeño operativo.</p>',
+            active.length ? '<p class="small text-muted mb-0"><strong>Selección de gráficos activa:</strong> ' + active.join(' | ') + '</p>' : ''
+        ].join('');
+    }
+
+    function reportText(rows, state) {
+        var total = rows.length;
+        if (!total) return 'Sin datos para el filtro actual.';
+        function topLabel(arr) { return (arr[0] && arr[0].label) ? arr[0].label : 'Sin dato'; }
+        function topValue(arr) { return (arr[0] && arr[0].value) ? arr[0].value : 0; }
+        var est = byCount(rows, function (r) { return r.estado; }, 5);
+        var dep = byCount(rows, function (r) { return r.departamento; }, 5);
+        var div = byCount(rows, function (r) { return r.division; }, 5);
+        var bar = byCount(rows, function (r) { return r.barrio; }, 5);
+        var act = byCount(rows, function (r) { return r.actuario; }, 5);
+        var dias = byCount(rows, function (r) { return r.rango_dias; });
+        var conCoords = rows.filter(function (r) { return r.coords === 'Con coordenadas'; }).length;
+        var conInv = rows.filter(function (r) { return r.investigados === 'Con investigados'; }).length;
+        var conAlla = rows.filter(function (r) { return r.allanamiento === 'Con allanamiento'; }).length;
+        var desest = rows.filter(function (r) { return r.desestimada === 'Desestimada'; }).length;
+
+        var actRows = rows.filter(function (r) { return r.actuario !== 'Sin actuario'; });
+        var unresolvedByAct = Object.create(null);
+        var totalByAct = Object.create(null);
+        var sumDaysByAct = Object.create(null);
+        var cntDaysByAct = Object.create(null);
+        actRows.forEach(function (r) {
+            totalByAct[r.actuario] = (totalByAct[r.actuario] || 0) + 1;
+            if (r.estado_pendiente) unresolvedByAct[r.actuario] = (unresolvedByAct[r.actuario] || 0) + 1;
+            if (typeof r.dias_investigacion === 'number') {
+                sumDaysByAct[r.actuario] = (sumDaysByAct[r.actuario] || 0) + r.dias_investigacion;
+                cntDaysByAct[r.actuario] = (cntDaysByAct[r.actuario] || 0) + 1;
+            }
+        });
+        var actRisk = Object.keys(totalByAct).map(function (a) {
+            var tot = totalByAct[a] || 0;
+            var pend = unresolvedByAct[a] || 0;
+            var pct = tot ? (100 * pend / tot) : 0;
+            var avg = (cntDaysByAct[a] || 0) ? (sumDaysByAct[a] / cntDaysByAct[a]) : 0;
+            return { label: a, total: tot, pendientes: pend, pct: pct, avgDias: avg };
+        }).sort(function (x, y) { return y.total - x.total || y.avgDias - x.avgDias; }).slice(0, 10);
+
+        var active = [];
+        Object.keys(state).forEach(function (k) { if (state[k]) active.push(k + ': ' + state[k]); });
+        var lines = [];
+        lines.push('INFORME ANALITICO - DENUNCIAS WEB');
+        lines.push('Fecha: ' + new Date().toLocaleString('es-AR'));
+        lines.push('');
+        lines.push('RESUMEN');
+        lines.push('- Total analizado: ' + total.toLocaleString('es-AR'));
+        lines.push('- Estado predominante: ' + topLabel(est) + ' (' + topValue(est).toLocaleString('es-AR') + ')');
+        lines.push('- Foco territorial: ' + topLabel(dep) + ' / ' + topLabel(div));
+        lines.push('- Zona critica: ' + topLabel(bar));
+        lines.push('- Actuario con mayor carga: ' + topLabel(act));
+        lines.push('- Tramo de antiguedad dominante: ' + topLabel(dias) + ' (' + topValue(dias).toLocaleString('es-AR') + ')');
+        lines.push('- Cobertura georreferenciada: ' + conCoords.toLocaleString('es-AR') + ' (' + (100 * conCoords / total).toFixed(1) + '%)');
+        lines.push('- Con investigados: ' + conInv.toLocaleString('es-AR') + ' (' + (100 * conInv / total).toFixed(1) + '%)');
+        lines.push('- Con allanamiento: ' + conAlla.toLocaleString('es-AR') + ' | Desestimadas: ' + desest.toLocaleString('es-AR'));
+        lines.push('');
+        lines.push('RANKING DE ACTUARIOS (carga y antiguedad promedio)');
+        if (!actRisk.length) {
+            lines.push('- Sin datos suficientes.');
+        } else {
+            actRisk.forEach(function (a, idx) {
+                lines.push(
+                    (idx + 1) + '. ' + a.label +
+                    ' | Carga: ' + a.total.toLocaleString('es-AR') +
+                    ' | Sin resolver: ' + a.pendientes.toLocaleString('es-AR') + ' (' + a.pct.toFixed(1) + '%)' +
+                    ' | Antiguedad prom.: ' + a.avgDias.toFixed(1) + ' dias'
+                );
+            });
+        }
+        if (active.length) {
+            lines.push('');
+            lines.push('SELECCION GRAFICOS ACTIVA');
+            lines.push(active.join(' | '));
+        }
+        return lines.join('\n');
+    }
+
+    function downloadTextFile(filename, text, mimeType) {
+        var blob = new Blob([text], { type: mimeType || 'text/plain;charset=utf-8' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    function toCsv(rows) {
+        if (!rows.length) return 'sin_datos\n';
+        var headers = Object.keys(rows[0].raw || {});
+        var out = [headers.join(',')];
+        rows.forEach(function (r) {
+            var vals = headers.map(function (h) {
+                var v = (r.raw || {})[h];
+                if (v === null || v === undefined) v = '';
+                var s = String(v).replace(/"/g, '""');
+                return '"' + s + '"';
+            });
+            out.push(vals.join(','));
+        });
+        return out.join('\n');
+    }
+
     function makeRows(rowsRaw) {
+        var now = new Date();
         return (rowsRaw || []).map(function (r) {
+            var fInicio = parseIsoDate(r.fecha_denuncia || r.fecha_apertura || r.fecha_recepcion);
+            var dias = fInicio ? Math.max(0, Math.floor((now.getTime() - fInicio.getTime()) / 86400000)) : null;
             return {
-                mes: monthLabelEs(r.fecha_denuncia),
-                dia: dayLabelEs(r.fecha_denuncia),
-                hora: hourLabel(r.fecha_recepcion, r.fecha_denuncia),
+                mes: monthLabelEs(r.fecha_denuncia || r.fecha_apertura),
+                dia: dayLabelEs(r.fecha_denuncia || r.fecha_apertura),
+                hora: hourLabel(r.fecha_recepcion, r.fecha_denuncia || r.fecha_apertura),
                 estado: String(r.causa_estado || '').trim() || 'Sin estado',
                 barrio: (String(r.barrio || '').trim() || 'Sin barrio') + ' (' + (String(r.localidad || '').trim() || 'Sin localidad') + ')',
-                departamento: String(r.departamento || '').trim() || 'Sin departamento',
-                division: String(r.division || '').trim() || 'Sin división',
-                dep_actuario: String(r.dep_actuario || '').trim() || 'Sin dependencia actuario',
+                departamento: String(r.departamento || r.desc_dep_padre || '').trim() || 'Sin departamento',
+                division: String(r.division || r.desc_dep_registro || '').trim() || 'Sin división',
+                dep_actuario: String(r.dep_actuario || r.desc_dep_actuario || '').trim() || 'Sin dependencia actuario',
                 actuario: toActuario(r.actuario_grado, r.actuario_apenom),
                 coords: (typeof r.latitud === 'number' && typeof r.longitud === 'number') ? 'Con coordenadas' : 'Sin coordenadas',
                 investigados: String(r.investigados || '').trim() ? 'Con investigados' : 'Sin investigados',
                 allanamiento: String(r.fecha_sol_allanamiento || '').trim() ? 'Con allanamiento' : 'Sin allanamiento',
-                desestimada: String(r.fecha_desestimada || '').trim() ? 'Desestimada' : 'No desestimada'
+                desestimada: String(r.fecha_desestimada || '').trim() ? 'Desestimada' : 'No desestimada',
+                dias_investigacion: dias,
+                rango_dias: daysRangeLabel(dias),
+                estado_pendiente: isUnresolvedEstado(r.causa_estado),
+                raw: r
             };
         });
     }
@@ -148,8 +387,10 @@
         var state = {
             mes: '', dia: '', hora: '', estado: '', barrio: '', departamento: '',
             division: '', dep_actuario: '', actuario: '', coords: '', investigados: '',
-            allanamiento: '', desestimada: ''
+            allanamiento: '', desestimada: '', rango_dias: ''
         };
+        var displayMode = 'cantidad';
+        var lastFilteredRows = [];
 
         function filteredRows() {
             return baseRows.filter(function (r) {
@@ -166,6 +407,7 @@
 
         function renderAll() {
             var rows = filteredRows();
+            lastFilteredRows = rows.slice();
             setText('ad-kpi-total', rows.length);
             setText('ad-kpi-concoords', rows.filter(function (r) { return r.coords === 'Con coordenadas'; }).length);
             setText('ad-kpi-sincoords', rows.filter(function (r) { return r.coords === 'Sin coordenadas'; }).length);
@@ -174,34 +416,38 @@
             setText('ad-kpi-investigados', rows.filter(function (r) { return r.investigados === 'Con investigados'; }).length);
 
             var mes = byCount(rows, function (r) { return r.mes; });
-            plotBar('ad-chart-mes', mes.map(function (x) { return x.label; }), mes.map(function (x) { return x.value; }), '#198754', function (x) { toggle('mes', x); });
+            plotBar('ad-chart-mes', mes.map(function (x) { return x.label; }), mes.map(function (x) { return x.value; }), '#198754', function (x) { toggle('mes', x); }, displayMode);
             var dia = byCount(rows, function (r) { return r.dia; });
-            plotBar('ad-chart-dia', dia.map(function (x) { return x.label; }), dia.map(function (x) { return x.value; }), '#0d6efd', function (x) { toggle('dia', x); });
+            plotBar('ad-chart-dia', dia.map(function (x) { return x.label; }), dia.map(function (x) { return x.value; }), '#0d6efd', function (x) { toggle('dia', x); }, displayMode);
             var hora = byCount(rows, function (r) { return r.hora; });
-            plotBar('ad-chart-hora', hora.map(function (x) { return x.label; }), hora.map(function (x) { return x.value; }), '#6f42c1', function (x) { toggle('hora', x); });
+            plotBar('ad-chart-hora', hora.map(function (x) { return x.label; }), hora.map(function (x) { return x.value; }), '#6f42c1', function (x) { toggle('hora', x); }, displayMode);
+            var edad = byCount(rows, function (r) { return r.rango_dias; });
+            plotBar('ad-chart-dias-investigacion', edad.map(function (x) { return x.label; }), edad.map(function (x) { return x.value; }), '#dc3545', function (x) { toggle('rango_dias', x); }, displayMode);
             var est = byCount(rows, function (r) { return r.estado; });
-            plotBar('ad-chart-estado', est.map(function (x) { return x.label; }), est.map(function (x) { return x.value; }), '#fd7e14', function (x) { toggle('estado', x); });
+            plotBar('ad-chart-estado', est.map(function (x) { return x.label; }), est.map(function (x) { return x.value; }), '#fd7e14', function (x) { toggle('estado', x); }, displayMode);
             var bar = byCount(rows, function (r) { return r.barrio; }, 30);
-            plotBar('ad-chart-barrio', bar.map(function (x) { return x.label; }), bar.map(function (x) { return x.value; }), '#7952b3', function (x) { toggle('barrio', x); });
+            plotBar('ad-chart-barrio', bar.map(function (x) { return x.label; }), bar.map(function (x) { return x.value; }), '#7952b3', function (x) { toggle('barrio', x); }, displayMode);
             var dep = byCount(rows, function (r) { return r.departamento; });
-            plotBar('ad-chart-departamento', dep.map(function (x) { return x.label; }), dep.map(function (x) { return x.value; }), '#198754', function (x) { toggle('departamento', x); });
+            plotBar('ad-chart-departamento', dep.map(function (x) { return x.label; }), dep.map(function (x) { return x.value; }), '#198754', function (x) { toggle('departamento', x); }, displayMode);
             var div = byCount(rows, function (r) { return r.division; }, 25);
-            plotBar('ad-chart-division', div.map(function (x) { return x.label; }), div.map(function (x) { return x.value; }), '#0dcaf0', function (x) { toggle('division', x); });
+            plotBar('ad-chart-division', div.map(function (x) { return x.label; }), div.map(function (x) { return x.value; }), '#0dcaf0', function (x) { toggle('division', x); }, displayMode);
             var dact = byCount(rows, function (r) { return r.dep_actuario; }, 25);
-            plotBar('ad-chart-dep-actuario', dact.map(function (x) { return x.label; }), dact.map(function (x) { return x.value; }), '#20c997', function (x) { toggle('dep_actuario', x); });
+            plotBar('ad-chart-dep-actuario', dact.map(function (x) { return x.label; }), dact.map(function (x) { return x.value; }), '#20c997', function (x) { toggle('dep_actuario', x); }, displayMode);
             var act = byCount(rows, function (r) { return r.actuario; }, 30);
-            plotBar('ad-chart-actuario', act.map(function (x) { return x.label; }), act.map(function (x) { return x.value; }), '#6610f2', function (x) { toggle('actuario', x); });
+            plotBar('ad-chart-actuario', act.map(function (x) { return x.label; }), act.map(function (x) { return x.value; }), '#6610f2', function (x) { toggle('actuario', x); }, displayMode);
 
             var c1 = byCount(rows, function (r) { return r.coords; });
-            plotPie('ad-chart-coords', c1.map(function (x) { return x.label; }), c1.map(function (x) { return x.value; }), function (x) { toggle('coords', x); });
+            plotPie('ad-chart-coords', c1.map(function (x) { return x.label; }), c1.map(function (x) { return x.value; }), function (x) { toggle('coords', x); }, displayMode);
             var c2 = byCount(rows, function (r) { return r.investigados; });
-            plotPie('ad-chart-investigados', c2.map(function (x) { return x.label; }), c2.map(function (x) { return x.value; }), function (x) { toggle('investigados', x); });
+            plotPie('ad-chart-investigados', c2.map(function (x) { return x.label; }), c2.map(function (x) { return x.value; }), function (x) { toggle('investigados', x); }, displayMode);
             var c3 = byCount(rows, function (r) { return r.allanamiento; });
-            plotPie('ad-chart-allanamiento', c3.map(function (x) { return x.label; }), c3.map(function (x) { return x.value; }), function (x) { toggle('allanamiento', x); });
+            plotPie('ad-chart-allanamiento', c3.map(function (x) { return x.label; }), c3.map(function (x) { return x.value; }), function (x) { toggle('allanamiento', x); }, displayMode);
             var c4 = byCount(rows, function (r) { return r.desestimada; });
-            plotPie('ad-chart-desestimada', c4.map(function (x) { return x.label; }), c4.map(function (x) { return x.value; }), function (x) { toggle('desestimada', x); });
+            plotPie('ad-chart-desestimada', c4.map(function (x) { return x.label; }), c4.map(function (x) { return x.value; }), function (x) { toggle('desestimada', x); }, displayMode);
 
             renderActiveInfo(state);
+            var rep = document.getElementById('ad-ai-report');
+            if (rep) rep.innerHTML = reportHtml(rows, state);
         }
 
         var btnClear = document.getElementById('ad-clear-chart-filters');
@@ -209,6 +455,26 @@
             btnClear.addEventListener('click', function () {
                 Object.keys(state).forEach(function (k) { state[k] = ''; });
                 renderAll();
+            });
+        }
+        document.querySelectorAll('input[name="ad-chart-mode"]').forEach(function (rb) {
+            rb.addEventListener('change', function () {
+                displayMode = this.value || 'cantidad';
+                renderAll();
+            });
+        });
+        var btnExportTxt = document.getElementById('ad-export-report-txt');
+        if (btnExportTxt) {
+            btnExportTxt.addEventListener('click', function () {
+                var text = reportText(lastFilteredRows, state);
+                downloadTextFile('analisis_denuncias_informe.txt', text, 'text/plain;charset=utf-8');
+            });
+        }
+        var btnExportCsv = document.getElementById('ad-export-report-csv');
+        if (btnExportCsv) {
+            btnExportCsv.addEventListener('click', function () {
+                var csv = toCsv(lastFilteredRows);
+                downloadTextFile('analisis_denuncias_analisis_filtrado.csv', csv, 'text/csv;charset=utf-8');
             });
         }
         renderAll();

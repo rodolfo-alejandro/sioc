@@ -21,6 +21,21 @@
     {% endif %}
 </div>
 
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <strong class="small mb-0">Vista de valores en gráficos:</strong>
+            <div class="btn-group btn-group-sm" role="group" aria-label="Modo de visualización">
+                <input type="radio" class="btn-check" name="ad-chart-mode" id="ad-chart-mode-cantidad" value="cantidad" checked>
+                <label class="btn btn-outline-primary" for="ad-chart-mode-cantidad">Cantidad</label>
+                <input type="radio" class="btn-check" name="ad-chart-mode" id="ad-chart-mode-porcentaje" value="porcentaje">
+                <label class="btn btn-outline-primary" for="ad-chart-mode-porcentaje">Porcentaje</label>
+            </div>
+            <span class="small text-muted">Los valores se muestran en el gráfico (no solo en hover).</span>
+        </div>
+    </div>
+</div>
+
 <div class="row g-3 mb-3">
     <div class="col-md-2"><div class="card ad-kpi-card"><div class="card-body"><div>Total</div><div class="value" id="ad-kpi-total">{{ kpis.total|number_format }}</div></div></div></div>
     <div class="col-md-2"><div class="card ad-kpi-card"><div class="card-body"><div>Con coords</div><div class="value" id="ad-kpi-concoords">{{ kpis.con_coords|number_format }}</div></div></div></div>
@@ -30,34 +45,66 @@
     <div class="col-md-2"><div class="card ad-kpi-card"><div class="card-body"><div>Con investigados</div><div class="value" id="ad-kpi-investigados">{{ kpis.con_investigados|number_format }}</div></div></div></div>
 </div>
 
-<div class="card mb-3">
-    <div class="card-body py-2">
-        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-            <div>
-                <strong>Interacción:</strong> hacé click en barras o porciones para filtrar cruzado entre gráficos.
-            </div>
-            <button class="btn btn-outline-secondary btn-sm" id="ad-clear-chart-filters" type="button">Limpiar selección de gráficos</button>
-        </div>
-        <div id="ad-active-chart-filters" class="mt-2 small text-muted"></div>
-    </div>
-</div>
+<ul class="nav nav-tabs mb-3" id="ad-dashboard-tabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="ad-tab-graficos-tab" data-bs-toggle="tab" data-bs-target="#ad-tab-graficos" type="button" role="tab">Gráficos</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="ad-tab-analisis-tab" data-bs-toggle="tab" data-bs-target="#ad-tab-analisis" type="button" role="tab">Análisis IA</button>
+    </li>
+</ul>
 
-<div class="row g-3">
-    <div class="col-12"><div class="card"><div class="card-header">Meses (ES)</div><div class="card-body"><div id="ad-chart-mes" style="height:300px;"></div></div></div></div>
-    <div class="col-12"><div class="card"><div class="card-header">Días de la semana</div><div class="card-body"><div id="ad-chart-dia" style="height:300px;"></div></div></div></div>
-    <div class="col-12"><div class="card"><div class="card-header">Hora</div><div class="card-body"><div id="ad-chart-hora" style="height:300px;"></div></div></div></div>
-    <div class="col-12"><div class="card"><div class="card-header">Estados</div><div class="card-body"><div id="ad-chart-estado" style="height:320px;"></div></div></div></div>
-    <div class="col-12"><div class="card"><div class="card-header">Barrios</div><div class="card-body"><div id="ad-chart-barrio" style="height:340px;"></div></div></div></div>
-    <div class="col-12"><div class="card"><div class="card-header">Departamento</div><div class="card-body"><div id="ad-chart-departamento" style="height:320px;"></div></div></div></div>
-    <div class="col-12"><div class="card"><div class="card-header">División</div><div class="card-body"><div id="ad-chart-division" style="height:320px;"></div></div></div></div>
-    <div class="col-12"><div class="card"><div class="card-header">Dependencia Actuario</div><div class="card-body"><div id="ad-chart-dep-actuario" style="height:320px;"></div></div></div></div>
-    <div class="col-12"><div class="card"><div class="card-header">Actuario</div><div class="card-body"><div id="ad-chart-actuario" style="height:360px;"></div></div></div></div>
-    <div class="col-12"><div class="card"><div class="card-header">Tortas (con/sin)</div><div class="card-body"><div class="row g-3">
-        <div class="col-md-3"><div id="ad-chart-coords" style="height:300px;"></div></div>
-        <div class="col-md-3"><div id="ad-chart-investigados" style="height:300px;"></div></div>
-        <div class="col-md-3"><div id="ad-chart-allanamiento" style="height:300px;"></div></div>
-        <div class="col-md-3"><div id="ad-chart-desestimada" style="height:300px;"></div></div>
-    </div></div></div></div>
+<div class="tab-content" id="ad-dashboard-tabs-content">
+    <div class="tab-pane fade show active" id="ad-tab-graficos" role="tabpanel">
+        <div class="card mb-3">
+            <div class="card-body py-2">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div>
+                        <strong>Interacción:</strong> hacé click en barras o porciones para filtrar cruzado entre gráficos.
+                    </div>
+                    <button class="btn btn-outline-secondary btn-sm" id="ad-clear-chart-filters" type="button">Limpiar selección de gráficos</button>
+                </div>
+                <div id="ad-active-chart-filters" class="mt-2 small text-muted"></div>
+            </div>
+        </div>
+
+        <div class="row g-3">
+            <div class="col-12"><div class="card"><div class="card-header">Meses (ES)</div><div class="card-body"><div id="ad-chart-mes" style="height:300px;"></div></div></div></div>
+            <div class="col-12"><div class="card"><div class="card-header">Días de la semana</div><div class="card-body"><div id="ad-chart-dia" style="height:300px;"></div></div></div></div>
+            <div class="col-12"><div class="card"><div class="card-header">Hora</div><div class="card-body"><div id="ad-chart-hora" style="height:300px;"></div></div></div></div>
+            <div class="col-12"><div class="card"><div class="card-header">Días de investigación (desde inicio a hoy)</div><div class="card-body"><div id="ad-chart-dias-investigacion" style="height:320px;"></div></div></div></div>
+            <div class="col-12"><div class="card"><div class="card-header">Estados</div><div class="card-body"><div id="ad-chart-estado" style="height:320px;"></div></div></div></div>
+            <div class="col-12"><div class="card"><div class="card-header">Barrios</div><div class="card-body"><div id="ad-chart-barrio" style="height:340px;"></div></div></div></div>
+            <div class="col-12"><div class="card"><div class="card-header">Departamento</div><div class="card-body"><div id="ad-chart-departamento" style="height:320px;"></div></div></div></div>
+            <div class="col-12"><div class="card"><div class="card-header">División</div><div class="card-body"><div id="ad-chart-division" style="height:320px;"></div></div></div></div>
+            <div class="col-12"><div class="card"><div class="card-header">Dependencia Actuario</div><div class="card-body"><div id="ad-chart-dep-actuario" style="height:320px;"></div></div></div></div>
+            <div class="col-12"><div class="card"><div class="card-header">Actuario</div><div class="card-body"><div id="ad-chart-actuario" style="height:360px;"></div></div></div></div>
+            <div class="col-12"><div class="card"><div class="card-header">Tortas (con/sin)</div><div class="card-body"><div class="row g-3">
+                <div class="col-md-3"><div id="ad-chart-coords" style="height:300px;"></div></div>
+                <div class="col-md-3"><div id="ad-chart-investigados" style="height:300px;"></div></div>
+                <div class="col-md-3"><div id="ad-chart-allanamiento" style="height:300px;"></div></div>
+                <div class="col-md-3"><div id="ad-chart-desestimada" style="height:300px;"></div></div>
+            </div></div></div></div>
+        </div>
+    </div>
+    <div class="tab-pane fade" id="ad-tab-analisis" role="tabpanel">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <h6 class="mb-0">Informe analítico automatizado</h6>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="ad-export-report-txt">
+                        <i class="bi bi-file-earmark-text"></i> Exportar informe (.txt)
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="ad-export-report-csv">
+                        <i class="bi bi-filetype-csv"></i> Exportar datos del análisis (.csv)
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="ad-ai-report" class="ad-relato"></div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <textarea id="ad-dashboard-data" class="d-none">{{ datos_json }}</textarea>
