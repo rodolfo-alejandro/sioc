@@ -588,18 +588,31 @@ def _detect_tipo_archivo(df: pd.DataFrame) -> str | None:
     return None
 
 
+def _row_signature(row) -> str:
+    """
+    Firma canónica de fila para detectar duplicados exactos dentro del mismo Excel.
+    Evita omitir filas válidas solo por repetir PAYMENT ID/ID RETIRO.
+    """
+    parts = []
+    for _, val in row.items():
+        if pd.isna(val):
+            parts.append("")
+        else:
+            parts.append(str(val).strip())
+    return "|".join(parts)
+
+
 def _ingestar_movimientos(df: pd.DataFrame, carga: BilleteraCarga):
     validos = 0
     fechas = []
-    seen_payment: set[str] = set()
+    seen_rows: set[str] = set()
     omit_dup = 0
     for _, row in df.iterrows():
-        pid = _clean_str(row.get("PAYMENT ID"))
-        if pid and pid in seen_payment:
+        sig = _row_signature(row)
+        if sig in seen_rows:
             omit_dup += 1
             continue
-        if pid:
-            seen_payment.add(pid)
+        seen_rows.add(sig)
         fecha = _parse_dt(row.get("FECHA CREACION PAGO"))
         monto = _parse_num(row.get("TOTAL PAGADO"))
         if fecha:
@@ -645,15 +658,14 @@ def _ingestar_movimientos(df: pd.DataFrame, carga: BilleteraCarga):
 def _ingestar_salidas(df: pd.DataFrame, carga: BilleteraCarga):
     validos = 0
     fechas = []
-    seen_retiro: set[str] = set()
+    seen_rows: set[str] = set()
     omit_dup = 0
     for _, row in df.iterrows():
-        rid = _clean_str(row.get("ID RETIRO"))
-        if rid and rid in seen_retiro:
+        sig = _row_signature(row)
+        if sig in seen_rows:
             omit_dup += 1
             continue
-        if rid:
-            seen_retiro.add(rid)
+        seen_rows.add(sig)
         fecha = _parse_dt(row.get("FECHA CREACION"))
         monto = _parse_num(row.get("MONTO RETIRADO"))
         if fecha:
@@ -1239,16 +1251,25 @@ def cargas():
             f"Carga procesada: {carga.registros_validos}/{carga.registros_total} registros insertados ({tipo})."
         )
         if omit_dup:
-            msg += f" Omitidas {omit_dup} filas por ID repetido (PAYMENT ID / ID RETIRO) dentro del Excel."
+            msg += f" Omitidas {omit_dup} filas duplicadas exactas dentro del Excel."
         flash(msg, "success")
         return redirect(url_for("billeteras_virtuales.cargas"))
 
     cargas_q = _q_cargas().order_by(BilleteraCarga.created_at.desc())
     tipo = _clean_str(request.args.get("tipo"))
+    archivo_q = _clean_str(request.args.get("archivo_q"))
     caso_id = request.args.get("caso_id", type=int)
     sujeto_id = request.args.get("sujeto_id", type=int)
     if tipo in {"movimientos", "salidas"}:
         cargas_q = cargas_q.filter(BilleteraCarga.tipo_archivo == tipo)
+    if archivo_q:
+        pat = f"%{archivo_q}%"
+        cargas_q = cargas_q.filter(
+            or_(
+                BilleteraCarga.nombre_archivo.ilike(pat),
+                BilleteraCarga.archivo_hash.ilike(pat),
+            )
+        )
     if caso_id:
         cargas_q = cargas_q.filter(BilleteraCarga.caso_id == caso_id)
     if sujeto_id:
@@ -1259,6 +1280,7 @@ def cargas():
         "billeteras_virtuales/cargas.html",
         cargas=cargas_list,
         tipo=tipo or "",
+        archivo_q=archivo_q or "",
         caso_id=caso_id,
         sujeto_id=sujeto_id,
         casos_opts=casos_opts,

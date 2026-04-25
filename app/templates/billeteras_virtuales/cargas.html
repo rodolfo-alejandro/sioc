@@ -51,6 +51,11 @@
                 <option value="movimientos" {{ 'movimientos' == tipo and 'selected' or '' }}>Movimientos</option>
                 <option value="salidas" {{ 'salidas' == tipo and 'selected' or '' }}>Salidas</option>
             </select>
+            <input type="text"
+                   name="archivo_q"
+                   value="{{ archivo_q or '' }}"
+                   class="form-control form-control-sm"
+                   placeholder="Filtrar por archivo o hash">
             <select name="caso_id" class="form-select form-select-sm" onchange="this.form.submit()">
                 <option value="">Todos los casos</option>
                 {% for c in casos_opts %}
@@ -63,6 +68,8 @@
                 <option value="{{ s.id }}" {{ s.id == sujeto_id and 'selected' or '' }}>{{ s.display_name() }}</option>
                 {% endfor %}
             </select>
+            <button type="submit" class="btn btn-sm btn-outline-primary">Aplicar</button>
+            <a href="{{ url_for('billeteras_virtuales.cargas') }}" class="btn btn-sm btn-outline-secondary">Limpiar</a>
         </form>
     </div>
     <div class="card-body">
