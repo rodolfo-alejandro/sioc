@@ -185,6 +185,10 @@
         var conInv = rows.filter(function (r) { return r.investigados === 'Con investigados'; }).length;
         var conAlla = rows.filter(function (r) { return r.allanamiento === 'Con allanamiento'; }).length;
         var desest = rows.filter(function (r) { return r.desestimada === 'Desestimada'; }).length;
+        var topMes = byCount(rows, function (r) { return r.mes; }, 5);
+        var topDia = byCount(rows, function (r) { return r.dia; }, 5);
+        var topHora = byCount(rows, function (r) { return r.hora; }, 8);
+        var topLoc = byCount(rows, function (r) { return r.localidad_simple; }, 5);
         var dias = byCount(rows, function (r) { return r.rango_dias; });
         var actRows = rows.filter(function (r) { return r.actuario !== 'Sin actuario'; });
         var unresolvedByAct = Object.create(null);
@@ -211,41 +215,82 @@
             }).length;
             return { k: k, pct: total ? (100 * filled / total) : 0 };
         }).sort(function (a, b) { return a.pct - b.pct; }).slice(0, 5);
+        var repInvest = byCount(
+            rows.filter(function (r) { return r.investigados_texto; }),
+            function (r) { return r.investigados_texto; }
+        ).filter(function (x) { return x.value > 1; }).slice(0, 5);
+        var repLugar = byCount(rows, function (r) { return r.barrio; }).filter(function (x) { return x.value > 1; }).slice(0, 5);
+        var repInvLugarMap = Object.create(null);
+        rows.forEach(function (r) {
+            if (!r.investigados_texto) return;
+            var key = r.investigados_texto + ' || ' + r.barrio;
+            repInvLugarMap[key] = (repInvLugarMap[key] || 0) + 1;
+        });
+        var repInvLugar = Object.keys(repInvLugarMap).map(function (k) {
+            return { label: k, value: repInvLugarMap[k] };
+        }).filter(function (x) { return x.value > 1; }).sort(function (a, b) { return b.value - a.value; }).slice(0, 5);
         var active = [];
         Object.keys(state).forEach(function (k) { if (state[k]) active.push(k + ': ' + state[k]); });
         return [
-            '<h6>Resumen ejecutivo</h6>',
-            '<p>Con los filtros actuales se analizan <strong>' + total.toLocaleString('es-AR') + '</strong> denuncias. ',
-            'Predomina el estado <strong>' + topLabel(est) + '</strong> (' + topValue(est).toLocaleString('es-AR') + '). ',
-            'El foco territorial principal se concentra en <strong>' + topLabel(dep) + '</strong> y la división <strong>' + topLabel(div) + '</strong>.</p>',
-            '<h6>Evaluación operativa por zona y personal</h6>',
-            '<ul>',
-            '<li><strong>Zona crítica:</strong> ' + topLabel(bar) + ' (' + topValue(bar).toLocaleString('es-AR') + ' denuncias en este recorte).</li>',
+            '<div class="row g-3">',
+            '<div class="col-lg-6"><div class="border rounded p-3 h-100">',
+            '<h6 class="mb-2">Resumen ejecutivo</h6>',
+            '<ul class="mb-0">',
+            '<li><strong>Total analizado:</strong> ' + total.toLocaleString('es-AR') + ' denuncias.</li>',
+            '<li><strong>Estado predominante:</strong> ' + topLabel(est) + ' (' + topValue(est).toLocaleString('es-AR') + ').</li>',
+            '<li><strong>Allanamientos:</strong> ' + conAlla.toLocaleString('es-AR') + ' (' + (100 * conAlla / total).toFixed(1) + '%).</li>',
+            '<li><strong>Desestimadas:</strong> ' + desest.toLocaleString('es-AR') + ' (' + (100 * desest / total).toFixed(1) + '%).</li>',
+            '<li><strong>Con investigados:</strong> ' + conInv.toLocaleString('es-AR') + ' (' + (100 * conInv / total).toFixed(1) + '%).</li>',
+            '<li><strong>Con coordenadas:</strong> ' + conCoords.toLocaleString('es-AR') + ' (' + (100 * conCoords / total).toFixed(1) + '%).</li>',
+            '</ul></div></div>',
+            '<div class="col-lg-6"><div class="border rounded p-3 h-100">',
+            '<h6 class="mb-2">Patrón temporal</h6>',
+            '<ul class="mb-0">',
+            '<li><strong>Mes con mayor incidencia:</strong> ' + topLabel(topMes) + ' (' + topValue(topMes).toLocaleString('es-AR') + ').</li>',
+            '<li><strong>Día con mayor incidencia:</strong> ' + topLabel(topDia) + ' (' + topValue(topDia).toLocaleString('es-AR') + ').</li>',
+            '<li><strong>Franja horaria crítica:</strong> ' + topLabel(topHora) + ' (' + topValue(topHora).toLocaleString('es-AR') + ').</li>',
+            '<li><strong>Tramo de investigación dominante:</strong> ' + topLabel(dias) + ' (' + topValue(dias).toLocaleString('es-AR') + ').</li>',
+            '</ul></div></div>',
+            '<div class="col-lg-6"><div class="border rounded p-3 h-100">',
+            '<h6 class="mb-2">Foco territorial</h6>',
+            '<ul class="mb-0">',
+            '<li><strong>Departamento prioritario:</strong> ' + topLabel(dep) + '.</li>',
+            '<li><strong>División con mayor carga:</strong> ' + topLabel(div) + '.</li>',
+            '<li><strong>Barrio crítico:</strong> ' + topLabel(bar) + ' (' + topValue(bar).toLocaleString('es-AR') + ').</li>',
+            '<li><strong>Localidad principal:</strong> ' + topLabel(topLoc) + '.</li>',
+            '</ul></div></div>',
+            '<div class="col-lg-6"><div class="border rounded p-3 h-100">',
+            '<h6 class="mb-2">Evaluación de actuarios</h6>',
+            '<ul class="mb-0">',
             '<li><strong>Actuario con mayor carga:</strong> ' + topLabel(act) + ' (' + topValue(act).toLocaleString('es-AR') + ').</li>',
-            '<li><strong>Cobertura georreferenciada:</strong> ' + conCoords.toLocaleString('es-AR') + ' con coordenadas (' + (100 * conCoords / total).toFixed(1) + '%).</li>',
-            '<li><strong>Calidad de datos investigativos:</strong> ' + conInv.toLocaleString('es-AR') + ' con investigados (' + (100 * conInv / total).toFixed(1) + '%).</li>',
-            '<li><strong>Acciones judiciales:</strong> ' + conAlla.toLocaleString('es-AR') + ' con solicitud de allanamiento; ' + desest.toLocaleString('es-AR') + ' desestimadas.</li>',
-            '<li><strong>Antigüedad de investigación dominante:</strong> ' + topLabel(dias) + ' (' + topValue(dias).toLocaleString('es-AR') + ').</li>',
-            '</ul>',
-            '<h6>Observaciones y recomendaciones sobre actuarios</h6>',
-            '<ul>',
             (actRisk.length ? actRisk.map(function (a) {
                 var rec = a.pct >= 70
-                    ? 'Requiere seguimiento prioritario y descarga de casos.'
-                    : (a.pct >= 50 ? 'Conviene reforzar apoyo operativo y control semanal.' : 'Carga manejable, sostener ritmo actual.');
+                    ? 'Seguimiento prioritario y posible redistribución.'
+                    : (a.pct >= 50 ? 'Refuerzo operativo y control semanal.' : 'Desempeño estable; sostener trazabilidad.');
                 return '<li><strong>' + a.label + ':</strong> ' + a.pendientes.toLocaleString('es-AR') + '/' + a.total.toLocaleString('es-AR') + ' sin resolver (' + a.pct.toFixed(1) + '%). ' + rec + '</li>';
-            }).join('') : '<li>No hay actuarios con datos suficientes en este recorte.</li>'),
-            '</ul>',
-            '<h6>Control de cobertura de campos (análisis integral)</h6>',
-            '<p>El informe usa todos los campos disponibles en el dataset filtrado. Los campos con menor completitud en este recorte son:</p>',
-            '<ul>',
+            }).join('') : '<li>Sin datos suficientes para evaluar actuarios.</li>'),
+            '</ul></div></div>',
+            '<div class="col-12"><div class="border rounded p-3">',
+            '<h6 class="mb-2">Coincidencias relevantes para investigación</h6>',
+            '<div class="row g-3">',
+            '<div class="col-lg-4"><strong>Investigados repetidos</strong><ul class="mb-0 mt-1">',
+            (repInvest.length ? repInvest.map(function (x) { return '<li>' + x.label + ': ' + x.value.toLocaleString('es-AR') + '</li>'; }).join('') : '<li>Sin repeticiones detectadas.</li>'),
+            '</ul></div>',
+            '<div class="col-lg-4"><strong>Lugares recurrentes</strong><ul class="mb-0 mt-1">',
+            (repLugar.length ? repLugar.map(function (x) { return '<li>' + x.label + ': ' + x.value.toLocaleString('es-AR') + '</li>'; }).join('') : '<li>Sin repeticiones relevantes.</li>'),
+            '</ul></div>',
+            '<div class="col-lg-4"><strong>Coincidencia investigado + lugar</strong><ul class="mb-0 mt-1">',
+            (repInvLugar.length ? repInvLugar.map(function (x) { return '<li>' + x.label + ': ' + x.value.toLocaleString('es-AR') + '</li>'; }).join('') : '<li>Sin coincidencias repetidas.</li>'),
+            '</ul></div></div></div></div>',
+            '<div class="col-12"><div class="border rounded p-3">',
+            '<h6 class="mb-2">Cobertura de campos (análisis completo)</h6>',
+            '<p class="mb-2">Se analizaron todos los campos del dataset filtrado. Campos con menor completitud:</p>',
+            '<ul class="mb-0">',
             (bajas.length ? bajas.map(function (x) {
-                return '<li><strong>' + x.k + ':</strong> ' + x.pct.toFixed(1) + '% de registros con dato.</li>';
+                return '<li><strong>' + x.k + ':</strong> ' + x.pct.toFixed(1) + '% con dato.</li>';
             }).join('') : '<li>Sin observaciones de completitud.</li>'),
-            '</ul>',
-            '<h6>Interpretación</h6>',
-            '<p>La combinación zona-personal sugiere priorizar supervisión y reasignación de recursos en los sectores con mayor densidad. ',
-            'Sostener trazabilidad de investigados y georreferenciación mejora la capacidad de respuesta y la evaluación del desempeño operativo.</p>',
+            '</ul></div></div>',
+            '</div>',
             active.length ? '<p class="small text-muted mb-0"><strong>Selección de gráficos activa:</strong> ' + active.join(' | ') + '</p>' : ''
         ].join('');
     }
@@ -289,6 +334,10 @@
 
         var active = [];
         Object.keys(state).forEach(function (k) { if (state[k]) active.push(k + ': ' + state[k]); });
+        var topMes = byCount(rows, function (r) { return r.mes; }, 5);
+        var topDia = byCount(rows, function (r) { return r.dia; }, 5);
+        var topHora = byCount(rows, function (r) { return r.hora; }, 8);
+        var topLoc = byCount(rows, function (r) { return r.localidad_simple; }, 5);
         var lines = [];
         lines.push('INFORME ANALITICO - DENUNCIAS WEB');
         lines.push('Fecha: ' + new Date().toLocaleString('es-AR'));
@@ -300,6 +349,10 @@
         lines.push('- Zona critica: ' + topLabel(bar));
         lines.push('- Actuario con mayor carga: ' + topLabel(act));
         lines.push('- Tramo de antiguedad dominante: ' + topLabel(dias) + ' (' + topValue(dias).toLocaleString('es-AR') + ')');
+        lines.push('- Mes de mayor incidencia: ' + topLabel(topMes) + ' (' + topValue(topMes).toLocaleString('es-AR') + ')');
+        lines.push('- Dia de mayor incidencia: ' + topLabel(topDia) + ' (' + topValue(topDia).toLocaleString('es-AR') + ')');
+        lines.push('- Hora de mayor incidencia: ' + topLabel(topHora) + ' (' + topValue(topHora).toLocaleString('es-AR') + ')');
+        lines.push('- Localidad principal: ' + topLabel(topLoc));
         lines.push('- Cobertura georreferenciada: ' + conCoords.toLocaleString('es-AR') + ' (' + (100 * conCoords / total).toFixed(1) + '%)');
         lines.push('- Con investigados: ' + conInv.toLocaleString('es-AR') + ' (' + (100 * conInv / total).toFixed(1) + '%)');
         lines.push('- Con allanamiento: ' + conAlla.toLocaleString('es-AR') + ' | Desestimadas: ' + desest.toLocaleString('es-AR'));
@@ -323,6 +376,32 @@
             lines.push(active.join(' | '));
         }
         return lines.join('\n');
+    }
+
+    function reportHtmlForPdf(rows, state) {
+        var now = new Date().toLocaleString('es-AR');
+        var body = reportHtml(rows, state);
+        return [
+            '<!doctype html><html><head><meta charset="utf-8"><title>Informe Analitico Denuncias Web</title>',
+            '<style>',
+            '@page { size: A4; margin: 18mm; }',
+            'body{font-family: Arial, sans-serif; color:#1f2937; font-size:12px;}',
+            '.head{border-bottom:2px solid #1d4ed8; padding-bottom:8px; margin-bottom:12px;}',
+            '.title{font-size:18px; font-weight:700; color:#1d4ed8;}',
+            '.sub{font-size:11px; color:#4b5563;}',
+            '.note{margin-top:10px; font-size:11px; color:#374151;}',
+            '.row{display:flex; flex-wrap:wrap; gap:12px;} .col-lg-6{width:48%;} .col-12{width:100%;} .col-lg-4{width:31%;}',
+            '.border{border:1px solid #d1d5db;} .rounded{border-radius:6px;} .p-3{padding:10px;} .h-100{height:100%;}',
+            'h6{margin:0 0 6px 0; font-size:13px;} ul{margin:0; padding-left:16px;} li{margin:0 0 4px;} p{margin:0 0 6px;}',
+            '.small{font-size:10px;} .text-muted{color:#6b7280;}',
+            '</style></head><body>',
+            '<div class="head"><div class="title">SIOC - Informe Analitico de Denuncias Web</div>',
+            '<div class="sub">Generado: ' + now + '</div>',
+            '<div class="sub">Fuente: filtros actuales y selecciones activas de graficos</div></div>',
+            body,
+            '<p class="note"><strong>Uso sugerido:</strong> este informe esta disenado para seguimiento operativo con jefaturas, priorizacion territorial y evaluacion de desempeno por personal actuante.</p>',
+            '</body></html>'
+        ].join('');
     }
 
     function downloadTextFile(filename, text, mimeType) {
@@ -367,9 +446,11 @@
                 departamento: String(r.departamento || r.desc_dep_padre || '').trim() || 'Sin departamento',
                 division: String(r.division || r.desc_dep_registro || '').trim() || 'Sin división',
                 dep_actuario: String(r.dep_actuario || r.desc_dep_actuario || '').trim() || 'Sin dependencia actuario',
+                localidad_simple: String(r.localidad || '').trim() || 'Sin localidad',
                 actuario: toActuario(r.actuario_grado, r.actuario_apenom),
                 coords: (typeof r.latitud === 'number' && typeof r.longitud === 'number') ? 'Con coordenadas' : 'Sin coordenadas',
                 investigados: String(r.investigados || '').trim() ? 'Con investigados' : 'Sin investigados',
+                investigados_texto: String(r.investigados || '').trim(),
                 allanamiento: String(r.fecha_sol_allanamiento || '').trim() ? 'Con allanamiento' : 'Sin allanamiento',
                 desestimada: String(r.fecha_desestimada || '').trim() ? 'Desestimada' : 'No desestimada',
                 dias_investigacion: dias,
@@ -475,6 +556,19 @@
             btnExportCsv.addEventListener('click', function () {
                 var csv = toCsv(lastFilteredRows);
                 downloadTextFile('analisis_denuncias_analisis_filtrado.csv', csv, 'text/csv;charset=utf-8');
+            });
+        }
+        var btnExportPdf = document.getElementById('ad-export-report-pdf');
+        if (btnExportPdf) {
+            btnExportPdf.addEventListener('click', function () {
+                var html = reportHtmlForPdf(lastFilteredRows, state);
+                var w = window.open('', '_blank');
+                if (!w) return;
+                w.document.open();
+                w.document.write(html);
+                w.document.close();
+                w.focus();
+                setTimeout(function () { w.print(); }, 250);
             });
         }
         renderAll();
