@@ -104,6 +104,12 @@ def create_seed_data():
             # Sabana de Llamadas
             ('SABANA_LLAMADAS_VIEW', 'Ver Sabana de Llamadas (mapa, sujetos, cargas)'),
             ('SABANA_LLAMADAS_UPLOAD', 'Subir archivos GPRS/VOZ y gestionar sujetos'),
+            # Analisis de denuncias web
+            ('DENUNCIAS_WEB_VIEW', 'Ver denuncias web'),
+            ('DENUNCIAS_WEB_IMPORT', 'Importar denuncias web desde CSV'),
+            ('DENUNCIAS_WEB_EXPORT', 'Exportar denuncias web filtradas'),
+            ('DENUNCIAS_WEB_DASHBOARD', 'Ver dashboard de denuncias web'),
+            ('DENUNCIAS_WEB_MAPA', 'Ver mapa de denuncias web'),
         ]
         
         permisos_creados = {}
@@ -148,7 +154,9 @@ def create_seed_data():
                           'GRUPOS_VIEW', 'GRUPOS_CREATE',
                           'RELACIONES_VIEW',
                           'OPERATIVOS_VIEW', 'OPERATIVOS_CREATE',
-                          'SABANA_LLAMADAS_VIEW', 'SABANA_LLAMADAS_UPLOAD']
+                          'SABANA_LLAMADAS_VIEW', 'SABANA_LLAMADAS_UPLOAD',
+                          'DENUNCIAS_WEB_VIEW', 'DENUNCIAS_WEB_IMPORT', 'DENUNCIAS_WEB_EXPORT',
+                          'DENUNCIAS_WEB_DASHBOARD', 'DENUNCIAS_WEB_MAPA']
             for perm_code in admin_perms:
                 if perm_code in permisos_creados:
                     admin_role.permissions.append(permisos_creados[perm_code])
@@ -162,7 +170,11 @@ def create_seed_data():
         if not analista_role:
             analista_role = Role(name='ANALISTA', description='Analista de datos')
             db.session.add(analista_role)
-            analista_perms = ['CORE_VIEW', 'DATALAB_VIEW', 'DATALAB_UPLOAD', 'SABANA_LLAMADAS_VIEW', 'SABANA_LLAMADAS_UPLOAD']
+            analista_perms = [
+                'CORE_VIEW', 'DATALAB_VIEW', 'DATALAB_UPLOAD', 'SABANA_LLAMADAS_VIEW', 'SABANA_LLAMADAS_UPLOAD',
+                'DENUNCIAS_WEB_VIEW', 'DENUNCIAS_WEB_IMPORT', 'DENUNCIAS_WEB_EXPORT',
+                'DENUNCIAS_WEB_DASHBOARD', 'DENUNCIAS_WEB_MAPA'
+            ]
             for perm_code in analista_perms:
                 if perm_code in permisos_creados:
                     analista_role.permissions.append(permisos_creados[perm_code])

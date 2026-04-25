@@ -112,6 +112,30 @@
                 </li>
                 {% endif %}
 
+                <!-- Análisis Denuncias Web -->
+                {% if current_user.has_permission('DENUNCIAS_WEB_VIEW') or current_user.has_permission('DENUNCIAS_WEB_IMPORT') %}
+                <li class="nav-item">
+                    <a class="nav-link" href="#" data-bs-toggle="collapse" data-bs-target="#submenuDenunciasWeb">
+                        <i class="bi bi-megaphone"></i> Denuncias Web
+                        <i class="bi bi-chevron-down ms-auto"></i>
+                    </a>
+                    <ul class="nav flex-column collapse" id="submenuDenunciasWeb">
+                        {% if current_user.has_permission('DENUNCIAS_WEB_VIEW') %}
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('analisis_denuncias.listado') }}"><i class="bi bi-table"></i> Listado</a></li>
+                        {% endif %}
+                        {% if current_user.has_permission('DENUNCIAS_WEB_DASHBOARD') %}
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('analisis_denuncias.dashboard') }}"><i class="bi bi-bar-chart-line"></i> Dashboard</a></li>
+                        {% endif %}
+                        {% if current_user.has_permission('DENUNCIAS_WEB_MAPA') %}
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('analisis_denuncias.mapa') }}"><i class="bi bi-geo-alt"></i> Mapa</a></li>
+                        {% endif %}
+                        {% if current_user.has_permission('DENUNCIAS_WEB_IMPORT') %}
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('analisis_denuncias.importar') }}"><i class="bi bi-cloud-upload"></i> Importar CSV</a></li>
+                        {% endif %}
+                    </ul>
+                </li>
+                {% endif %}
+
                 <!-- DataLab -->
                 <li class="nav-item">
                     <a class="nav-link" href="#" data-bs-toggle="collapse" data-bs-target="#submenuDataLab">

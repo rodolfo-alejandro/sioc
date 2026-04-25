@@ -1,0 +1,83 @@
+{% extends "layouts/base.html" %}
+{% block title %}Listado Denuncias Web - SIOC{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/analisis_denuncias.css') }}">
+{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-table"></i> Denuncias Web de Drogas</h1>
+    <p class="text-muted">Listado principal con superbuscador y filtros avanzados.</p>
+</div>
+
+{% include "analisis_denuncias/_filtros.html" %}
+
+<div class="d-flex gap-2 mb-2">
+    {% if can_import %}
+    <a class="btn btn-outline-primary btn-sm" href="{{ url_for('analisis_denuncias.importar') }}"><i class="bi bi-cloud-upload"></i> Importar CSV</a>
+    {% endif %}
+    {% if can_dashboard %}
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_denuncias.dashboard', **request.args) }}"><i class="bi bi-bar-chart-line"></i> Dashboard</a>
+    {% endif %}
+    {% if can_map %}
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_denuncias.mapa', **request.args) }}"><i class="bi bi-geo-alt"></i> Mapa</a>
+    {% endif %}
+    {% if can_export %}
+    <a class="btn btn-outline-success btn-sm" href="{{ url_for('analisis_denuncias.export_csv', **request.args) }}"><i class="bi bi-filetype-csv"></i> CSV</a>
+    <a class="btn btn-outline-success btn-sm" href="{{ url_for('analisis_denuncias.export_xlsx', **request.args) }}"><i class="bi bi-file-earmark-excel"></i> Excel</a>
+    {% endif %}
+</div>
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between">
+        <h6 class="mb-0">Resultados</h6>
+        <span class="badge bg-light text-dark border">Total: {{ total|number_format }}</span>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-sm align-middle">
+                <thead>
+                    <tr>
+                        <th>Nro actuación</th><th>Fecha denuncia</th><th>Dependencia registro</th><th>Estado</th><th>Localidad</th><th>Barrio</th><th>Actuario</th><th>Investigados</th><th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in rows %}
+                    <tr>
+                        <td>{{ r.nro_actuacion or '—' }}</td>
+                        <td>{{ r.fecha_denuncia|localtime('%d/%m/%Y') if r.fecha_denuncia else '—' }}</td>
+                        <td>{{ r.desc_dep_registro or '—' }}</td>
+                        <td>{{ r.causa_estado or '—' }}</td>
+                        <td>{{ r.localidad or '—' }}</td>
+                        <td>{{ r.barrio or '—' }}</td>
+                        <td>{{ r.actuario_apenom or '—' }}</td>
+                        <td>{{ (r.investigados or '—')[:80] }}</td>
+                        <td>
+                            <a class="btn btn-outline-primary btn-sm" href="{{ url_for('analisis_denuncias.detalle', denuncia_id=r.id) }}">Detalle</a>
+                            {% if can_map and r.latitud is not none and r.longitud is not none %}
+                            <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_denuncias.mapa', causas_id=r.causas_id) }}">Mapa</a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="9" class="text-muted text-center">Sin resultados.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<nav class="mt-3">
+    <ul class="pagination pagination-sm">
+        {% set prev_page = page - 1 %}
+        {% set next_page = page + 1 %}
+        <li class="page-item {% if page <= 1 %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('analisis_denuncias.listado', **args_no_page, page=prev_page) }}">Anterior</a>
+        </li>
+        <li class="page-item disabled"><span class="page-link">Página {{ page }} / {{ pages }}</span></li>
+        <li class="page-item {% if page >= pages %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('analisis_denuncias.listado', **args_no_page, page=next_page) }}">Siguiente</a>
+        </li>
+    </ul>
+</nav>
+{% endblock %}

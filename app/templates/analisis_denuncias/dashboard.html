@@ -1,0 +1,44 @@
+{% extends "layouts/base.html" %}
+{% block title %}Dashboard Denuncias Web - SIOC{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/analisis_denuncias.css') }}">
+{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-bar-chart-line"></i> Dashboard de Denuncias Web</h1>
+    <p class="text-muted">KPIs y gráficos sobre datos reales filtrados.</p>
+</div>
+
+{% include "analisis_denuncias/_filtros.html" %}
+
+<div class="d-flex gap-2 mb-3">
+    {% if can_view %}
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_denuncias.listado', **request.args) }}"><i class="bi bi-table"></i> Listado</a>
+    {% endif %}
+    {% if can_map %}
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_denuncias.mapa', **request.args) }}"><i class="bi bi-geo-alt"></i> Mapa</a>
+    {% endif %}
+</div>
+
+<div class="row g-3 mb-3">
+    <div class="col-md-2"><div class="card ad-kpi-card"><div class="card-body"><div>Total</div><div class="value">{{ kpis.total|number_format }}</div></div></div></div>
+    <div class="col-md-2"><div class="card ad-kpi-card"><div class="card-body"><div>Con coords</div><div class="value">{{ kpis.con_coords|number_format }}</div></div></div></div>
+    <div class="col-md-2"><div class="card ad-kpi-card"><div class="card-body"><div>Sin coords</div><div class="value">{{ kpis.sin_coords|number_format }}</div></div></div></div>
+    <div class="col-md-2"><div class="card ad-kpi-card"><div class="card-body"><div>Allanamiento</div><div class="value">{{ kpis.con_allanamiento|number_format }}</div></div></div></div>
+    <div class="col-md-2"><div class="card ad-kpi-card"><div class="card-body"><div>Desestimadas</div><div class="value">{{ kpis.desestimadas|number_format }}</div></div></div></div>
+    <div class="col-md-2"><div class="card ad-kpi-card"><div class="card-body"><div>Con investigados</div><div class="value">{{ kpis.con_investigados|number_format }}</div></div></div></div>
+</div>
+
+<div class="row g-3">
+    <div class="col-md-6"><div class="card"><div class="card-header">Denuncias por mes</div><div class="card-body"><div id="ad-chart-mensual" style="height:320px;"></div></div></div></div>
+    <div class="col-md-6"><div class="card"><div class="card-header">Top 10 barrios</div><div class="card-body"><div id="ad-chart-barrios" style="height:320px;"></div></div></div></div>
+    <div class="col-md-6"><div class="card"><div class="card-header">Top 10 dependencias</div><div class="card-body"><div id="ad-chart-deps" style="height:320px;"></div></div></div></div>
+    <div class="col-md-3"><div class="card"><div class="card-header">Estados de causa</div><div class="card-body"><div id="ad-chart-estados" style="height:320px;"></div></div></div></div>
+    <div class="col-md-3"><div class="card"><div class="card-header">Con/Sin coordenadas</div><div class="card-body"><div id="ad-chart-coords" style="height:320px;"></div></div></div></div>
+</div>
+
+<textarea id="ad-dashboard-data" class="d-none">{{ datos_json }}</textarea>
+{% endblock %}
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/analisis_denuncias_dashboard.js') }}"></script>
+{% endblock %}

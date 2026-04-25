@@ -1,0 +1,34 @@
+{% extends "layouts/base.html" %}
+{% block title %}Mapa Denuncias Web - SIOC{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/analisis_denuncias.css') }}">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-geo-alt"></i> Mapa operativo de denuncias</h1>
+    <p class="text-muted">Marcadores de denuncias con coordenadas, respetando filtros.</p>
+</div>
+
+{% include "analisis_denuncias/_filtros.html" %}
+
+<div class="d-flex gap-2 mb-2">
+    {% if can_view %}
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_denuncias.listado', **request.args) }}"><i class="bi bi-table"></i> Volver al listado</a>
+    {% endif %}
+    {% if can_dashboard %}
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_denuncias.dashboard', **request.args) }}"><i class="bi bi-bar-chart-line"></i> Ir al dashboard</a>
+    {% endif %}
+    <a class="btn btn-outline-secondary btn-sm" href="{{ request.path }}">Limpiar filtros</a>
+</div>
+
+<div class="alert alert-secondary py-2 small">
+    Total de denuncias georreferenciadas filtradas: <strong>{{ total_filtrado|number_format }}</strong>
+</div>
+<div id="ad-map" class="ad-map"></div>
+<textarea id="ad-map-markers" class="d-none">{{ markers_json }}</textarea>
+{% endblock %}
+{% block extra_scripts %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="{{ url_for('static', filename='js/analisis_denuncias_mapa.js') }}"></script>
+{% endblock %}

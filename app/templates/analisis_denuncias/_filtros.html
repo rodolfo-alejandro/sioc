@@ -1,0 +1,123 @@
+<div class="card mb-3 ad-filtros">
+    <div class="card-body">
+        <form method="GET" class="row g-2">
+            <div class="col-md-4">
+                <label class="form-label">Superbuscador</label>
+                <input type="text" name="q" value="{{ request.args.get('q','') }}" class="form-control" placeholder="relato, barrio, localidad, investigados, actuario, dependencia, estado, actuación, causa">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Año</label>
+                <select class="form-select" name="anio">
+                    <option value="">Todos</option>
+                    {% for x in filtros.anios %}
+                    <option value="{{ x }}" {% if request.args.get('anio','') == (x|string) %}selected{% endif %}>{{ x }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Fecha denuncia desde</label>
+                <input type="date" class="form-control" name="fecha_desde" value="{{ request.args.get('fecha_desde','') }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Fecha denuncia hasta</label>
+                <input type="date" class="form-control" name="fecha_hasta" value="{{ request.args.get('fecha_hasta','') }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Estado</label>
+                <select class="form-select" name="causa_estado">
+                    <option value="">Todos</option>
+                    {% for x in filtros.estados %}
+                    <option value="{{ x }}" {% if request.args.get('causa_estado','') == x %}selected{% endif %}>{{ x }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label">Dependencia registro</label>
+                <select class="form-select" name="dep_registro">
+                    <option value="">Todas</option>
+                    {% for x in filtros.deps_registro %}
+                    <option value="{{ x }}" {% if request.args.get('dep_registro','') == x %}selected{% endif %}>{{ x }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Dependencia actuario</label>
+                <select class="form-select" name="dep_actuario">
+                    <option value="">Todas</option>
+                    {% for x in filtros.deps_actuario %}
+                    <option value="{{ x }}" {% if request.args.get('dep_actuario','') == x %}selected{% endif %}>{{ x }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Localidad</label>
+                <select class="form-select" name="localidad">
+                    <option value="">Todas</option>
+                    {% for x in filtros.localidades %}
+                    <option value="{{ x }}" {% if request.args.get('localidad','') == x %}selected{% endif %}>{{ x }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Barrio</label>
+                <select class="form-select" name="barrio">
+                    <option value="">Todos</option>
+                    {% for x in filtros.barrios %}
+                    <option value="{{ x }}" {% if request.args.get('barrio','') == x %}selected{% endif %}>{{ x }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Actuario</label>
+                <select class="form-select" name="actuario">
+                    <option value="">Todos</option>
+                    {% for x in filtros.actuarios %}
+                    <option value="{{ x }}" {% if request.args.get('actuario','') == x %}selected{% endif %}>{{ x }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label">Coordenadas</label>
+                <select class="form-select" name="coords">
+                    <option value="">Todas</option>
+                    <option value="con" {% if request.args.get('coords','') == 'con' %}selected{% endif %}>Con</option>
+                    <option value="sin" {% if request.args.get('coords','') == 'sin' %}selected{% endif %}>Sin</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Investigados</label>
+                <select class="form-select" name="investigados_mode">
+                    <option value="">Todos</option>
+                    <option value="con" {% if request.args.get('investigados_mode','') == 'con' %}selected{% endif %}>Con</option>
+                    <option value="sin" {% if request.args.get('investigados_mode','') == 'sin' %}selected{% endif %}>Sin</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Solicitud allanamiento</label>
+                <select class="form-select" name="allanamiento_mode">
+                    <option value="">Todas</option>
+                    <option value="con" {% if request.args.get('allanamiento_mode','') == 'con' %}selected{% endif %}>Con</option>
+                    <option value="sin" {% if request.args.get('allanamiento_mode','') == 'sin' %}selected{% endif %}>Sin</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Desestimada</label>
+                <select class="form-select" name="desestimada_mode">
+                    <option value="">Todas</option>
+                    <option value="con" {% if request.args.get('desestimada_mode','') == 'con' %}selected{% endif %}>Sí</option>
+                    <option value="sin" {% if request.args.get('desestimada_mode','') == 'sin' %}selected{% endif %}>No</option>
+                </select>
+            </div>
+            <div class="col-md-2 d-grid">
+                <label class="form-label">&nbsp;</label>
+                <button class="btn btn-primary" type="submit"><i class="bi bi-funnel"></i> Aplicar</button>
+            </div>
+            <div class="col-md-2 d-grid">
+                <label class="form-label">&nbsp;</label>
+                <a class="btn btn-outline-secondary" href="{{ request.path }}">Limpiar filtros</a>
+            </div>
+        </form>
+    </div>
+</div>

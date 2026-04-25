@@ -1,0 +1,65 @@
+{% extends "layouts/base.html" %}
+{% block title %}Detalle Denuncia Web - SIOC{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/analisis_denuncias.css') }}">
+{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-file-earmark-text"></i> Detalle denuncia #{{ row.causas_id }}</h1>
+</div>
+
+<div class="d-flex gap-2 mb-3">
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_denuncias.listado') }}"><i class="bi bi-arrow-left"></i> Volver</a>
+    {% if can_map and row.latitud is not none and row.longitud is not none %}
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_denuncias.mapa', causas_id=row.causas_id) }}"><i class="bi bi-geo-alt"></i> Ver en mapa</a>
+    {% endif %}
+</div>
+
+<div class="row g-3">
+    <div class="col-md-6">
+        <div class="card"><div class="card-header"><h6 class="mb-0">Datos administrativos</h6></div><div class="card-body">
+            <div><strong>Causa ID:</strong> {{ row.causas_id or '—' }}</div>
+            <div><strong>Nro actuación:</strong> {{ row.nro_actuacion or '—' }}</div>
+            <div><strong>Año:</strong> {{ row.anio_actuacion or '—' }}</div>
+            <div><strong>Estado:</strong> {{ row.causa_estado or '—' }}</div>
+            <div><strong>Dependencia registro:</strong> {{ row.desc_dep_registro or '—' }}</div>
+            <div><strong>Dependencia actuario:</strong> {{ row.desc_dep_actuario or '—' }}</div>
+            <div><strong>Actuario:</strong> {{ row.actuario_grado or '' }} {{ row.actuario_apenom or '—' }}</div>
+        </div></div>
+    </div>
+    <div class="col-md-6">
+        <div class="card"><div class="card-header"><h6 class="mb-0">Fechas y ubicación</h6></div><div class="card-body">
+            <div><strong>Denuncia:</strong> {{ row.fecha_denuncia|localtime('%d/%m/%Y') if row.fecha_denuncia else '—' }}</div>
+            <div><strong>Recepción:</strong> {{ row.fecha_recepcion|localtime('%d/%m/%Y') if row.fecha_recepcion else '—' }}</div>
+            <div><strong>Apertura:</strong> {{ row.fecha_apertura|localtime('%d/%m/%Y') if row.fecha_apertura else '—' }}</div>
+            <div><strong>Desestimada:</strong> {{ row.fecha_desestimada|localtime('%d/%m/%Y') if row.fecha_desestimada else '—' }}</div>
+            <div><strong>Solicitud allanamiento:</strong> {{ row.fecha_sol_allanamiento|localtime('%d/%m/%Y') if row.fecha_sol_allanamiento else '—' }}</div>
+            <div><strong>Localidad/Barrio:</strong> {{ row.localidad or '—' }} / {{ row.barrio or '—' }}</div>
+            <div><strong>Coord:</strong> {{ row.coord or '—' }}</div>
+            <div><strong>Lat/Lon:</strong> {{ row.latitud if row.latitud is not none else '—' }}, {{ row.longitud if row.longitud is not none else '—' }}</div>
+        </div></div>
+    </div>
+    <div class="col-md-12">
+        <div class="card"><div class="card-header"><h6 class="mb-0">Relato completo</h6></div><div class="card-body">
+            <div class="ad-relato">{{ row.relato_original or row.relato or '—' }}</div>
+        </div></div>
+    </div>
+    <div class="col-md-12">
+        <div class="card"><div class="card-header"><h6 class="mb-0">Investigados</h6></div><div class="card-body">
+            <div class="ad-relato">{{ row.investigados or '—' }}</div>
+        </div></div>
+    </div>
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header"><h6 class="mb-0">Observación interna</h6></div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('analisis_denuncias.guardar_observacion', denuncia_id=row.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <textarea class="form-control" rows="4" name="observacion_interna">{{ row.observacion_interna or '' }}</textarea>
+                    <button class="btn btn-primary btn-sm mt-2" type="submit">Guardar</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
