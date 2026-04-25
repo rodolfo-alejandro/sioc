@@ -8,38 +8,38 @@
     <div class="collapse" id="ad-filtros-collapse">
         <div class="card-body">
             <form method="GET" class="row g-2" id="ad-form-filtros">
-                <div class="col-md-4">
+                <div class="col-lg-3 col-md-6">
                     <label class="form-label">Superbuscador</label>
-                    <input type="text" name="q" value="{{ selected.q }}" class="form-control" placeholder="relato, barrio, localidad, investigados, actuario, dependencia, estado, actuación, causa">
+                    <input type="text" name="q" value="{{ selected.q }}" class="form-control form-control-sm" placeholder="relato, barrio, localidad, investigados, actuario, dependencia, estado, actuación, causa">
                 </div>
-                <div class="col-md-3">
+                <div class="col-lg-3 col-md-6">
                     <label class="form-label">Investigados (búsqueda específica)</label>
-                    <input type="text" name="investigados_q" value="{{ selected.investigados_q }}" class="form-control" placeholder="nombre, apodo, DNI, domicilio...">
+                    <input type="text" name="investigados_q" value="{{ selected.investigados_q }}" class="form-control form-control-sm" placeholder="nombre, apodo, DNI, domicilio...">
                 </div>
-                <div class="col-md-2">
+                <div class="col-lg-2 col-md-4">
                     <label class="form-label">N° actuación</label>
-                    <input type="text" name="nro_actuacion_q" value="{{ selected.nro_actuacion_q }}" class="form-control" placeholder="ej: 91, 180, 358">
+                    <input type="text" name="nro_actuacion_q" value="{{ selected.nro_actuacion_q }}" class="form-control form-control-sm" placeholder="ej: 91, 180, 358">
                 </div>
-                <div class="col-md-2">
+                <div class="col-lg-2 col-md-4">
                     <label class="form-label">Año</label>
-                    <select class="form-select" name="anio">
+                    <select class="form-select form-select-sm" name="anio">
                         <option value="">Todos</option>
                         {% for x in filtros.anios %}
                         <option value="{{ x }}" {% if selected.anio == x %}selected{% endif %}>{{ x }}</option>
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-md-2">
+                <div class="col-lg-2 col-md-4">
                     <label class="form-label">Fecha denuncia desde</label>
-                    <input type="date" class="form-control" name="fecha_desde" value="{{ selected.fecha_desde }}">
+                    <input type="date" class="form-control form-control-sm" name="fecha_desde" value="{{ selected.fecha_desde }}">
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">Fecha denuncia hasta</label>
-                    <input type="date" class="form-control" name="fecha_hasta" value="{{ selected.fecha_hasta }}">
+                    <input type="date" class="form-control form-control-sm" name="fecha_hasta" value="{{ selected.fecha_hasta }}">
                 </div>
 
-                <div class="col-md-3">
-                    <label class="form-label">Departamento (DOZC / Norte / Sur / Centro)</label>
+                <div class="col-lg-2 col-md-4">
+                    <label class="form-label">Departamento</label>
                     <button class="btn btn-outline-secondary btn-sm w-100 sabana-dd-btn text-start text-truncate" type="button" id="dd-ad-departamentos" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">Departamentos...</button>
                     <div class="dropdown-menu p-2 sabana-dd-menu w-100" aria-labelledby="dd-ad-departamentos">
                         <input type="text" class="form-control form-control-sm mb-1 sabana-dd-search" placeholder="Buscar departamento..." data-target="ad-filtro-departamentos">
@@ -53,8 +53,8 @@
                         </div>
                     </div>
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label">Dependencia registro</label>
+                <div class="col-lg-2 col-md-4">
+                    <label class="form-label">División</label>
                     <button class="btn btn-outline-secondary btn-sm w-100 sabana-dd-btn text-start text-truncate" type="button" id="dd-ad-dep-reg" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">Dependencias...</button>
                     <div class="dropdown-menu p-2 sabana-dd-menu w-100" aria-labelledby="dd-ad-dep-reg">
                         <input type="text" class="form-control form-control-sm mb-1 sabana-dd-search" placeholder="Buscar..." data-target="ad-filtro-dep-reg">
@@ -68,7 +68,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="col-md-3">
+                <div class="col-lg-2 col-md-4">
                     <label class="form-label">Dependencia actuario</label>
                     <button class="btn btn-outline-secondary btn-sm w-100 sabana-dd-btn text-start text-truncate" type="button" id="dd-ad-dep-act" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">Dependencias...</button>
                     <div class="dropdown-menu p-2 sabana-dd-menu w-100" aria-labelledby="dd-ad-dep-act">
@@ -83,7 +83,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="col-md-3">
+                <div class="col-lg-2 col-md-4">
                     <label class="form-label">Estado de causa</label>
                     <button class="btn btn-outline-secondary btn-sm w-100 sabana-dd-btn text-start text-truncate" type="button" id="dd-ad-estados" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">Estados...</button>
                     <div class="dropdown-menu p-2 sabana-dd-menu w-100" aria-labelledby="dd-ad-estados">
@@ -99,7 +99,7 @@
                     </div>
                 </div>
 
-                <div class="col-md-2">
+                <div class="col-lg-2 col-md-4">
                     <label class="form-label">Localidad</label>
                     <button class="btn btn-outline-secondary btn-sm w-100 sabana-dd-btn text-start text-truncate" type="button" id="dd-ad-localidades" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">Localidades...</button>
                     <div class="dropdown-menu p-2 sabana-dd-menu w-100" aria-labelledby="dd-ad-localidades">
@@ -114,7 +114,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="col-md-3">
+                <div class="col-lg-3 col-md-6">
                     <label class="form-label">Barrio (con localidad)</label>
                     <button class="btn btn-outline-secondary btn-sm w-100 sabana-dd-btn text-start text-truncate" type="button" id="dd-ad-barrios" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">Barrios...</button>
                     <div class="dropdown-menu p-2 sabana-dd-menu w-100" aria-labelledby="dd-ad-barrios">
@@ -129,8 +129,8 @@
                         </div>
                     </div>
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label">Actuario (jerarquía + nombre)</label>
+                <div class="col-lg-3 col-md-6">
+                    <label class="form-label">Actuario</label>
                     <button class="btn btn-outline-secondary btn-sm w-100 sabana-dd-btn text-start text-truncate" type="button" id="dd-ad-actuarios" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">Actuarios...</button>
                     <div class="dropdown-menu p-2 sabana-dd-menu w-100" aria-labelledby="dd-ad-actuarios">
                         <input type="text" class="form-control form-control-sm mb-1 sabana-dd-search" placeholder="Buscar actuario..." data-target="ad-filtro-actuarios">
@@ -145,45 +145,45 @@
                     </div>
                 </div>
 
-                <div class="col-md-2">
+                <div class="col-lg-2 col-md-4">
                     <label class="form-label">Coordenadas</label>
-                    <select class="form-select" name="coords">
+                    <select class="form-select form-select-sm" name="coords">
                         <option value="">Todas</option>
                         <option value="con" {% if selected.coords == 'con' %}selected{% endif %}>Con</option>
                         <option value="sin" {% if selected.coords == 'sin' %}selected{% endif %}>Sin</option>
                     </select>
                 </div>
-                <div class="col-md-2">
+                <div class="col-lg-2 col-md-4">
                     <label class="form-label">Investigados (cargados)</label>
-                    <select class="form-select" name="investigados_mode">
+                    <select class="form-select form-select-sm" name="investigados_mode">
                         <option value="">Todos</option>
                         <option value="con" {% if selected.investigados_mode == 'con' %}selected{% endif %}>Con</option>
                         <option value="sin" {% if selected.investigados_mode == 'sin' %}selected{% endif %}>Sin</option>
                     </select>
                 </div>
-                <div class="col-md-2">
+                <div class="col-lg-2 col-md-4">
                     <label class="form-label">Solicitud allanamiento</label>
-                    <select class="form-select" name="allanamiento_mode">
+                    <select class="form-select form-select-sm" name="allanamiento_mode">
                         <option value="">Todas</option>
                         <option value="con" {% if selected.allanamiento_mode == 'con' %}selected{% endif %}>Con</option>
                         <option value="sin" {% if selected.allanamiento_mode == 'sin' %}selected{% endif %}>Sin</option>
                     </select>
                 </div>
-                <div class="col-md-2">
+                <div class="col-lg-2 col-md-4">
                     <label class="form-label">Desestimada</label>
-                    <select class="form-select" name="desestimada_mode">
+                    <select class="form-select form-select-sm" name="desestimada_mode">
                         <option value="">Todas</option>
                         <option value="con" {% if selected.desestimada_mode == 'con' %}selected{% endif %}>Sí</option>
                         <option value="sin" {% if selected.desestimada_mode == 'sin' %}selected{% endif %}>No</option>
                     </select>
                 </div>
-                <div class="col-md-2 d-grid">
+                <div class="col-lg-1 col-md-2 d-grid">
                     <label class="form-label">&nbsp;</label>
-                    <button class="btn btn-primary" type="submit"><i class="bi bi-funnel"></i> Aplicar</button>
+                    <button class="btn btn-primary btn-sm" type="submit"><i class="bi bi-funnel"></i> Aplicar</button>
                 </div>
-                <div class="col-md-2 d-grid">
+                <div class="col-lg-1 col-md-2 d-grid">
                     <label class="form-label">&nbsp;</label>
-                    <a class="btn btn-outline-secondary" href="{{ request.path }}">Limpiar filtros</a>
+                    <a class="btn btn-outline-secondary btn-sm" href="{{ request.path }}">Limpiar filtros</a>
                 </div>
             </form>
         </div>

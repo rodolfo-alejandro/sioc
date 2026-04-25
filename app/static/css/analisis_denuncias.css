@@ -5,6 +5,13 @@
 
 .ad-filtros .form-label {
     font-size: 0.85rem;
+    margin-bottom: 0.2rem;
+}
+
+.ad-filtros .form-control-sm,
+.ad-filtros .form-select-sm,
+.ad-filtros .btn-sm {
+    font-size: 0.83rem;
 }
 
 .ad-relato {
