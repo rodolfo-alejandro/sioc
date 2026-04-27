@@ -338,6 +338,8 @@ def _pick_tipo_medida(text: str) -> str:
 
 def _pick_tipo_consigna(text: str) -> str:
     t = (text or "").lower()
+    if "consigna policial fija" in t:
+        return "fija"
     if "consigna ambulatoria" in t:
         return "ambulatoria"
     if "consigna fija" in t:
@@ -479,10 +481,46 @@ def _extract_medidas_detalle(full: str) -> list[str]:
 def _extract_dias_por_consigna(full: str) -> dict:
     txt = full or ""
     out = {"fija": None, "ambulatoria": None, "personalizada": None}
+    num_words = {
+        "uno": 1, "una": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5,
+        "seis": 6, "siete": 7, "ocho": 8, "nueve": 9, "diez": 10,
+        "once": 11, "doce": 12, "trece": 13, "catorce": 14, "quince": 15,
+        "veinte": 20, "treinta": 30, "cuarenta": 40, "cincuenta": 50,
+        "sesenta": 60, "noventa": 90,
+    }
+
+    def _extract_days_value(chunk: str):
+        if not chunk:
+            return None
+        # 1) número explícito
+        m_num = re.search(r"\(?\b(\d{1,3})\b\)?\s*d[ií]as", chunk, flags=re.IGNORECASE)
+        if m_num:
+            return _to_int_or_none(m_num.group(1))
+        # 2) número escrito (ej: "diez dias")
+        m_word = re.search(r"\b([a-záéíóúñ]{3,15})\b\s*d[ií]as", chunk, flags=re.IGNORECASE)
+        if m_word:
+            w = _clean(m_word.group(1)).lower()
+            return num_words.get(w)
+        # 3) formato típico "(10)" sin "días" pegado
+        m_par = re.search(r"\((\d{1,3})\)", chunk)
+        if m_par:
+            return _to_int_or_none(m_par.group(1))
+        return None
+
+    def _days_near_keyword(keyword_pat: str):
+        for m in re.finditer(keyword_pat, txt, flags=re.IGNORECASE):
+            a = max(0, m.start() - 80)
+            b = min(len(txt), m.end() + 240)
+            d = _extract_days_value(txt[a:b])
+            if d:
+                return d
+        return None
+
     pats = {
         "fija": [
             r"CONSIGNA\s+FIJA[^.\n]{0,120}?(\d{1,3})\s*d[ií]as",
             r"(\d{1,3})\s*d[ií]as[^.\n]{0,120}?CONSIGNA\s+FIJA",
+            r"CONSIGNA\s+POLICIAL\s+FIJA",
         ],
         "ambulatoria": [
             r"CONSIGNA\s+AMBULATORIA[^.\n]{0,120}?(\d{1,3})\s*d[ií]as",
@@ -491,14 +529,31 @@ def _extract_dias_por_consigna(full: str) -> dict:
         "personalizada": [
             r"CONSIGNA\s+PERSONALIZADA[^.\n]{0,120}?(\d{1,3})\s*d[ií]as",
             r"(\d{1,3})\s*d[ií]as[^.\n]{0,120}?CONSIGNA\s+PERSONALIZADA",
+            r"RONDAS?\s+PERI[ÓO]DICAS?",
         ],
     }
     for k, ls in pats.items():
         for pat in ls:
             m = re.search(pat, txt, flags=re.IGNORECASE)
             if m:
-                out[k] = _to_int_or_none(m.group(1))
-                break
+                # Si el patrón trae grupo numérico, usarlo; si no, buscar días cerca.
+                if m.lastindex and m.lastindex >= 1 and _clean(m.group(1)):
+                    out[k] = _to_int_or_none(m.group(1))
+                else:
+                    out[k] = _days_near_keyword(pat)
+                if out[k]:
+                    break
+
+    # Fallbacks operativos:
+    # - Si solo hay un total de días y se detecta tipo de consigna único, asignarlo.
+    total_dias = _to_int_or_none(_first_group(r"(\d{1,3})\s*d[ií]as", txt))
+    tipo_detectado = _pick_tipo_consigna(txt)
+    if total_dias:
+        if tipo_detectado in out and out[tipo_detectado] is None:
+            out[tipo_detectado] = total_dias
+        # Si no hay tipo puntual pero hay "rondas", volcar a personalizada.
+        if out["personalizada"] is None and re.search(r"RONDAS?\s+PERI[ÓO]DICAS?", txt, flags=re.IGNORECASE):
+            out["personalizada"] = total_dias
     return out
 
 
