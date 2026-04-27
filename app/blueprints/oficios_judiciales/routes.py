@@ -63,6 +63,8 @@ except Exception:
 
 _schema_checked = False
 _MIN_PDF_TEXT_LEN = 120
+_OCR_GOOD_ENOUGH_LEN = 900
+_MAX_PDF_OCR_PAGES = 3
 
 
 def _is_superadmin() -> bool:
@@ -211,11 +213,14 @@ def _ocr_from_pil_with_error(img) -> tuple[str, str]:
     last_err = ""
     best = ""
     for im in attempts:
-        for lang in ("spa+eng", "spa", "eng"):
+        # Modo rápido: priorizar spa y cortar cuando el texto ya es suficientemente bueno.
+        for lang in ("spa", "spa+eng"):
             try:
                 txt = _normalize_spaces(pytesseract.image_to_string(im, lang=lang))
                 if len(txt) > len(best):
                     best = txt
+                if len(best) >= _OCR_GOOD_ENOUGH_LEN:
+                    return best, ""
             except Exception as exc:
                 last_err = str(exc)
                 continue
@@ -280,7 +285,12 @@ def _scan_pdf_as_images(raw: bytes) -> tuple[str, str, str, list[str]]:
     qr_parts = []
     ocr_parts = []
     qr_url = ""
-    for img in pages:
+    total_pages = len(pages)
+    if total_pages > _MAX_PDF_OCR_PAGES:
+        warnings.append(
+            f"OCR rápido activo: se procesaron {_MAX_PDF_OCR_PAGES} de {total_pages} páginas escaneadas."
+        )
+    for img in pages[:_MAX_PDF_OCR_PAGES]:
         payload, _ = _extract_qr_text_from_pil_image(img)
         if payload:
             resolved, resolved_url = _resolve_qr_payload(payload)
@@ -305,7 +315,7 @@ def _resolve_qr_payload(qr_payload: str) -> tuple[str, str]:
         if requests is None:
             return "", payload
         try:
-            resp = requests.get(payload, timeout=12)
+            resp = requests.get(payload, timeout=5)
             if resp.ok:
                 return _normalize_spaces(resp.text), payload
         except Exception:
