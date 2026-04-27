@@ -1171,6 +1171,26 @@ def cargar():
                 _add_domicilio_if_new(payload.get("domicilio_acusado_2"), "denunciado")
             if _clean(payload.get("domicilio_victima_3")):
                 _add_domicilio_if_new(payload.get("domicilio_victima_3"), "victima")
+            for ax in (payload.get("acusados_extra") or []):
+                if not isinstance(ax, dict):
+                    continue
+                _add_person_if_new(
+                    ax.get("nombre"),
+                    ax.get("dni"),
+                    "denunciado",
+                    _normalize_notificar(ax.get("notificar"), "si"),
+                )
+                _add_domicilio_if_new(ax.get("domicilio"), "denunciado")
+            for vx in (payload.get("victimas_extra_detalle") or []):
+                if not isinstance(vx, dict):
+                    continue
+                _add_person_if_new(
+                    vx.get("nombre"),
+                    vx.get("dni"),
+                    "victima",
+                    _normalize_notificar(vx.get("notificar"), "no"),
+                )
+                _add_domicilio_if_new(vx.get("domicilio"), "victima")
             for vextra in (payload.get("victimas_adicionales") or []):
                 if _clean(vextra):
                     _add_person_if_new(vextra, "", "victima", victima_notificar)

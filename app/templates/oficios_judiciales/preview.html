@@ -140,31 +140,18 @@
         <div class="collapse mt-2" id="personas-extra-collapse">
             <div class="card">
                 <div class="card-header"><strong>Acusados/Víctimas adicionales</strong></div>
-                <div class="card-body row g-2">
-                    <div class="col-md-3"><label class="form-label">Acusado 2</label><input class="form-control" id="f-acusado_2" value="{{ data.acusado_2 or '' }}"></div>
-                    <div class="col-md-2"><label class="form-label">DNI acusado 2</label><input class="form-control" id="f-dni_acusado_2" value="{{ data.dni_acusado_2 or '' }}"></div>
-                    <div class="col-md-4"><label class="form-label">Domicilio acusado 2</label><input class="form-control" id="f-domicilio_acusado_2" value="{{ data.domicilio_acusado_2 or '' }}"></div>
-                    <div class="col-md-1">
-                        <label class="form-label">¿Notificar?</label>
-                        <select class="form-select" id="f-acusado_2_notificar">
-                            {% set an2 = (data.acusado_2_notificar or 'si') %}
-                            <option value="si" {{ 'selected' if an2 == 'si' else '' }}>Sí</option>
-                            <option value="no" {{ 'selected' if an2 == 'no' else '' }}>No</option>
-                        </select>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <strong class="small">Acusados adicionales</strong>
+                        <button class="btn btn-outline-success btn-sm" type="button" id="btn-add-acusado">Agregar acusado</button>
                     </div>
-                    <div class="col-md-2"></div>
-                    <div class="col-md-3"><label class="form-label">Víctima 3</label><input class="form-control" id="f-victima_3" value="{{ data.victima_3 or '' }}"></div>
-                    <div class="col-md-2"><label class="form-label">DNI víctima 3</label><input class="form-control" id="f-dni_victima_3" value="{{ data.dni_victima_3 or '' }}"></div>
-                    <div class="col-md-4"><label class="form-label">Domicilio víctima 3</label><input class="form-control" id="f-domicilio_victima_3" value="{{ data.domicilio_victima_3 or '' }}"></div>
-                    <div class="col-md-1">
-                        <label class="form-label">¿Notificar?</label>
-                        <select class="form-select" id="f-victima_3_notificar">
-                            {% set vn3 = (data.victima_3_notificar or 'no') %}
-                            <option value="si" {{ 'selected' if vn3 == 'si' else '' }}>Sí</option>
-                            <option value="no" {{ 'selected' if vn3 == 'no' else '' }}>No</option>
-                        </select>
+                    <div id="extra-acusados" class="row g-2"></div>
+                    <hr>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <strong class="small">Víctimas adicionales</strong>
+                        <button class="btn btn-outline-success btn-sm" type="button" id="btn-add-victima">Agregar víctima</button>
                     </div>
-                    <div class="col-md-2"></div>
+                    <div id="extra-victimas" class="row g-2"></div>
                 </div>
             </div>
         </div>
@@ -188,6 +175,78 @@
     var target = document.getElementById('preview-json');
     if (!form || !target) return;
     function v(id) { var el = document.getElementById(id); return el ? el.value : ''; }
+    var extraAcusadosRoot = document.getElementById('extra-acusados');
+    var extraVictimasRoot = document.getElementById('extra-victimas');
+    function makePersonRow(kind, idx, defaults) {
+        var wrap = document.createElement('div');
+        wrap.className = 'col-12 border rounded p-2';
+        wrap.setAttribute('data-kind', kind);
+        wrap.innerHTML =
+            '<div class="row g-2">' +
+            '<div class="col-md-3"><label class="form-label">' + (kind === 'acusado' ? 'Acusado' : 'Víctima') + ' ' + (idx + 1) + '</label><input class="form-control js-nombre" value="' + (defaults.nombre || '') + '"></div>' +
+            '<div class="col-md-2"><label class="form-label">DNI</label><input class="form-control js-dni" value="' + (defaults.dni || '') + '"></div>' +
+            '<div class="col-md-5"><label class="form-label">Domicilio</label><input class="form-control js-domicilio" value="' + (defaults.domicilio || '') + '"></div>' +
+            '<div class="col-md-1"><label class="form-label">¿Notificar?</label><select class="form-select js-notificar"><option value="si">Sí</option><option value="no">No</option></select></div>' +
+            '<div class="col-md-1 d-flex align-items-end"><button class="btn btn-outline-danger btn-sm w-100 js-del" type="button">Quitar</button></div>' +
+            '</div>';
+        var sel = wrap.querySelector('.js-notificar');
+        sel.value = defaults.notificar || (kind === 'acusado' ? 'si' : 'no');
+        wrap.querySelector('.js-del').addEventListener('click', function () { wrap.remove(); });
+        return wrap;
+    }
+    function collectRows(root) {
+        if (!root) return [];
+        return Array.prototype.slice.call(root.querySelectorAll('[data-kind]')).map(function (row) {
+            return {
+                nombre: (row.querySelector('.js-nombre') || {}).value || '',
+                dni: (row.querySelector('.js-dni') || {}).value || '',
+                domicilio: (row.querySelector('.js-domicilio') || {}).value || '',
+                notificar: (row.querySelector('.js-notificar') || {}).value || 'no'
+            };
+        }).filter(function (x) { return String(x.nombre || '').trim(); });
+    }
+    var addAcBtn = document.getElementById('btn-add-acusado');
+    var addViBtn = document.getElementById('btn-add-victima');
+    if (addAcBtn && extraAcusadosRoot) {
+        addAcBtn.addEventListener('click', function () {
+            var idx = extraAcusadosRoot.querySelectorAll('[data-kind="acusado"]').length + 2;
+            extraAcusadosRoot.appendChild(makePersonRow('acusado', idx, { notificar: 'si' }));
+        });
+    }
+    if (addViBtn && extraVictimasRoot) {
+        addViBtn.addEventListener('click', function () {
+            var idx = extraVictimasRoot.querySelectorAll('[data-kind="victima"]').length + 3;
+            extraVictimasRoot.appendChild(makePersonRow('victima', idx, { notificar: 'no' }));
+        });
+    }
+    var initialAcusado2 = {
+        nombre: {{ (data.acusado_2 or '')|tojson }},
+        dni: {{ (data.dni_acusado_2 or '')|tojson }},
+        domicilio: {{ (data.domicilio_acusado_2 or '')|tojson }},
+        notificar: {{ (data.acusado_2_notificar or 'si')|tojson }}
+    };
+    if (extraAcusadosRoot && (initialAcusado2.nombre || initialAcusado2.dni || initialAcusado2.domicilio)) {
+        extraAcusadosRoot.appendChild(makePersonRow('acusado', 2, {
+            nombre: initialAcusado2.nombre,
+            dni: initialAcusado2.dni,
+            domicilio: initialAcusado2.domicilio,
+            notificar: initialAcusado2.notificar
+        }));
+    }
+    var initialVictima3 = {
+        nombre: {{ (data.victima_3 or '')|tojson }},
+        dni: {{ (data.dni_victima_3 or '')|tojson }},
+        domicilio: {{ (data.domicilio_victima_3 or '')|tojson }},
+        notificar: {{ (data.victima_3_notificar or 'no')|tojson }}
+    };
+    if (extraVictimasRoot && (initialVictima3.nombre || initialVictima3.dni || initialVictima3.domicilio)) {
+        extraVictimasRoot.appendChild(makePersonRow('victima', 3, {
+            nombre: initialVictima3.nombre,
+            dni: initialVictima3.dni,
+            domicilio: initialVictima3.domicilio,
+            notificar: initialVictima3.notificar
+        }));
+    }
     function recomputeTipoConsignaYDias() {
         var ind = v('f-indeterminada') === 'si';
         var dPer = v('f-dias_personalizada');
@@ -237,14 +296,16 @@
             victima_2: v('f-victima_2'),
             dni_victima_2: v('f-dni_victima_2'),
             domicilio_victima_2: v('f-domicilio_victima_2'),
-            acusado_2: v('f-acusado_2'),
-            dni_acusado_2: v('f-dni_acusado_2'),
-            domicilio_acusado_2: v('f-domicilio_acusado_2'),
-            acusado_2_notificar: v('f-acusado_2_notificar'),
-            victima_3: v('f-victima_3'),
-            dni_victima_3: v('f-dni_victima_3'),
-            domicilio_victima_3: v('f-domicilio_victima_3'),
-            victima_3_notificar: v('f-victima_3_notificar'),
+            acusados_extra: collectRows(extraAcusadosRoot),
+            victimas_extra_detalle: collectRows(extraVictimasRoot),
+            acusado_2: '',
+            dni_acusado_2: '',
+            domicilio_acusado_2: '',
+            acusado_2_notificar: 'si',
+            victima_3: '',
+            dni_victima_3: '',
+            domicilio_victima_3: '',
+            victima_3_notificar: 'no',
             acusado_notificar: v('f-acusado_notificar'),
             victima_notificar: v('f-victima_notificar'),
             victima_2_notificar: v('f-victima_2_notificar'),
