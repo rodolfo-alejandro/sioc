@@ -175,6 +175,9 @@
                         {% if current_user.has_permission('OFICIOS_JUDICIALES_UPLOAD') %}
                         <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('oficios_judiciales.cargar') }}"><i class="bi bi-cloud-upload"></i> Carga inteligente</a></li>
                         <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('oficios_judiciales.manual_listado') }}"><i class="bi bi-journal-check"></i> Control manual VIF</a></li>
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('oficios_judiciales.manual_dashboard') }}"><i class="bi bi-bar-chart-line"></i> Dashboard manual</a></li>
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('oficios_judiciales.manual_mapa') }}"><i class="bi bi-geo-alt"></i> Mapa manual</a></li>
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('oficios_judiciales.manual_reincidencias') }}"><i class="bi bi-search"></i> Reincidencias</a></li>
                         <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('oficios_judiciales.catalogos') }}"><i class="bi bi-list-ul"></i> Catálogos</a></li>
                         {% endif %}
                     </ul>

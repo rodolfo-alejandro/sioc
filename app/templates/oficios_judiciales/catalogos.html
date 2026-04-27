@@ -46,5 +46,77 @@
             </div>
         </div>
     </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header"><strong>Tipos de consigna</strong></div>
+            <div class="card-body">
+                <form method="POST" class="d-flex gap-2 mb-3">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="catalog_action" value="add_tipo_consigna">
+                    <input class="form-control" name="nombre" placeholder="Ej: fija, ambulatoria, personalizada">
+                    <button class="btn btn-primary">Agregar</button>
+                </form>
+                <ul class="mb-0">
+                    {% for t in tipos_consigna %}
+                    <li>{{ t.nombre }}</li>
+                    {% else %}
+                    <li class="text-muted">Sin datos.</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header"><strong>Fiscalías</strong></div>
+            <div class="card-body">
+                <form method="POST" class="d-flex gap-2 mb-3">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="catalog_action" value="add_fiscalia">
+                    <input class="form-control" name="nombre" placeholder="Ej: Fiscalía de Violencia Familiar N° 2">
+                    <button class="btn btn-primary">Agregar</button>
+                </form>
+                <ul class="mb-0">
+                    {% for f in fiscalias %}
+                    <li>{{ f.nombre }}</li>
+                    {% else %}
+                    <li class="text-muted">Sin datos.</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header"><strong>Barrios (JSON/Excel)</strong></div>
+            <div class="card-body">
+                <div class="d-flex flex-wrap gap-2 mb-3">
+                    <form method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="catalog_action" value="import_barrios_json">
+                        <button class="btn btn-outline-primary">Importar desde barrios.json</button>
+                    </form>
+                    <form method="POST" enctype="multipart/form-data" class="d-flex gap-2">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="catalog_action" value="import_barrios_excel">
+                        <input class="form-control" type="file" name="barrios_excel" accept=".xlsx,.xls" required>
+                        <button class="btn btn-outline-success">Importar Excel</button>
+                    </form>
+                </div>
+                <small class="text-muted d-block mb-2">Vista previa (máx. 200):</small>
+                <ul class="mb-0">
+                    {% for b in barrios %}
+                    <li>
+                        {{ b.nombre }}
+                        {% if b.codigo %}<span class="text-muted">({{ b.codigo }})</span>{% endif %}
+                        {% if b.dependencia_nombre %}<span class="text-muted"> - {{ b.dependencia_nombre }}</span>{% endif %}
+                    </li>
+                    {% else %}
+                    <li class="text-muted">Sin datos.</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}

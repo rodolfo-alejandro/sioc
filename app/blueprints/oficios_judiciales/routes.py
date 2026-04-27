@@ -14,7 +14,10 @@ from sqlalchemy import false, func, inspect, or_, text
 from app.blueprints.oficios_judiciales import bp
 from app.extensions import db
 from app.models.oficios_judiciales import (
+    CatalogoBarrio,
+    CatalogoFiscalia,
     CatalogoJuzgado,
+    CatalogoTipoConsigna,
     CatalogoTipoMedida,
     ConsignaDomicilio,
     ConsignaJudicial,
@@ -94,7 +97,17 @@ def _ensure_schema():
         return
     insp = inspect(db.engine)
     existing = set(insp.get_table_names())
-    for model in (ConsignaJudicial, ConsignaPersona, ConsignaDomicilio, ConsignaMedidaDetalle, CatalogoJuzgado, CatalogoTipoMedida):
+    for model in (
+        ConsignaJudicial,
+        ConsignaPersona,
+        ConsignaDomicilio,
+        ConsignaMedidaDetalle,
+        CatalogoJuzgado,
+        CatalogoTipoMedida,
+        CatalogoTipoConsigna,
+        CatalogoFiscalia,
+        CatalogoBarrio,
+    ):
         if model.__tablename__ not in existing:
             model.__table__.create(bind=db.engine)
     cols = {c.get("name") for c in insp.get_columns(ConsignaJudicial.__tablename__)}
@@ -119,6 +132,15 @@ def _ensure_schema():
     if "juzgado_key" not in cols:
         db.session.execute(text("ALTER TABLE oficios_consignas ADD COLUMN juzgado_key VARCHAR(255) NULL"))
         db.session.commit()
+    if "fiscalia" not in cols:
+        db.session.execute(text("ALTER TABLE oficios_consignas ADD COLUMN fiscalia VARCHAR(255) NULL"))
+        db.session.commit()
+    if "fiscalia_key" not in cols:
+        db.session.execute(text("ALTER TABLE oficios_consignas ADD COLUMN fiscalia_key VARCHAR(255) NULL"))
+        db.session.commit()
+    if "telefono_contacto" not in cols:
+        db.session.execute(text("ALTER TABLE oficios_consignas ADD COLUMN telefono_contacto VARCHAR(80) NULL"))
+        db.session.commit()
     pcols = {c.get("name") for c in insp.get_columns(ConsignaPersona.__tablename__)}
     if "notificar" not in pcols:
         db.session.execute(text("ALTER TABLE oficios_consigna_personas ADD COLUMN notificar VARCHAR(20) NULL"))
@@ -135,6 +157,12 @@ def _ensure_schema():
         db.session.commit()
     if "longitud" not in dcols:
         db.session.execute(text("ALTER TABLE oficios_consigna_domicilios ADD COLUMN longitud DOUBLE NULL"))
+        db.session.commit()
+    if "barrio_codigo" not in dcols:
+        db.session.execute(text("ALTER TABLE oficios_consigna_domicilios ADD COLUMN barrio_codigo VARCHAR(40) NULL"))
+        db.session.commit()
+    if "barrio_nombre" not in dcols:
+        db.session.execute(text("ALTER TABLE oficios_consigna_domicilios ADD COLUMN barrio_nombre VARCHAR(255) NULL"))
         db.session.commit()
     _schema_checked = True
 
@@ -163,6 +191,14 @@ def _juzgado_key(v: str) -> str:
         return ""
     s = re.sub(r"n[°º\*]\s*", "n ", s, flags=re.IGNORECASE)
     s = re.sub(r"\bnominaci[oó]n\b", "nominacion", s, flags=re.IGNORECASE)
+    s = re.sub(r"[^a-z0-9]", "", s)
+    return s
+
+
+def _fiscalia_key(v: str) -> str:
+    s = _clean(v).lower()
+    if not s:
+        return ""
     s = re.sub(r"[^a-z0-9]", "", s)
     return s
 
@@ -1515,6 +1551,7 @@ def manual_listado():
         abort(403)
     estado = _clean(request.args.get("estado")) or "activa"
     qtxt = _clean(request.args.get("q"))
+    tipo_consigna = _clean(request.args.get("tipo_consigna"))
     q = _q_base().filter(ConsignaJudicial.fuente_principal == "manual")
     if estado == "activa":
         q = q.filter(ConsignaJudicial.estado == "activa")
@@ -1530,8 +1567,150 @@ def manual_listado():
                 ConsignaJudicial.caratula.ilike(pat),
             )
         )
+    if tipo_consigna:
+        q = q.filter(ConsignaJudicial.tipo_consigna == tipo_consigna)
     rows = q.order_by(ConsignaJudicial.created_at.desc()).limit(300).all()
-    return render_template("oficios_judiciales/manual_listado.html", rows=rows, selected=request.args)
+    tipos_consigna = [r[0] for r in q.with_entities(ConsignaJudicial.tipo_consigna).distinct().all() if r[0]]
+    return render_template("oficios_judiciales/manual_listado.html", rows=rows, selected=request.args, tipos_consigna=tipos_consigna)
+
+
+@bp.route("/manual/dashboard")
+def manual_dashboard():
+    if not _can_view():
+        abort(403)
+    base = _q_base().filter(ConsignaJudicial.fuente_principal == "manual")
+    total = base.count()
+    activas = base.filter(ConsignaJudicial.estado == "activa").count()
+    finalizadas = base.filter(ConsignaJudicial.estado == "finalizada").count()
+    por_tipo = (
+        base.with_entities(ConsignaJudicial.tipo_consigna, func.count(ConsignaJudicial.id))
+        .group_by(ConsignaJudicial.tipo_consigna)
+        .order_by(func.count(ConsignaJudicial.id).desc())
+        .all()
+    )
+    por_barrio = (
+        db.session.query(ConsignaDomicilio.barrio_nombre, func.count(ConsignaDomicilio.id))
+        .join(ConsignaJudicial, ConsignaJudicial.id == ConsignaDomicilio.consigna_id)
+        .filter(
+            ConsignaJudicial.unidad_id == current_user.unidad_id,
+            ConsignaJudicial.fuente_principal == "manual",
+            ConsignaDomicilio.barrio_nombre.isnot(None),
+            ConsignaDomicilio.barrio_nombre != "",
+        )
+        .group_by(ConsignaDomicilio.barrio_nombre)
+        .order_by(func.count(ConsignaDomicilio.id).desc())
+        .limit(15)
+        .all()
+    )
+    return render_template(
+        "oficios_judiciales/manual_dashboard.html",
+        total=total,
+        activas=activas,
+        finalizadas=finalizadas,
+        por_tipo=por_tipo,
+        por_barrio=por_barrio,
+    )
+
+
+@bp.route("/manual/mapa")
+def manual_mapa():
+    if not _can_view():
+        abort(403)
+    estado = _clean(request.args.get("estado")) or "activa"
+    tipo_consigna = _clean(request.args.get("tipo_consigna"))
+    barrio = _clean(request.args.get("barrio"))
+    q = (
+        db.session.query(ConsignaJudicial, ConsignaDomicilio)
+        .join(ConsignaDomicilio, ConsignaDomicilio.consigna_id == ConsignaJudicial.id)
+        .filter(
+            ConsignaJudicial.unidad_id == current_user.unidad_id,
+            ConsignaJudicial.fuente_principal == "manual",
+            ConsignaDomicilio.latitud.isnot(None),
+            ConsignaDomicilio.longitud.isnot(None),
+        )
+    )
+    if estado == "activa":
+        q = q.filter(ConsignaJudicial.estado == "activa")
+    elif estado == "finalizada":
+        q = q.filter(ConsignaJudicial.estado == "finalizada")
+    if tipo_consigna:
+        q = q.filter(ConsignaJudicial.tipo_consigna == tipo_consigna)
+    if barrio:
+        q = q.filter(ConsignaDomicilio.barrio_nombre == barrio)
+    rows = q.order_by(ConsignaJudicial.id.desc()).limit(1000).all()
+    points = []
+    for r, d in rows:
+        points.append(
+            {
+                "id": r.id,
+                "expediente": r.expediente,
+                "tipo_consigna": r.tipo_consigna,
+                "estado": r.estado,
+                "barrio": d.barrio_nombre or "",
+                "direccion": d.direccion or "",
+                "lat": d.latitud,
+                "lng": d.longitud,
+                "detalle_url": url_for("oficios_judiciales.detalle", consigna_id=r.id),
+            }
+        )
+    tipos_consigna = [r[0] for r in _q_base().with_entities(ConsignaJudicial.tipo_consigna).distinct().all() if r[0]]
+    barrios = [r[0] for r in db.session.query(ConsignaDomicilio.barrio_nombre).filter(ConsignaDomicilio.barrio_nombre.isnot(None), ConsignaDomicilio.barrio_nombre != "").distinct().order_by(ConsignaDomicilio.barrio_nombre.asc()).all() if r[0]]
+    return render_template(
+        "oficios_judiciales/manual_mapa.html",
+        points_json=json.dumps(points),
+        tipos_consigna=tipos_consigna,
+        barrios=barrios,
+        selected=request.args,
+    )
+
+
+@bp.route("/manual/reincidencias")
+def manual_reincidencias():
+    if not _can_view():
+        abort(403)
+    qtxt = _clean(request.args.get("q"))
+    rows = []
+    detalle = []
+    if qtxt:
+        rows = (
+            db.session.query(
+                ConsignaPersona.nombre,
+                ConsignaPersona.dni,
+                func.count(ConsignaPersona.id).label("n"),
+            )
+            .join(ConsignaJudicial, ConsignaJudicial.id == ConsignaPersona.consigna_id)
+            .filter(
+                ConsignaJudicial.unidad_id == current_user.unidad_id,
+                ConsignaJudicial.fuente_principal == "manual",
+                or_(ConsignaPersona.nombre.ilike(f"%{qtxt}%"), ConsignaPersona.dni.ilike(f"%{qtxt}%")),
+            )
+            .group_by(ConsignaPersona.nombre, ConsignaPersona.dni)
+            .having(func.count(ConsignaPersona.id) > 1)
+            .order_by(func.count(ConsignaPersona.id).desc())
+            .limit(100)
+            .all()
+        )
+        detalle = (
+            db.session.query(
+                ConsignaPersona.nombre,
+                ConsignaPersona.dni,
+                ConsignaJudicial.id,
+                ConsignaJudicial.expediente,
+                ConsignaJudicial.tipo_consigna,
+                ConsignaJudicial.estado,
+                ConsignaJudicial.fecha_notificacion,
+            )
+            .join(ConsignaJudicial, ConsignaJudicial.id == ConsignaPersona.consigna_id)
+            .filter(
+                ConsignaJudicial.unidad_id == current_user.unidad_id,
+                ConsignaJudicial.fuente_principal == "manual",
+                or_(ConsignaPersona.nombre.ilike(f"%{qtxt}%"), ConsignaPersona.dni.ilike(f"%{qtxt}%")),
+            )
+            .order_by(ConsignaJudicial.fecha_notificacion.desc().nullslast(), ConsignaJudicial.id.desc())
+            .limit(300)
+            .all()
+        )
+    return render_template("oficios_judiciales/manual_reincidencias.html", rows=rows, detalle=detalle, selected=request.args)
 
 
 @bp.route("/manual/nuevo", methods=["GET", "POST"])
@@ -1540,11 +1719,18 @@ def manual_nuevo():
         abort(403)
     juzgados = CatalogoJuzgado.query.filter_by(activo=True).order_by(CatalogoJuzgado.nombre.asc()).all()
     tipos_medida = CatalogoTipoMedida.query.filter_by(activo=True).order_by(CatalogoTipoMedida.nombre.asc()).all()
+    tipos_consigna = CatalogoTipoConsigna.query.filter_by(activo=True).order_by(CatalogoTipoConsigna.nombre.asc()).all()
+    fiscalias = CatalogoFiscalia.query.filter_by(activo=True).order_by(CatalogoFiscalia.nombre.asc()).all()
+    barrios = CatalogoBarrio.query.filter_by(activo=True).order_by(CatalogoBarrio.nombre.asc()).all()
     if request.method == "POST":
         exp = _clean(request.form.get("expediente"))
         caratula = _clean(request.form.get("caratula"))
         tipo_consigna = _clean(request.form.get("tipo_consigna"))
         estado = _clean(request.form.get("estado")) or "activa"
+        fiscalia_id = _to_int_or_none(request.form.get("fiscalia_id"))
+        fiscalia_row = CatalogoFiscalia.query.get(fiscalia_id) if fiscalia_id else None
+        fiscalia = _clean(fiscalia_row.nombre if fiscalia_row else request.form.get("fiscalia_txt"))
+        tel_contacto = _clean(request.form.get("telefono_contacto"))
         juz_id = _to_int_or_none(request.form.get("juzgado_id"))
         tipo_id = _to_int_or_none(request.form.get("tipo_medida_id"))
         juz_row = CatalogoJuzgado.query.get(juz_id) if juz_id else None
@@ -1577,6 +1763,9 @@ def manual_nuevo():
                 caratula=caratula,
                 tipo_medida=tipo_medida,
                 tipo_consigna=tipo_consigna,
+                fiscalia=fiscalia,
+                fiscalia_key=_fiscalia_key(fiscalia),
+                telefono_contacto=tel_contacto,
                 fecha_oficio=_parse_date(_clean(request.form.get("fecha_oficio"))),
                 fecha_notificacion=_parse_date(_clean(request.form.get("fecha_notificacion"))),
                 cantidad_dias=_to_int_or_none(request.form.get("cantidad_dias")),
@@ -1595,6 +1784,9 @@ def manual_nuevo():
             row.caratula = row.caratula or caratula
             row.tipo_medida = row.tipo_medida or tipo_medida
             row.tipo_consigna = row.tipo_consigna or tipo_consigna
+            row.fiscalia = row.fiscalia or fiscalia
+            row.fiscalia_key = row.fiscalia_key or _fiscalia_key(fiscalia)
+            row.telefono_contacto = row.telefono_contacto or tel_contacto
 
         def _add_person_manual(nombre, dni, tipo, notificar):
             nom = _clean(nombre)
@@ -1623,24 +1815,31 @@ def manual_nuevo():
                 )
             )
 
-        def _add_domicilio_manual(direccion, tipo, lat, lng):
+        def _add_domicilio_manual(direccion, tipo, lat, lng, barrio_id):
             d = _clean(direccion)
             if not d:
                 return
             lat_f = _to_float_or_none(lat)
             lng_f = _to_float_or_none(lng)
+            b_id = _to_int_or_none(barrio_id)
+            b_row = CatalogoBarrio.query.get(b_id) if b_id else None
             exists = ConsignaDomicilio.query.filter_by(consigna_id=row.id, tipo=tipo, direccion=d).first()
             if exists:
                 if exists.latitud is None:
                     exists.latitud = lat_f
                 if exists.longitud is None:
                     exists.longitud = lng_f
+                if b_row and not _clean(exists.barrio_nombre):
+                    exists.barrio_codigo = _clean(b_row.codigo)
+                    exists.barrio_nombre = _clean(b_row.nombre)
                 return
             db.session.add(
                 ConsignaDomicilio(
                     consigna_id=row.id,
                     direccion=d,
                     tipo=tipo,
+                    barrio_codigo=_clean(b_row.codigo) if b_row else "",
+                    barrio_nombre=_clean(b_row.nombre) if b_row else "",
                     latitud=lat_f,
                     longitud=lng_f,
                 )
@@ -1653,7 +1852,8 @@ def manual_nuevo():
         p_dom = request.form.getlist("persona_domicilio[]")
         p_lat = request.form.getlist("persona_lat[]")
         p_lng = request.form.getlist("persona_lng[]")
-        total = max(len(p_nombres), len(p_dnis), len(p_tipos), len(p_noti), len(p_dom), len(p_lat), len(p_lng))
+        p_barrio = request.form.getlist("persona_barrio_id[]")
+        total = max(len(p_nombres), len(p_dnis), len(p_tipos), len(p_noti), len(p_dom), len(p_lat), len(p_lng), len(p_barrio))
         for i in range(total):
             nombre = p_nombres[i] if i < len(p_nombres) else ""
             dni = p_dnis[i] if i < len(p_dnis) else ""
@@ -1662,19 +1862,28 @@ def manual_nuevo():
             dom = p_dom[i] if i < len(p_dom) else ""
             lat = p_lat[i] if i < len(p_lat) else ""
             lng = p_lng[i] if i < len(p_lng) else ""
+            barr = p_barrio[i] if i < len(p_barrio) else ""
             _add_person_manual(nombre, dni, tipo, noti)
-            _add_domicilio_manual(dom, tipo, lat, lng)
+            _add_domicilio_manual(dom, tipo, lat, lng, barr)
 
         db.session.commit()
         flash("Consigna manual guardada.", "success")
         return redirect(url_for("oficios_judiciales.detalle", consigna_id=row.id))
-    return render_template("oficios_judiciales/manual_form.html", juzgados=juzgados, tipos_medida=tipos_medida)
+    return render_template(
+        "oficios_judiciales/manual_form.html",
+        juzgados=juzgados,
+        tipos_medida=tipos_medida,
+        tipos_consigna=tipos_consigna,
+        fiscalias=fiscalias,
+        barrios=barrios,
+    )
 
 
 @bp.route("/catalogos", methods=["GET", "POST"])
 def catalogos():
     if not _can_upload():
         abort(403)
+    _ensure_schema()
     action = _clean(request.form.get("catalog_action"))
     if request.method == "POST":
         if action == "add_juzgado":
@@ -1687,11 +1896,88 @@ def catalogos():
             if nombre and not CatalogoTipoMedida.query.filter_by(nombre=nombre).first():
                 db.session.add(CatalogoTipoMedida(nombre=nombre, activo=True))
                 db.session.commit()
+        elif action == "add_tipo_consigna":
+            nombre = _clean(request.form.get("nombre"))
+            if nombre and not CatalogoTipoConsigna.query.filter_by(nombre=nombre).first():
+                db.session.add(CatalogoTipoConsigna(nombre=nombre, activo=True))
+                db.session.commit()
+        elif action == "add_fiscalia":
+            nombre = _clean(request.form.get("nombre"))
+            if nombre and not CatalogoFiscalia.query.filter_by(nombre=nombre).first():
+                db.session.add(CatalogoFiscalia(nombre=nombre, clave=_fiscalia_key(nombre), activo=True))
+                db.session.commit()
+        elif action == "import_barrios_json":
+            try:
+                json_path = os.path.abspath(os.path.join(current_app.root_path, "..", "barrios.json"))
+                if os.path.exists(json_path):
+                    with open(json_path, "r", encoding="utf-8") as f:
+                        payload = json.load(f)
+                    for ft in (payload.get("features") or []):
+                        props = (ft or {}).get("properties") or {}
+                        nombre = _clean(props.get("name"))
+                        if not nombre:
+                            continue
+                        if not CatalogoBarrio.query.filter_by(nombre=nombre).first():
+                            db.session.add(CatalogoBarrio(nombre=nombre, activo=True))
+                    db.session.commit()
+            except Exception:
+                db.session.rollback()
+        elif action == "import_barrios_excel":
+            f = request.files.get("barrios_excel")
+            if f and _clean(f.filename):
+                try:
+                    import pandas as pd  # lazy import
+
+                    df = pd.read_excel(f)
+                    cols = {str(c).strip().lower(): c for c in df.columns}
+                    c_cod = cols.get("barrios")
+                    c_nom = cols.get("barrios_nombre")
+                    c_dep = cols.get("dependencia")
+                    c_dep_nom = cols.get("dependencia_nombre")
+                    if c_nom is not None:
+                        for _, r in df.iterrows():
+                            nom = _clean(r.get(c_nom))
+                            if not nom:
+                                continue
+                            codigo = _clean(r.get(c_cod)) if c_cod is not None else ""
+                            depc = _clean(r.get(c_dep)) if c_dep is not None else ""
+                            depn = _clean(r.get(c_dep_nom)) if c_dep_nom is not None else ""
+                            b = CatalogoBarrio.query.filter_by(nombre=nom).first()
+                            if not b:
+                                db.session.add(
+                                    CatalogoBarrio(
+                                        nombre=nom,
+                                        codigo=codigo or None,
+                                        dependencia_codigo=depc or None,
+                                        dependencia_nombre=depn or None,
+                                        activo=True,
+                                    )
+                                )
+                            else:
+                                if codigo and not _clean(b.codigo):
+                                    b.codigo = codigo
+                                if depc and not _clean(b.dependencia_codigo):
+                                    b.dependencia_codigo = depc
+                                if depn and not _clean(b.dependencia_nombre):
+                                    b.dependencia_nombre = depn
+                        db.session.commit()
+                except Exception:
+                    db.session.rollback()
         flash("Catálogo actualizado.", "success")
         return redirect(url_for("oficios_judiciales.catalogos"))
     juzgados = CatalogoJuzgado.query.order_by(CatalogoJuzgado.nombre.asc()).all()
     tipos_medida = CatalogoTipoMedida.query.order_by(CatalogoTipoMedida.nombre.asc()).all()
-    return render_template("oficios_judiciales/catalogos.html", juzgados=juzgados, tipos_medida=tipos_medida)
+    tipos_consigna = CatalogoTipoConsigna.query.order_by(CatalogoTipoConsigna.nombre.asc()).all()
+    fiscalias = CatalogoFiscalia.query.order_by(CatalogoFiscalia.nombre.asc()).all()
+    barrios = CatalogoBarrio.query.order_by(CatalogoBarrio.nombre.asc()).limit(200).all()
+    return render_template(
+        "oficios_judiciales/catalogos.html",
+        juzgados=juzgados,
+        tipos_medida=tipos_medida,
+        tipos_consigna=tipos_consigna,
+        fiscalias=fiscalias,
+        barrios=barrios,
+    )
 
 
 @bp.route("/listado")

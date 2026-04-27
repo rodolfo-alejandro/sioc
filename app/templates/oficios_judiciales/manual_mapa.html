@@ -1,0 +1,74 @@
+{% extends "layouts/base.html" %}
+{% block title %}Mapa Manual VIF{% endblock %}
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center">
+    <h1><i class="bi bi-geo-alt"></i> Mapa Manual VIF</h1>
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('oficios_judiciales.manual_listado') }}">Volver</a>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="GET" class="row g-2">
+            <div class="col-md-3">
+                <select class="form-select form-select-sm" name="estado">
+                    <option value="activa" {{ 'selected' if selected.get('estado','activa') == 'activa' else '' }}>Solo activas</option>
+                    <option value="finalizada" {{ 'selected' if selected.get('estado') == 'finalizada' else '' }}>Solo finalizadas</option>
+                    <option value="todas" {{ 'selected' if selected.get('estado') == 'todas' else '' }}>Todas</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <select class="form-select form-select-sm" name="tipo_consigna">
+                    <option value="">Tipo de consigna (todas)</option>
+                    {% for tc in tipos_consigna %}
+                    <option value="{{ tc }}" {{ 'selected' if selected.get('tipo_consigna') == tc else '' }}>{{ tc|title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <select class="form-select form-select-sm" name="barrio">
+                    <option value="">Barrio (todos)</option>
+                    {% for b in barrios %}
+                    <option value="{{ b }}" {{ 'selected' if selected.get('barrio') == b else '' }}>{{ b }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2 d-flex gap-2">
+                <button class="btn btn-outline-primary btn-sm" type="submit">Aplicar</button>
+                <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('oficios_judiciales.manual_mapa') }}">Limpiar</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div id="mapa-manual" style="height: 68vh; min-height: 420px;"></div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_scripts %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(function () {
+    var points = {{ points_json|safe }};
+    var map = L.map('mapa-manual').setView([-24.79, -65.41], 11);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap'
+    }).addTo(map);
+    var bounds = [];
+    points.forEach(function (p) {
+        if (!p.lat || !p.lng) return;
+        var txt = '<strong>Expte:</strong> ' + (p.expediente || '-') + '<br>' +
+            '<strong>Consigna:</strong> ' + (p.tipo_consigna || '-') + '<br>' +
+            '<strong>Estado:</strong> ' + (p.estado || '-') + '<br>' +
+            '<strong>Barrio:</strong> ' + (p.barrio || '-') + '<br>' +
+            '<strong>Dirección:</strong> ' + (p.direccion || '-') + '<br>' +
+            '<a href="' + p.detalle_url + '">Ver detalle</a>';
+        L.marker([p.lat, p.lng]).addTo(map).bindPopup(txt);
+        bounds.push([p.lat, p.lng]);
+    });
+    if (bounds.length) map.fitBounds(bounds, { padding: [30, 30] });
+})();
+</script>
+{% endblock %}

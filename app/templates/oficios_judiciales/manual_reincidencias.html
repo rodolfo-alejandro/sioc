@@ -1,0 +1,70 @@
+{% extends "layouts/base.html" %}
+{% block title %}Reincidencias Manual VIF{% endblock %}
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center">
+    <h1><i class="bi bi-search"></i> Reincidencias Manual VIF</h1>
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('oficios_judiciales.manual_listado') }}">Volver</a>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="GET" class="row g-2">
+            <div class="col-md-8">
+                <input class="form-control" name="q" value="{{ selected.get('q','') }}" placeholder="Buscar por DNI o nombre">
+            </div>
+            <div class="col-md-4 d-flex gap-2">
+                <button class="btn btn-outline-primary" type="submit">Buscar</button>
+                <a class="btn btn-outline-secondary" href="{{ url_for('oficios_judiciales.manual_reincidencias') }}">Limpiar</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-5">
+        <div class="card h-100">
+            <div class="card-header"><strong>Coincidencias</strong></div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead><tr><th>Nombre</th><th>DNI</th><th class="text-end">Veces</th></tr></thead>
+                        <tbody>
+                            {% for r in rows %}
+                            <tr><td>{{ r[0] or '—' }}</td><td>{{ r[1] or '—' }}</td><td class="text-end">{{ r[2] }}</td></tr>
+                            {% else %}
+                            <tr><td colspan="3" class="text-center text-muted">Sin coincidencias.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-7">
+        <div class="card h-100">
+            <div class="card-header"><strong>Detalle de consignas</strong></div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead><tr><th>Persona</th><th>Expediente</th><th>Consigna</th><th>Estado</th><th>Inicio</th><th></th></tr></thead>
+                        <tbody>
+                            {% for d in detalle %}
+                            <tr>
+                                <td>{{ d[0] or '—' }}{% if d[1] %}<div class="text-muted">{{ d[1] }}</div>{% endif %}</td>
+                                <td>{{ d[3] or '—' }}</td>
+                                <td>{{ d[4] or '—' }}</td>
+                                <td>{{ d[5] or '—' }}</td>
+                                <td>{{ d[6].strftime('%d/%m/%Y') if d[6] else '—' }}</td>
+                                <td><a class="btn btn-sm btn-outline-primary" href="{{ url_for('oficios_judiciales.detalle', consigna_id=d[2]) }}">Detalle</a></td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="6" class="text-center text-muted">Sin datos.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

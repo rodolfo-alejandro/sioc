@@ -37,12 +37,30 @@
     <div class="col-md-2">
         <label class="form-label">Tipo consigna</label>
         <select class="form-select" name="tipo_consigna">
+            {% for tc in tipos_consigna %}
+            <option value="{{ tc.nombre|lower }}">{{ tc.nombre }}</option>
+            {% endfor %}
+            {% if not tipos_consigna %}
             <option value="fija">Fija</option>
             <option value="ambulatoria">Ambulatoria</option>
             <option value="personalizada">Personalizada</option>
             <option value="indeterminada">Indeterminada</option>
             <option value="mixta">Mixta</option>
+            {% endif %}
         </select>
+    </div>
+    <div class="col-md-3">
+        <label class="form-label">Fiscalía</label>
+        <select class="form-select" name="fiscalia_id">
+            <option value="">Seleccionar...</option>
+            {% for f in fiscalias %}
+            <option value="{{ f.id }}">{{ f.nombre }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-3">
+        <label class="form-label">Fiscalía (texto libre)</label>
+        <input class="form-control" name="fiscalia_txt" placeholder="Si no está en catálogo">
     </div>
     <div class="col-md-2"><label class="form-label">Fecha oficio</label><input class="form-control" type="date" name="fecha_oficio"></div>
     <div class="col-md-2"><label class="form-label">Fecha notificación</label><input class="form-control" type="date" name="fecha_notificacion"></div>
@@ -58,6 +76,7 @@
     <div class="col-md-2"><label class="form-label">Días ambulatoria</label><input class="form-control" name="dias_ambulatoria"></div>
     <div class="col-md-2"><label class="form-label">Días personalizada</label><input class="form-control" name="dias_personalizada"></div>
     <div class="col-md-2"><label class="form-label">Días total</label><input class="form-control" name="cantidad_dias"></div>
+    <div class="col-md-3"><label class="form-label">Teléfono contacto</label><input class="form-control" name="telefono_contacto"></div>
 
     <div class="col-12">
         <div class="card">
@@ -94,6 +113,7 @@
             '<div class="col-md-2"><label class="form-label">Tipo</label><select class="form-select" name="persona_tipo[]"><option value="victima">Víctima</option><option value="denunciado">Acusado</option></select></div>' +
             '<div class="col-md-2"><label class="form-label">¿Notificar?</label><select class="form-select" name="persona_notificar[]"><option value="si">Sí</option><option value="no">No</option></select></div>' +
             '<div class="col-md-3"><label class="form-label">Domicilio</label><input class="form-control" name="persona_domicilio[]"></div>' +
+            '<div class="col-md-3"><label class="form-label">Barrio</label><select class="form-select" name="persona_barrio_id[]"><option value="">Seleccionar...</option>{% for b in barrios %}<option value="{{ b.id }}">{{ b.nombre }}{% if b.codigo %} ({{ b.codigo }}){% endif %}</option>{% endfor %}</select></div>' +
             '<div class="col-md-2"><label class="form-label">Latitud</label><input class="form-control" name="persona_lat[]" placeholder="-24.78"></div>' +
             '<div class="col-md-2"><label class="form-label">Longitud</label><input class="form-control" name="persona_lng[]" placeholder="-65.41"></div>' +
             '<div class="col-md-2 d-flex align-items-end"><button class="btn btn-outline-danger w-100 btn-sm js-del" type="button">Quitar</button></div>' +

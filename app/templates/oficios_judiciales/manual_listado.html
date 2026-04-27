@@ -7,6 +7,9 @@
 
 <div class="d-flex gap-2 mb-3">
     <a class="btn btn-primary btn-sm" href="{{ url_for('oficios_judiciales.manual_nuevo') }}"><i class="bi bi-plus-circle"></i> Nueva carga manual</a>
+    <a class="btn btn-outline-primary btn-sm" href="{{ url_for('oficios_judiciales.manual_dashboard') }}"><i class="bi bi-bar-chart-line"></i> Dashboard</a>
+    <a class="btn btn-outline-primary btn-sm" href="{{ url_for('oficios_judiciales.manual_mapa') }}"><i class="bi bi-geo-alt"></i> Mapa</a>
+    <a class="btn btn-outline-primary btn-sm" href="{{ url_for('oficios_judiciales.manual_reincidencias') }}"><i class="bi bi-search"></i> Reincidencias</a>
     <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('oficios_judiciales.catalogos') }}"><i class="bi bi-list-ul"></i> Catálogos</a>
 </div>
 
@@ -22,6 +25,14 @@
             </div>
             <div class="col-md-4">
                 <input class="form-control form-control-sm" name="q" placeholder="Expediente / carátula" value="{{ selected.get('q','') }}">
+            </div>
+            <div class="col-md-3">
+                <select class="form-select form-select-sm" name="tipo_consigna">
+                    <option value="">Tipo de consigna (todas)</option>
+                    {% for tc in tipos_consigna %}
+                    <option value="{{ tc }}" {{ 'selected' if selected.get('tipo_consigna') == tc else '' }}>{{ tc|title }}</option>
+                    {% endfor %}
+                </select>
             </div>
             <div class="col-md-3 d-flex gap-2">
                 <button class="btn btn-outline-primary btn-sm" type="submit">Aplicar</button>

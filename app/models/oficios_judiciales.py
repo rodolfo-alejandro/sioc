@@ -20,6 +20,9 @@ class ConsignaJudicial(db.Model):
     caratula = db.Column(db.Text, nullable=True)
     tipo_medida = db.Column(db.String(80), nullable=True, index=True)
     tipo_consigna = db.Column(db.String(30), nullable=True, index=True)  # fija | ambulatoria | personalizada | indeterminada
+    fiscalia = db.Column(db.String(255), nullable=True, index=True)
+    fiscalia_key = db.Column(db.String(255), nullable=True, index=True)
+    telefono_contacto = db.Column(db.String(80), nullable=True, index=True)
     fecha_oficio = db.Column(db.Date, nullable=True, index=True)
     fecha_notificacion = db.Column(db.Date, nullable=True, index=True)  # inicio real
     cantidad_dias = db.Column(db.Integer, nullable=True)
@@ -82,6 +85,8 @@ class ConsignaDomicilio(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     consigna_id = db.Column(db.Integer, db.ForeignKey("oficios_consignas.id"), nullable=False, index=True)
     direccion = db.Column(db.Text, nullable=False)
+    barrio_codigo = db.Column(db.String(40), nullable=True, index=True)
+    barrio_nombre = db.Column(db.String(255), nullable=True, index=True)
     latitud = db.Column(db.Float, nullable=True, index=True)
     longitud = db.Column(db.Float, nullable=True, index=True)
     tipo = db.Column(db.String(30), nullable=False, index=True)  # victima | denunciado
@@ -109,5 +114,33 @@ class CatalogoTipoMedida(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     nombre = db.Column(db.String(120), nullable=False, unique=True, index=True)
+    activo = db.Column(db.Boolean, nullable=False, default=True, index=True)
+
+
+class CatalogoTipoConsigna(db.Model):
+    __tablename__ = "oficios_catalogo_tipos_consigna"
+
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(60), nullable=False, unique=True, index=True)
+    activo = db.Column(db.Boolean, nullable=False, default=True, index=True)
+
+
+class CatalogoFiscalia(db.Model):
+    __tablename__ = "oficios_catalogo_fiscalias"
+
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(255), nullable=False, unique=True, index=True)
+    clave = db.Column(db.String(255), nullable=True, index=True)
+    activo = db.Column(db.Boolean, nullable=False, default=True, index=True)
+
+
+class CatalogoBarrio(db.Model):
+    __tablename__ = "oficios_catalogo_barrios"
+
+    id = db.Column(db.Integer, primary_key=True)
+    codigo = db.Column(db.String(40), nullable=True, index=True)
+    nombre = db.Column(db.String(255), nullable=False, unique=True, index=True)
+    dependencia_codigo = db.Column(db.String(40), nullable=True, index=True)
+    dependencia_nombre = db.Column(db.String(255), nullable=True, index=True)
     activo = db.Column(db.Boolean, nullable=False, default=True, index=True)
 
