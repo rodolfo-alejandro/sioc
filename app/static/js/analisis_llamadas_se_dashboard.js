@@ -2,6 +2,28 @@
   "use strict";
 
   function byId(id) { return document.getElementById(id); }
+  function monthLabelEs(iso, mesRaw) {
+    if (mesRaw && String(mesRaw).trim()) return String(mesRaw).trim();
+    if (!iso) return "Sin fecha";
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return "Sin fecha";
+    var m = d.toLocaleDateString("es-AR", { month: "long" });
+    return m.charAt(0).toUpperCase() + m.slice(1);
+  }
+  function dayLabelEs(iso, diaRaw) {
+    if (diaRaw && String(diaRaw).trim()) return String(diaRaw).trim();
+    if (!iso) return "Sin fecha";
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return "Sin fecha";
+    var x = d.toLocaleDateString("es-AR", { weekday: "long" });
+    return x.charAt(0).toUpperCase() + x.slice(1);
+  }
+  function hourLabel(iso) {
+    if (!iso) return "Sin hora";
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return "Sin hora";
+    return String(d.getHours()).padStart(2, "0") + ":00";
+  }
   function parseRows() {
     try { return JSON.parse((byId("als-dashboard-rows") || {}).value || "[]"); }
     catch (e) { return []; }
@@ -241,7 +263,7 @@
   function init() {
     var baseRows = parseRows();
     if (!baseRows.length) return;
-    var state = { alerta: "", barrio: "", dep: "", juris: "", dia: "", diario: "" };
+    var state = { mes: "", dia: "", hora: "", alerta: "", barrio: "", localidad: "", dep: "", juris: "", semana: "", diario: "", coords: "", tipologia: "" };
     var mode = "cantidad";
 
     var lastRows = [];
@@ -249,27 +271,40 @@
       return baseRows.map(function (r) {
         return {
           llamada_fecha_raw: r.llamada_fecha || "",
+          mes: monthLabelEs(r.llamada_fecha, r.llamada_mes),
           alerta: r.llamada_alerta_desc || "Sin dato",
           barrio: r.llamada_barrio_nombre || "Sin dato",
           dep: r.llamada_dep_nombre || "Sin dato",
           juris: r.llamada_jurisdiccion || "Sin dato",
           localidad: r.llamada_local_nombre || "Sin dato",
           detalle: r.llamada_detalle || "",
-          dia: r.llamada_dia_semana || "Sin dato",
+          dia: dayLabelEs(r.llamada_fecha, r.llamada_dia_semana),
+          hora: hourLabel(r.llamada_fecha),
+          semana: r.llamada_semana || "Sin semana",
           diario: (r.llamada_fecha || "").slice(0, 10) || "Sin fecha",
           con_coord: (typeof r.llamada_coordx === "number" && typeof r.llamada_coordy === "number"),
+          coords: (typeof r.llamada_coordx === "number" && typeof r.llamada_coordy === "number") ? "Con coordenadas" : "Sin coordenadas",
+          tipologia: (String(r.llamada_alerta_desc || "").toLowerCase().indexOf("venta") >= 0)
+            ? "Venta"
+            : ((String(r.llamada_alerta_desc || "").toLowerCase().indexOf("consumo") >= 0) ? "Consumo" : "Otra"),
         };
       });
     }
     var rowsN = normalizedRows();
     function rowsFiltered() {
       return rowsN.filter(function (r) {
-        return (!state.alerta || r.alerta === state.alerta)
+        return (!state.mes || r.mes === state.mes)
+          && (!state.dia || r.dia === state.dia)
+          && (!state.hora || r.hora === state.hora)
+          && (!state.alerta || r.alerta === state.alerta)
           && (!state.barrio || r.barrio === state.barrio)
+          && (!state.localidad || r.localidad === state.localidad)
           && (!state.dep || r.dep === state.dep)
           && (!state.juris || r.juris === state.juris)
-          && (!state.dia || r.dia === state.dia)
-          && (!state.diario || r.diario === state.diario);
+          && (!state.semana || r.semana === state.semana)
+          && (!state.diario || r.diario === state.diario)
+          && (!state.coords || r.coords === state.coords)
+          && (!state.tipologia || r.tipologia === state.tipologia);
       });
     }
     function toggle(k, v) { state[k] = state[k] === v ? "" : v; render(); }
@@ -281,12 +316,18 @@
       setText("als-kpi-venta", rows.filter(function (r) { return String(r.alerta).toLowerCase().indexOf("venta") >= 0; }).length);
       setText("als-kpi-consumo", rows.filter(function (r) { return String(r.alerta).toLowerCase().indexOf("consumo") >= 0; }).length);
 
-      pie("als-chart-alertas", byCount(rows, function (r) { return r.alerta; }), function (x) { toggle("alerta", x); }, mode);
-      bar("als-chart-barrios", byCount(rows, function (r) { return r.barrio; }, 20), "#6f42c1", function (x) { toggle("barrio", x); }, mode);
-      bar("als-chart-deps", byCount(rows, function (r) { return r.dep; }, 20), "#198754", function (x) { toggle("dep", x); }, mode);
-      bar("als-chart-juris", byCount(rows, function (r) { return r.juris; }, 20), "#0d6efd", function (x) { toggle("juris", x); }, mode);
-      line("als-chart-diario", byCount(rows, function (r) { return r.diario; }), function (x) { toggle("diario", x); }, mode);
+      bar("als-chart-mes", byCount(rows, function (r) { return r.mes; }), "#198754", function (x) { toggle("mes", x); }, mode);
       bar("als-chart-dia", byCount(rows, function (r) { return r.dia; }), "#fd7e14", function (x) { toggle("dia", x); }, mode);
+      bar("als-chart-hora", byCount(rows, function (r) { return r.hora; }), "#6f42c1", function (x) { toggle("hora", x); }, mode);
+      bar("als-chart-alertas", byCount(rows, function (r) { return r.alerta; }), "#0d6efd", function (x) { toggle("alerta", x); }, mode);
+      bar("als-chart-barrios", byCount(rows, function (r) { return r.barrio; }, 30), "#7952b3", function (x) { toggle("barrio", x); }, mode);
+      bar("als-chart-localidades", byCount(rows, function (r) { return r.localidad; }, 25), "#20c997", function (x) { toggle("localidad", x); }, mode);
+      bar("als-chart-juris", byCount(rows, function (r) { return r.juris; }, 25), "#0dcaf0", function (x) { toggle("juris", x); }, mode);
+      bar("als-chart-deps", byCount(rows, function (r) { return r.dep; }, 25), "#198754", function (x) { toggle("dep", x); }, mode);
+      bar("als-chart-semana", byCount(rows, function (r) { return r.semana; }), "#dc3545", function (x) { toggle("semana", x); }, mode);
+      line("als-chart-diario", byCount(rows, function (r) { return r.diario; }), function (x) { toggle("diario", x); }, mode);
+      pie("als-chart-coords", byCount(rows, function (r) { return r.coords; }), function (x) { toggle("coords", x); }, mode);
+      pie("als-chart-tipologia", byCount(rows, function (r) { return r.tipologia; }), function (x) { toggle("tipologia", x); }, mode);
       renderActiveInfo(state);
       var rep = byId("als-ai-report");
       if (rep) rep.innerHTML = reportHtml(rows, state);

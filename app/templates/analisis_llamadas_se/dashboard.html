@@ -46,8 +46,7 @@
   <div class="col-md-3"><div class="card als-kpi"><div class="card-body"><div>Alerta consumo</div><div class="value" id="als-kpi-consumo">{{ kpis.consumo|number_format }}</div></div></div></div>
 </div>
 
-<div class="row g-3">
-  <ul class="nav nav-tabs mb-3" id="als-dashboard-tabs" role="tablist">
+<ul class="nav nav-tabs mb-3" id="als-dashboard-tabs" role="tablist">
     <li class="nav-item" role="presentation">
       <button class="nav-link active" id="als-tab-graficos-tab" data-bs-toggle="tab" data-bs-target="#als-tab-graficos" type="button" role="tab">Gráficos</button>
     </li>
@@ -56,17 +55,25 @@
     </li>
   </ul>
 
-  <div class="tab-content" id="als-dashboard-tabs-content">
-    <div class="tab-pane fade show active" id="als-tab-graficos" role="tabpanel">
-      <div class="row g-3">
-        <div class="col-lg-6"><div class="card"><div class="card-header">Tipos de alerta</div><div class="card-body"><div id="als-chart-alertas" style="height:320px;"></div></div></div></div>
-        <div class="col-lg-6"><div class="card"><div class="card-header">Top barrios</div><div class="card-body"><div id="als-chart-barrios" style="height:320px;"></div></div></div></div>
-        <div class="col-lg-6"><div class="card"><div class="card-header">Top dependencias</div><div class="card-body"><div id="als-chart-deps" style="height:320px;"></div></div></div></div>
-        <div class="col-lg-6"><div class="card"><div class="card-header">Top jurisdicciones</div><div class="card-body"><div id="als-chart-juris" style="height:320px;"></div></div></div></div>
-        <div class="col-lg-6"><div class="card"><div class="card-header">Evolución diaria</div><div class="card-body"><div id="als-chart-diario" style="height:320px;"></div></div></div></div>
-        <div class="col-lg-6"><div class="card"><div class="card-header">Día de semana</div><div class="card-body"><div id="als-chart-dia" style="height:320px;"></div></div></div></div>
-      </div>
+<div class="tab-content" id="als-dashboard-tabs-content">
+  <div class="tab-pane fade show active" id="als-tab-graficos" role="tabpanel">
+    <div class="row g-3">
+      <div class="col-12"><div class="card"><div class="card-header">Mes</div><div class="card-body"><div id="als-chart-mes" style="height:300px;"></div></div></div></div>
+      <div class="col-12"><div class="card"><div class="card-header">Día de la semana</div><div class="card-body"><div id="als-chart-dia" style="height:300px;"></div></div></div></div>
+      <div class="col-12"><div class="card"><div class="card-header">Hora</div><div class="card-body"><div id="als-chart-hora" style="height:300px;"></div></div></div></div>
+      <div class="col-12"><div class="card"><div class="card-header">Tipo de alerta</div><div class="card-body"><div id="als-chart-alertas" style="height:320px;"></div></div></div></div>
+      <div class="col-12"><div class="card"><div class="card-header">Barrios</div><div class="card-body"><div id="als-chart-barrios" style="height:340px;"></div></div></div></div>
+      <div class="col-12"><div class="card"><div class="card-header">Localidades</div><div class="card-body"><div id="als-chart-localidades" style="height:320px;"></div></div></div></div>
+      <div class="col-12"><div class="card"><div class="card-header">Jurisdicciones</div><div class="card-body"><div id="als-chart-juris" style="height:320px;"></div></div></div></div>
+      <div class="col-12"><div class="card"><div class="card-header">Dependencias</div><div class="card-body"><div id="als-chart-deps" style="height:320px;"></div></div></div></div>
+      <div class="col-12"><div class="card"><div class="card-header">Semana</div><div class="card-body"><div id="als-chart-semana" style="height:300px;"></div></div></div></div>
+      <div class="col-12"><div class="card"><div class="card-header">Evolución diaria</div><div class="card-body"><div id="als-chart-diario" style="height:320px;"></div></div></div></div>
+      <div class="col-12"><div class="card"><div class="card-header">Tortas (con/sin)</div><div class="card-body"><div class="row g-3">
+        <div class="col-md-6"><div id="als-chart-coords" style="height:300px;"></div></div>
+        <div class="col-md-6"><div id="als-chart-tipologia" style="height:300px;"></div></div>
+      </div></div></div></div>
     </div>
+  </div>
     <div class="tab-pane fade" id="als-tab-analisis" role="tabpanel">
       <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -81,7 +88,6 @@
           <div id="als-ai-report" class="als-pre"></div>
         </div>
       </div>
-    </div>
   </div>
 </div>
 
