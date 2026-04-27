@@ -81,8 +81,8 @@
     </div>
 
     <div class="col-md-6"><label class="form-label">Carátula</label><input class="form-control" id="f-caratula" value="{{ data.caratula }}"></div>
-    <div class="col-md-3"><label class="form-label">Fecha oficio</label><input class="form-control" id="f-fecha_oficio" value="{{ data.fecha_oficio }}"></div>
-    <div class="col-md-3"><label class="form-label">Fecha notificación (inicio)</label><input class="form-control" id="f-fecha_notificacion" value="{{ data.fecha_notificacion }}"></div>
+    <div class="col-md-3"><label class="form-label">Fecha oficio</label><input type="date" class="form-control" id="f-fecha_oficio" value="{{ data.fecha_oficio }}"></div>
+    <div class="col-md-3"><label class="form-label">Fecha notificación (inicio)</label><input type="date" class="form-control" id="f-fecha_notificacion" value="{{ data.fecha_notificacion }}"></div>
 
     <div class="col-12">
         <div class="card">
@@ -117,9 +117,12 @@
         </div>
     </div>
 
-    <div class="col-md-4"><label class="form-label">Distancia restricción</label><input class="form-control" id="f-distancia_restriccion" value="{{ data.distancia_restriccion }}"></div>
-    <div class="col-md-4"><label class="form-label">Cantidad días</label><input class="form-control" id="f-cantidad_dias" value="{{ data.cantidad_dias }}"></div>
-    <div class="col-md-4"><label class="form-label">Turnos</label><input class="form-control" id="f-turnos" value="{{ data.turnos }}"></div>
+    <div class="col-md-3"><label class="form-label">Distancia restricción</label><input class="form-control" id="f-distancia_restriccion" value="{{ data.distancia_restriccion }}"></div>
+    <div class="col-md-3"><label class="form-label">Días (general)</label><input class="form-control" id="f-cantidad_dias" value="{{ data.cantidad_dias }}"></div>
+    <div class="col-md-3"><label class="form-label">Días consigna fija</label><input class="form-control" id="f-dias_fija" value="{{ data.dias_fija or '' }}"></div>
+    <div class="col-md-3"><label class="form-label">Días consigna ambulatoria</label><input class="form-control" id="f-dias_ambulatoria" value="{{ data.dias_ambulatoria or '' }}"></div>
+    <div class="col-md-3"><label class="form-label">Días consigna personalizada</label><input class="form-control" id="f-dias_personalizada" value="{{ data.dias_personalizada or '' }}"></div>
+    <div class="col-md-3"><label class="form-label">Turnos</label><input class="form-control" id="f-turnos" value="{{ data.turnos }}"></div>
 
     <div class="col-md-12"><label class="form-label">Observaciones</label><textarea class="form-control" rows="2" id="f-observaciones">{{ data.observaciones }}</textarea></div>
     <div class="col-md-12"><label class="form-label">Medidas detalle (una por línea)</label><textarea class="form-control" rows="4" id="f-medidas_detalle">{{ (data.medidas_detalle or [])|join('\n') }}</textarea></div>
@@ -140,6 +143,29 @@
     var form = document.querySelector('form');
     var target = document.getElementById('preview-json');
     if (!form || !target) return;
+    function syncDiasPorTipo() {
+        var tc = document.getElementById('f-tipo_consigna');
+        var general = document.getElementById('f-cantidad_dias');
+        if (!tc || !general) return;
+        var map = {
+            fija: document.getElementById('f-dias_fija'),
+            ambulatoria: document.getElementById('f-dias_ambulatoria'),
+            personalizada: document.getElementById('f-dias_personalizada')
+        };
+        var src = map[tc.value];
+        if (src && String(src.value || '').trim()) {
+            general.value = src.value;
+        }
+    }
+    var tipoConsigna = document.getElementById('f-tipo_consigna');
+    if (tipoConsigna) {
+        tipoConsigna.addEventListener('change', syncDiasPorTipo);
+    }
+    ['f-dias_fija', 'f-dias_ambulatoria', 'f-dias_personalizada'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.addEventListener('change', syncDiasPorTipo);
+    });
+    syncDiasPorTipo();
     form.addEventListener('submit', function () {
         function v(id) { var el = document.getElementById(id); return el ? el.value : ''; }
         var payload = {
@@ -161,6 +187,9 @@
             tercero_domicilio: v('f-tercero_domicilio'),
             distancia_restriccion: v('f-distancia_restriccion'),
             cantidad_dias: v('f-cantidad_dias'),
+            dias_fija: v('f-dias_fija'),
+            dias_ambulatoria: v('f-dias_ambulatoria'),
+            dias_personalizada: v('f-dias_personalizada'),
             turnos: v('f-turnos'),
             observaciones: v('f-observaciones'),
             medidas_detalle: v('f-medidas_detalle').split('\n').map(function (x) { return x.trim(); }).filter(Boolean),

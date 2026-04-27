@@ -19,6 +19,7 @@
             <div><strong>Fecha oficio:</strong> {{ row.fecha_oficio|localtime('%d/%m/%Y') if row.fecha_oficio else '—' }}</div>
             <div><strong>Fecha notificación (inicio):</strong> {{ row.fecha_notificacion|localtime('%d/%m/%Y') if row.fecha_notificacion else '—' }}</div>
             <div><strong>Días:</strong> {{ row.cantidad_dias or '—' }}</div>
+            <div><strong>Días fija/ambulatoria/personalizada:</strong> {{ row.dias_fija or '—' }} / {{ row.dias_ambulatoria or '—' }} / {{ row.dias_personalizada or '—' }}</div>
             <div><strong>Vencimiento:</strong>
                 {% if venc.fecha_vencimiento %}
                     {{ venc.fecha_vencimiento.strftime('%d/%m/%Y') }} ({{ venc.label }})

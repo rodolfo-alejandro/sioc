@@ -97,6 +97,15 @@ def _ensure_schema():
     if "tipo_consigna" not in cols:
         db.session.execute(text("ALTER TABLE oficios_consignas ADD COLUMN tipo_consigna VARCHAR(30) NULL"))
         db.session.commit()
+    if "dias_fija" not in cols:
+        db.session.execute(text("ALTER TABLE oficios_consignas ADD COLUMN dias_fija INT NULL"))
+        db.session.commit()
+    if "dias_ambulatoria" not in cols:
+        db.session.execute(text("ALTER TABLE oficios_consignas ADD COLUMN dias_ambulatoria INT NULL"))
+        db.session.commit()
+    if "dias_personalizada" not in cols:
+        db.session.execute(text("ALTER TABLE oficios_consignas ADD COLUMN dias_personalizada INT NULL"))
+        db.session.commit()
     _schema_checked = True
 
 
@@ -314,8 +323,17 @@ def _pick_tipo_medida(text: str) -> str:
     ]
     for k, v in checks:
         if k in t:
-            return v
-    return ""
+            # no return temprano para permitir medidas combinadas
+            pass
+    found = []
+    for k, v in checks:
+        if k in t and v not in found:
+            found.append(v)
+    if not found:
+        return ""
+    if len(found) == 1:
+        return found[0]
+    return " + ".join(found[:4])
 
 
 def _pick_tipo_consigna(text: str) -> str:
@@ -342,6 +360,24 @@ def _normalize_dni(v: str) -> str:
     if len(out) == 8:
         return f"{out[:2]}.{out[2:5]}.{out[5:]}"
     return out
+
+
+def _to_int_or_none(v):
+    s = _clean(v)
+    if not s:
+        return None
+    nums = re.findall(r"\d+", s)
+    if not nums:
+        return None
+    try:
+        return int(nums[0])
+    except Exception:
+        return None
+
+
+def _to_input_date(v: str) -> str:
+    d = _parse_date(_clean(v))
+    return d.strftime("%Y-%m-%d") if d else ""
 
 
 def _extract_dni_by_context(full: str, person_name: str = "") -> str:
@@ -438,6 +474,32 @@ def _extract_medidas_detalle(full: str) -> list[str]:
     return clean
 
 
+def _extract_dias_por_consigna(full: str) -> dict:
+    txt = full or ""
+    out = {"fija": None, "ambulatoria": None, "personalizada": None}
+    pats = {
+        "fija": [
+            r"CONSIGNA\s+FIJA[^.\n]{0,120}?(\d{1,3})\s*d[ií]as",
+            r"(\d{1,3})\s*d[ií]as[^.\n]{0,120}?CONSIGNA\s+FIJA",
+        ],
+        "ambulatoria": [
+            r"CONSIGNA\s+AMBULATORIA[^.\n]{0,120}?(\d{1,3})\s*d[ií]as",
+            r"(\d{1,3})\s*d[ií]as[^.\n]{0,120}?CONSIGNA\s+AMBULATORIA",
+        ],
+        "personalizada": [
+            r"CONSIGNA\s+PERSONALIZADA[^.\n]{0,120}?(\d{1,3})\s*d[ií]as",
+            r"(\d{1,3})\s*d[ií]as[^.\n]{0,120}?CONSIGNA\s+PERSONALIZADA",
+        ],
+    }
+    for k, ls in pats.items():
+        for pat in ls:
+            m = re.search(pat, txt, flags=re.IGNORECASE)
+            if m:
+                out[k] = _to_int_or_none(m.group(1))
+                break
+    return out
+
+
 def _parse_fields(text: str) -> dict:
     full = text or ""
     expediente = _first_group(r"(EXP[-.\s]*\d+[\/\d\-]*)", full)
@@ -463,6 +525,7 @@ def _parse_fields(text: str) -> dict:
     fecha_oficio, fecha_notif = _extract_date_by_context(full)
 
     medidas = _extract_medidas_detalle(full)
+    dias_tipo = _extract_dias_por_consigna(full)
 
     return {
         "juzgado": _smart_cut(juzgado, 180),
@@ -476,6 +539,9 @@ def _parse_fields(text: str) -> dict:
         "tipo_consigna": _pick_tipo_consigna(full),
         "distancia_restriccion": _smart_cut(dist, 40),
         "cantidad_dias": _smart_cut(dias, 12),
+        "dias_fija": dias_tipo["fija"] or "",
+        "dias_ambulatoria": dias_tipo["ambulatoria"] or "",
+        "dias_personalizada": dias_tipo["personalizada"] or "",
         "turnos": _smart_cut(turnos, 80),
         "dni_denunciado": dni_denunciado,
         "dni_victima": dni_victima,
@@ -574,7 +640,10 @@ def cargar():
                 tipo_consigna=_clean(payload.get("tipo_consigna")),
                 fecha_oficio=_parse_date(_clean(payload.get("fecha_oficio"))),
                 fecha_notificacion=_parse_date(_clean(payload.get("fecha_notificacion"))),
-                cantidad_dias=int(payload.get("cantidad_dias") or 0) if str(payload.get("cantidad_dias") or "").isdigit() else None,
+                cantidad_dias=_to_int_or_none(payload.get("cantidad_dias")),
+                dias_fija=_to_int_or_none(payload.get("dias_fija")),
+                dias_ambulatoria=_to_int_or_none(payload.get("dias_ambulatoria")),
+                dias_personalizada=_to_int_or_none(payload.get("dias_personalizada")),
                 distancia=_clean(payload.get("distancia_restriccion")),
                 turnos=_clean(payload.get("turnos")),
                 estado=_clean(payload.get("estado")) or "activa",
@@ -755,6 +824,8 @@ def cargar():
         merged["qr_url"] = qr_url
         merged["archivo_origen"] = archivo_origen
         merged["estado"] = "activa"
+        merged["fecha_oficio"] = _to_input_date(merged.get("fecha_oficio"))
+        merged["fecha_notificacion"] = _to_input_date(merged.get("fecha_notificacion"))
         merged["archivos_procesados"] = processed_files
         merged["advertencias"] = warnings
         merged["campos_detectados"] = sorted(detected_fields_set)
@@ -863,7 +934,7 @@ def export_csv():
     out = io.StringIO()
     import csv
     w = csv.writer(out)
-    w.writerow(["id", "expediente", "juzgado", "tipo_medida", "tipo_consigna", "fecha_notificacion", "cantidad_dias", "estado", "caratula"])
+    w.writerow(["id", "expediente", "juzgado", "tipo_medida", "tipo_consigna", "fecha_notificacion", "cantidad_dias", "dias_fija", "dias_ambulatoria", "dias_personalizada", "estado", "caratula"])
     for r in q.yield_per(300):
         w.writerow(
             [
@@ -874,6 +945,9 @@ def export_csv():
                 r.tipo_consigna or "",
                 r.fecha_notificacion.isoformat() if r.fecha_notificacion else "",
                 r.cantidad_dias or "",
+                r.dias_fija or "",
+                r.dias_ambulatoria or "",
+                r.dias_personalizada or "",
                 r.estado or "",
                 r.caratula or "",
             ]
@@ -900,6 +974,9 @@ def export_xlsx():
                 "tipo_consigna": r.tipo_consigna,
                 "fecha_notificacion": r.fecha_notificacion,
                 "cantidad_dias": r.cantidad_dias,
+                "dias_fija": r.dias_fija,
+                "dias_ambulatoria": r.dias_ambulatoria,
+                "dias_personalizada": r.dias_personalizada,
                 "estado": r.estado,
                 "caratula": r.caratula,
             }
