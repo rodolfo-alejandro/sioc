@@ -95,10 +95,9 @@
                 <div class="col-md-1">
                     <label class="form-label">¿Notificar?</label>
                     <select class="form-select" id="f-acusado_notificar">
-                        {% set an = (data.acusado_notificar or 'indeterminada') %}
+                        {% set an = (data.acusado_notificar or 'si') %}
                         <option value="si" {{ 'selected' if an == 'si' else '' }}>Sí</option>
                         <option value="no" {{ 'selected' if an == 'no' else '' }}>No</option>
-                        <option value="indeterminada" {{ 'selected' if an == 'indeterminada' else '' }}>Ind.</option>
                     </select>
                 </div>
             </div>
@@ -115,10 +114,9 @@
                 <div class="col-md-1">
                     <label class="form-label">¿Notificar?</label>
                     <select class="form-select" id="f-victima_notificar">
-                        {% set vn = (data.victima_notificar or 'indeterminada') %}
+                        {% set vn = (data.victima_notificar or 'no') %}
                         <option value="si" {{ 'selected' if vn == 'si' else '' }}>Sí</option>
                         <option value="no" {{ 'selected' if vn == 'no' else '' }}>No</option>
-                        <option value="indeterminada" {{ 'selected' if vn == 'indeterminada' else '' }}>Ind.</option>
                     </select>
                 </div>
                 <div class="col-md-5"><label class="form-label">Víctima 2 (opcional)</label><input class="form-control" id="f-victima_2" value="{{ data.victima_2 or '' }}"></div>
@@ -127,10 +125,9 @@
                 <div class="col-md-1">
                     <label class="form-label">¿Notificar?</label>
                     <select class="form-select" id="f-victima_2_notificar">
-                        {% set vn2 = (data.victima_2_notificar or 'indeterminada') %}
+                        {% set vn2 = (data.victima_2_notificar or 'no') %}
                         <option value="si" {{ 'selected' if vn2 == 'si' else '' }}>Sí</option>
                         <option value="no" {{ 'selected' if vn2 == 'no' else '' }}>No</option>
-                        <option value="indeterminada" {{ 'selected' if vn2 == 'indeterminada' else '' }}>Ind.</option>
                     </select>
                 </div>
                 <div class="col-md-12">

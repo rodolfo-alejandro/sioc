@@ -391,6 +391,25 @@ def _to_input_date(v: str) -> str:
     return d.strftime("%Y-%m-%d") if d else ""
 
 
+def _normalize_notificar(v: str, default: str = "no") -> str:
+    s = _clean(v).lower()
+    if s not in ("si", "no"):
+        return default
+    return s
+
+
+def _expediente_key(v: str) -> str:
+    """
+    Normaliza expediente para comparación robusta entre OCRs ruidosos.
+    """
+    s = _clean(v).lower()
+    if not s:
+        return ""
+    s = re.sub(r"\bexp(?:ediente|te)?\.?\b", "", s, flags=re.IGNORECASE)
+    s = re.sub(r"[^a-z0-9]", "", s)
+    return s
+
+
 def _extract_dni_by_context(full: str, person_name: str = "") -> str:
     txt = full or ""
     if person_name:
@@ -477,8 +496,10 @@ def _extract_victimas_from_caratula(caratula: str, acusado: str) -> list[str]:
     uniq = []
     acusado_l = _clean(acusado).lower()
     for p in parts:
-        pp = _smart_cut(p, 140)
+        pp = _clean_person_name(_smart_cut(p, 140))
         if not pp:
+            continue
+        if not _is_probable_person_name(pp):
             continue
         if acusado_l and _clean(pp).lower() == acusado_l:
             continue
@@ -493,8 +514,37 @@ def _clean_person_name(name: str) -> str:
         return ""
     s = re.sub(r"^\d+\/\d+\s*-\s*", "", s).strip()
     s = re.sub(r"^Expte\.?\s*N[°º]?\s*[^-]+-\s*", "", s, flags=re.IGNORECASE).strip()
+    s = re.sub(r"\bPOR\s+VIOLENCIA\s+FAMILIAR\b.*$", "", s, flags=re.IGNORECASE).strip()
+    s = re.sub(r"\bCONTRA\b.*$", "", s, flags=re.IGNORECASE).strip()
+    s = re.sub(r"\d+\/\d+", "", s).strip()
     s = re.sub(r"\s+", " ", s).strip(" -,;:")
     return s
+
+
+def _is_probable_person_name(name: str) -> bool:
+    n = _clean_person_name(name)
+    if not n:
+        return False
+    low = n.lower()
+    blacklist = (
+        "los impulsos",
+        "disminuir",
+        "violencia familiar",
+        "denunciante",
+        "victima",
+        "juzgado",
+        "resolucion",
+        "notificacion",
+        "domicilio",
+    )
+    if any(b in low for b in blacklist):
+        return False
+    toks = [t for t in re.split(r"\s+", n) if t]
+    if len(toks) < 2:
+        return False
+    if any(re.search(r"\d", t) for t in toks):
+        return False
+    return True
 
 
 def _extract_dni_strict_for_name(full: str, person_name: str) -> str:
@@ -519,19 +569,20 @@ def _extract_victimas_from_text(full: str, acusado: str) -> list[str]:
     out = []
     # Patrones de víctimas en frases de prohibición/acercamiento.
     pats = [
-        r"contra\s+([A-ZÁÉÍÓÚÑ ,;]{8,160})\s*,\s*debiendo",
-        r"en contra de\s+([A-ZÁÉÍÓÚÑ ,;]{8,160})",
-        r"a la denunciante\s+([A-ZÁÉÍÓÚÑ ,;]{8,160})",
-        r"de\s+([A-ZÁÉÍÓÚÑ ,;]{8,160})\s+y\s+([A-ZÁÉÍÓÚÑ ,;]{8,160})",
+        r"EN\s+CONTRA\s+DE\s+([A-ZÁÉÍÓÚÑ ,;]{8,180})",
+        r"CONTRA\s+([A-ZÁÉÍÓÚÑ ,;]{8,180})\s*,\s*DEBIENDO",
+        r"A\s+LA\s+DENUNCIANTE\s+([A-ZÁÉÍÓÚÑ ,;]{8,180})",
     ]
     for pat in pats:
-        for m in re.finditer(pat, txt, flags=re.IGNORECASE):
+        for m in re.finditer(pat, txt, flags=re.MULTILINE):
             groups = [g for g in m.groups() if g]
             for gg in groups:
                 block = _normalize_spaces(gg)
                 for p in re.split(r";|\s+Y\s+", block, flags=re.IGNORECASE):
                     pp = _clean_person_name(_smart_cut(p.strip(" -,:"), 140))
                     if not pp:
+                        continue
+                    if not _is_probable_person_name(pp):
                         continue
                     if acusado_l and _clean(pp).lower() == acusado_l:
                         continue
@@ -776,8 +827,8 @@ def _parse_fields(text: str) -> dict:
         "dias_ambulatoria": dias_tipo["ambulatoria"] or "",
         "dias_personalizada": dias_tipo["personalizada"] or "",
         "turnos": _smart_cut(turnos, 80),
-        "acusado_notificar": "indeterminada",
-        "victima_notificar": "indeterminada",
+        "acusado_notificar": "si",
+        "victima_notificar": "no",
         "dni_denunciado": dni_denunciado,
         "dni_victima": dni_victima,
         "dni_victima_2": dni_victima_2,
@@ -880,90 +931,144 @@ def cargar():
                 flash("No se pudo interpretar la previsualización.", "danger")
                 return redirect(url_for("oficios_judiciales.cargar"))
 
-            row = ConsignaJudicial(
-                unidad_id=current_user.unidad_id,
-                creado_por=current_user.id,
-                expediente=_clean(payload.get("expediente")),
-                juzgado=_clean(payload.get("juzgado")),
-                caratula=_clean(payload.get("caratula")),
-                tipo_medida=_clean(payload.get("tipo_medida")),
-                tipo_consigna=_clean(payload.get("tipo_consigna")),
-                fecha_oficio=_parse_date(_clean(payload.get("fecha_oficio"))),
-                fecha_notificacion=_parse_date(_clean(payload.get("fecha_notificacion"))),
-                cantidad_dias=_to_int_or_none(payload.get("cantidad_dias")),
-                dias_fija=_to_int_or_none(payload.get("dias_fija")),
-                dias_ambulatoria=_to_int_or_none(payload.get("dias_ambulatoria")),
-                dias_personalizada=_to_int_or_none(payload.get("dias_personalizada")),
-                acusado_notificar=_clean(payload.get("acusado_notificar")) or "indeterminada",
-                distancia=_clean(payload.get("distancia_restriccion")),
-                turnos=_clean(payload.get("turnos")),
-                estado=_clean(payload.get("estado")) or "activa",
-                observaciones=_clean(payload.get("observaciones")),
-                texto_fuente=_clean(payload.get("texto_fuente")),
-                fuente_principal=_clean(payload.get("fuente_principal")) or "ocr",
-                qr_url=_clean(payload.get("qr_url")),
-                archivo_origen=_clean(payload.get("archivo_origen")),
-            )
-            db.session.add(row)
-            db.session.flush()
+            exp = _clean(payload.get("expediente"))
+            juz = _clean(payload.get("juzgado"))
+            acusado_notificar = _normalize_notificar(payload.get("acusado_notificar"), "si")
+            victima_notificar = _normalize_notificar(payload.get("victima_notificar"), "no")
+            victima_2_notificar = _normalize_notificar(payload.get("victima_2_notificar"), "no")
+
+            row = None
+            exp_key = _expediente_key(exp)
+            fecha_oficio_new = _parse_date(_clean(payload.get("fecha_oficio")))
+            if exp:
+                q = ConsignaJudicial.query.filter(
+                    ConsignaJudicial.unidad_id == current_user.unidad_id,
+                )
+                if juz:
+                    q = q.filter(ConsignaJudicial.juzgado == juz)
+                candidates = q.order_by(ConsignaJudicial.id.desc()).limit(250).all()
+                for cand in candidates:
+                    if _clean(cand.expediente) == exp:
+                        row = cand
+                        break
+                    if exp_key and _expediente_key(cand.expediente) == exp_key:
+                        row = cand
+                        break
+            # Fallback: algunos OCR no extraen expediente; consolidar por juzgado + fecha oficio.
+            if row is None and (not exp_key) and juz and fecha_oficio_new:
+                row = (
+                    ConsignaJudicial.query.filter(
+                        ConsignaJudicial.unidad_id == current_user.unidad_id,
+                        ConsignaJudicial.juzgado == juz,
+                        ConsignaJudicial.fecha_oficio == fecha_oficio_new,
+                    )
+                    .order_by(ConsignaJudicial.id.desc())
+                    .first()
+                )
+
+            is_new = row is None
+            if is_new:
+                row = ConsignaJudicial(
+                    unidad_id=current_user.unidad_id,
+                    creado_por=current_user.id,
+                    expediente=exp,
+                    juzgado=juz,
+                    caratula=_clean(payload.get("caratula")),
+                    tipo_medida=_clean(payload.get("tipo_medida")),
+                    tipo_consigna=_clean(payload.get("tipo_consigna")),
+                    fecha_oficio=fecha_oficio_new,
+                    fecha_notificacion=_parse_date(_clean(payload.get("fecha_notificacion"))),
+                    cantidad_dias=_to_int_or_none(payload.get("cantidad_dias")),
+                    dias_fija=_to_int_or_none(payload.get("dias_fija")),
+                    dias_ambulatoria=_to_int_or_none(payload.get("dias_ambulatoria")),
+                    dias_personalizada=_to_int_or_none(payload.get("dias_personalizada")),
+                    acusado_notificar=acusado_notificar,
+                    distancia=_clean(payload.get("distancia_restriccion")),
+                    turnos=_clean(payload.get("turnos")),
+                    estado=_clean(payload.get("estado")) or "activa",
+                    observaciones=_clean(payload.get("observaciones")),
+                    texto_fuente=_clean(payload.get("texto_fuente")),
+                    fuente_principal=_clean(payload.get("fuente_principal")) or "ocr",
+                    qr_url=_clean(payload.get("qr_url")),
+                    archivo_origen=_clean(payload.get("archivo_origen")),
+                )
+                db.session.add(row)
+                db.session.flush()
+            else:
+                row.acusado_notificar = acusado_notificar
+                row.caratula = row.caratula or _clean(payload.get("caratula"))
+                row.tipo_medida = row.tipo_medida or _clean(payload.get("tipo_medida"))
+                row.tipo_consigna = row.tipo_consigna or _clean(payload.get("tipo_consigna"))
+                row.distancia = row.distancia or _clean(payload.get("distancia_restriccion"))
+                row.turnos = row.turnos or _clean(payload.get("turnos"))
+                row.observaciones = row.observaciones or _clean(payload.get("observaciones"))
+                row.texto_fuente = row.texto_fuente or _clean(payload.get("texto_fuente"))
+                row.qr_url = row.qr_url or _clean(payload.get("qr_url"))
+                row.archivo_origen = row.archivo_origen or _clean(payload.get("archivo_origen"))
+                if not row.fecha_oficio:
+                    row.fecha_oficio = _parse_date(_clean(payload.get("fecha_oficio")))
+                if not row.fecha_notificacion:
+                    row.fecha_notificacion = _parse_date(_clean(payload.get("fecha_notificacion")))
+                if row.cantidad_dias is None:
+                    row.cantidad_dias = _to_int_or_none(payload.get("cantidad_dias"))
+                if row.dias_fija is None:
+                    row.dias_fija = _to_int_or_none(payload.get("dias_fija"))
+                if row.dias_ambulatoria is None:
+                    row.dias_ambulatoria = _to_int_or_none(payload.get("dias_ambulatoria"))
+                if row.dias_personalizada is None:
+                    row.dias_personalizada = _to_int_or_none(payload.get("dias_personalizada"))
+
+            def _add_person_if_new(nombre: str, dni: str, tipo: str, notificar: str):
+                nom = _clean(nombre)
+                if not nom:
+                    return
+                dni_n = _normalize_dni(dni)
+                exists = ConsignaPersona.query.filter_by(
+                    consigna_id=row.id,
+                    tipo=tipo,
+                    nombre=nom,
+                    dni=dni_n,
+                ).first()
+                if exists:
+                    exists.notificar = _normalize_notificar(notificar, exists.notificar or "no")
+                    return
+                db.session.add(
+                    ConsignaPersona(
+                        consigna_id=row.id,
+                        nombre=nom,
+                        dni=dni_n,
+                        tipo=tipo,
+                        notificar=_normalize_notificar(notificar, "no"),
+                    )
+                )
+
+            def _add_domicilio_if_new(direccion: str, tipo: str):
+                d = _clean(direccion)
+                if not d:
+                    return
+                exists = ConsignaDomicilio.query.filter_by(
+                    consigna_id=row.id,
+                    tipo=tipo,
+                    direccion=d,
+                ).first()
+                if not exists:
+                    db.session.add(ConsignaDomicilio(consigna_id=row.id, direccion=d, tipo=tipo))
 
             if _clean(payload.get("persona_denunciada")):
-                db.session.add(
-                    ConsignaPersona(
-                        consigna_id=row.id,
-                        nombre=_clean(payload.get("persona_denunciada")),
-                        dni=_clean(payload.get("dni_denunciado")),
-                        tipo="denunciado",
-                        notificar=_clean(payload.get("acusado_notificar")) or "indeterminada",
-                    )
-                )
+                _add_person_if_new(payload.get("persona_denunciada"), payload.get("dni_denunciado"), "denunciado", acusado_notificar)
             if _clean(payload.get("victima")):
-                db.session.add(
-                    ConsignaPersona(
-                        consigna_id=row.id,
-                        nombre=_clean(payload.get("victima")),
-                        dni=_clean(payload.get("dni_victima")),
-                        tipo="victima",
-                        notificar=_clean(payload.get("victima_notificar")) or "indeterminada",
-                    )
-                )
+                _add_person_if_new(payload.get("victima"), payload.get("dni_victima"), "victima", victima_notificar)
             if _clean(payload.get("victima_2")):
-                db.session.add(
-                    ConsignaPersona(
-                        consigna_id=row.id,
-                        nombre=_clean(payload.get("victima_2")),
-                        dni=_clean(payload.get("dni_victima_2")),
-                        tipo="victima",
-                        notificar=_clean(payload.get("victima_2_notificar")) or "indeterminada",
-                    )
-                )
+                _add_person_if_new(payload.get("victima_2"), payload.get("dni_victima_2"), "victima", victima_2_notificar)
             if _clean(payload.get("domicilio_victima_2")):
-                db.session.add(
-                    ConsignaDomicilio(
-                        consigna_id=row.id,
-                        direccion=_clean(payload.get("domicilio_victima_2")),
-                        tipo="victima",
-                    )
-                )
+                _add_domicilio_if_new(payload.get("domicilio_victima_2"), "victima")
             for vextra in (payload.get("victimas_adicionales") or []):
                 if _clean(vextra):
-                    db.session.add(
-                        ConsignaPersona(
-                            consigna_id=row.id,
-                            nombre=_clean(vextra),
-                            dni="",
-                            tipo="victima",
-                            notificar=_clean(payload.get("victima_notificar")) or "indeterminada",
-                        )
-                    )
+                    _add_person_if_new(vextra, "", "victima", victima_notificar)
             if _clean(payload.get("domicilio_denunciado")):
-                db.session.add(
-                    ConsignaDomicilio(consigna_id=row.id, direccion=_clean(payload.get("domicilio_denunciado")), tipo="denunciado")
-                )
+                _add_domicilio_if_new(payload.get("domicilio_denunciado"), "denunciado")
             if _clean(payload.get("domicilio_victima")):
-                db.session.add(
-                    ConsignaDomicilio(consigna_id=row.id, direccion=_clean(payload.get("domicilio_victima")), tipo="victima")
-                )
+                _add_domicilio_if_new(payload.get("domicilio_victima"), "victima")
             if _clean(payload.get("tercero_nombre")):
                 db.session.add(
                     ConsignaPersona(
@@ -982,7 +1087,10 @@ def cargar():
                     db.session.add(ConsignaMedidaDetalle(consigna_id=row.id, descripcion=_clean(m)))
 
             db.session.commit()
-            flash("Consigna judicial guardada correctamente.", "success")
+            if is_new:
+                flash("Consigna judicial guardada correctamente.", "success")
+            else:
+                flash("Notificación incorporada al oficio existente (sin duplicar expediente).", "success")
             return redirect(url_for("oficios_judiciales.detalle", consigna_id=row.id))
 
         files = request.files.getlist("archivos")
