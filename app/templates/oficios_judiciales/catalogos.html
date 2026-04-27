@@ -3,119 +3,284 @@
 {% block content %}
 <div class="page-header">
     <h1><i class="bi bi-list-ul"></i> Catálogos de Oficios VIF</h1>
+    <p class="text-muted mb-0">Gestioná cada rubro en pestañas: editá nombre o eliminá filas. Los barrios se pueden importar desde el servidor, subiendo un JSON GeoJSON o un Excel.</p>
 </div>
 
-<div class="row g-3">
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header"><strong>Juzgados</strong></div>
-            <div class="card-body">
-                <form method="POST" class="d-flex gap-2 mb-3">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="hidden" name="catalog_action" value="add_juzgado">
-                    <input class="form-control" name="nombre" placeholder="Ej: Juzgado de Violencia Familiar 2° Nominación">
-                    <button class="btn btn-primary">Agregar</button>
-                </form>
-                <ul class="mb-0">
+<ul class="nav nav-tabs flex-nowrap overflow-auto mb-3 border-bottom" role="tablist" style="white-space: nowrap;">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="tab-juz-btn" data-bs-toggle="tab" data-bs-target="#tab-juz" type="button" role="tab">Juzgados</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-med-btn" data-bs-toggle="tab" data-bs-target="#tab-med" type="button" role="tab">Tipos de medida</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-cons-btn" data-bs-toggle="tab" data-bs-target="#tab-cons" type="button" role="tab">Tipos de consigna</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-fis-btn" data-bs-toggle="tab" data-bs-target="#tab-fis" type="button" role="tab">Fiscalías</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-bar-btn" data-bs-toggle="tab" data-bs-target="#tab-bar" type="button" role="tab">Barrios</button>
+    </li>
+</ul>
+
+<div class="tab-content">
+    {# —— Juzgados —— #}
+    <div class="tab-pane fade show active" id="tab-juz" role="tabpanel">
+        <form method="POST" class="row g-2 mb-3 align-items-end">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="catalog_action" value="add_juzgado">
+            <div class="col-md-10">
+                <label class="form-label small text-muted mb-0">Agregar juzgado</label>
+                <input class="form-control" name="nombre" placeholder="Ej: Juzgado de Violencia Familiar 2° Nominación">
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-primary w-100" type="submit">Agregar</button>
+            </div>
+        </form>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle">
+                <thead><tr><th style="width:5rem;">#</th><th>Nombre</th><th class="text-end" style="width:11rem;">Acciones</th></tr></thead>
+                <tbody>
                     {% for j in juzgados %}
-                    <li>{{ j.nombre }}</li>
+                    <tr>
+                        <td>{{ j.id }}</td>
+                        <td>
+                            <form method="POST" class="d-flex flex-wrap gap-2 align-items-center">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="catalog_action" value="edit_juzgado">
+                                <input type="hidden" name="item_id" value="{{ j.id }}">
+                                <input class="form-control form-control-sm flex-grow-1" name="nombre" value="{{ j.nombre }}" required>
+                                <button class="btn btn-sm btn-primary" type="submit">Guardar</button>
+                            </form>
+                        </td>
+                        <td class="text-end">
+                            <form method="POST" class="d-inline" onsubmit="return confirm('¿Eliminar este juzgado del catálogo?');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="catalog_action" value="delete_juzgado">
+                                <input type="hidden" name="item_id" value="{{ j.id }}">
+                                <button class="btn btn-sm btn-outline-danger" type="submit">Eliminar</button>
+                            </form>
+                        </td>
+                    </tr>
                     {% else %}
-                    <li class="text-muted">Sin datos.</li>
+                    <tr><td colspan="3" class="text-muted text-center">Sin datos.</td></tr>
                     {% endfor %}
-                </ul>
-            </div>
+                </tbody>
+            </table>
         </div>
     </div>
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header"><strong>Tipos de medida</strong></div>
-            <div class="card-body">
-                <form method="POST" class="d-flex gap-2 mb-3">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="hidden" name="catalog_action" value="add_tipo_medida">
-                    <input class="form-control" name="nombre" placeholder="Ej: prohibición de acercamiento">
-                    <button class="btn btn-primary">Agregar</button>
-                </form>
-                <ul class="mb-0">
+
+    {# —— Tipos de medida —— #}
+    <div class="tab-pane fade" id="tab-med" role="tabpanel">
+        <form method="POST" class="row g-2 mb-3 align-items-end">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="catalog_action" value="add_tipo_medida">
+            <div class="col-md-10">
+                <label class="form-label small text-muted mb-0">Agregar tipo de medida</label>
+                <input class="form-control" name="nombre" placeholder="Ej: prohibición de acercamiento">
+            </div>
+            <div class="col-md-2"><button class="btn btn-primary w-100" type="submit">Agregar</button></div>
+        </form>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle">
+                <thead><tr><th style="width:5rem;">#</th><th>Nombre</th><th class="text-end" style="width:11rem;">Acciones</th></tr></thead>
+                <tbody>
                     {% for t in tipos_medida %}
-                    <li>{{ t.nombre }}</li>
+                    <tr>
+                        <td>{{ t.id }}</td>
+                        <td>
+                            <form method="POST" class="d-flex flex-wrap gap-2 align-items-center">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="catalog_action" value="edit_tipo_medida">
+                                <input type="hidden" name="item_id" value="{{ t.id }}">
+                                <input class="form-control form-control-sm flex-grow-1" name="nombre" value="{{ t.nombre }}" required>
+                                <button class="btn btn-sm btn-primary" type="submit">Guardar</button>
+                            </form>
+                        </td>
+                        <td class="text-end">
+                            <form method="POST" class="d-inline" onsubmit="return confirm('¿Eliminar este tipo de medida?');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="catalog_action" value="delete_tipo_medida">
+                                <input type="hidden" name="item_id" value="{{ t.id }}">
+                                <button class="btn btn-sm btn-outline-danger" type="submit">Eliminar</button>
+                            </form>
+                        </td>
+                    </tr>
                     {% else %}
-                    <li class="text-muted">Sin datos.</li>
+                    <tr><td colspan="3" class="text-muted text-center">Sin datos.</td></tr>
                     {% endfor %}
-                </ul>
-            </div>
+                </tbody>
+            </table>
         </div>
     </div>
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header"><strong>Tipos de consigna</strong></div>
-            <div class="card-body">
-                <form method="POST" class="d-flex gap-2 mb-3">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="hidden" name="catalog_action" value="add_tipo_consigna">
-                    <input class="form-control" name="nombre" placeholder="Ej: fija, ambulatoria, personalizada">
-                    <button class="btn btn-primary">Agregar</button>
-                </form>
-                <ul class="mb-0">
+
+    {# —— Tipos de consigna —— #}
+    <div class="tab-pane fade" id="tab-cons" role="tabpanel">
+        <form method="POST" class="row g-2 mb-3 align-items-end">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="catalog_action" value="add_tipo_consigna">
+            <div class="col-md-10">
+                <label class="form-label small text-muted mb-0">Agregar tipo de consigna</label>
+                <input class="form-control" name="nombre" placeholder="Ej: Fija, Ambulatoria">
+            </div>
+            <div class="col-md-2"><button class="btn btn-primary w-100" type="submit">Agregar</button></div>
+        </form>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle">
+                <thead><tr><th style="width:5rem;">#</th><th>Nombre</th><th class="text-end" style="width:11rem;">Acciones</th></tr></thead>
+                <tbody>
                     {% for t in tipos_consigna %}
-                    <li>{{ t.nombre }}</li>
+                    <tr>
+                        <td>{{ t.id }}</td>
+                        <td>
+                            <form method="POST" class="d-flex flex-wrap gap-2 align-items-center">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="catalog_action" value="edit_tipo_consigna">
+                                <input type="hidden" name="item_id" value="{{ t.id }}">
+                                <input class="form-control form-control-sm flex-grow-1" name="nombre" value="{{ t.nombre }}" required>
+                                <button class="btn btn-sm btn-primary" type="submit">Guardar</button>
+                            </form>
+                        </td>
+                        <td class="text-end">
+                            <form method="POST" class="d-inline" onsubmit="return confirm('¿Eliminar este tipo de consigna?');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="catalog_action" value="delete_tipo_consigna">
+                                <input type="hidden" name="item_id" value="{{ t.id }}">
+                                <button class="btn btn-sm btn-outline-danger" type="submit">Eliminar</button>
+                            </form>
+                        </td>
+                    </tr>
                     {% else %}
-                    <li class="text-muted">Sin datos.</li>
+                    <tr><td colspan="3" class="text-muted text-center">Sin datos.</td></tr>
                     {% endfor %}
-                </ul>
-            </div>
+                </tbody>
+            </table>
         </div>
     </div>
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header"><strong>Fiscalías</strong></div>
-            <div class="card-body">
-                <form method="POST" class="d-flex gap-2 mb-3">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="hidden" name="catalog_action" value="add_fiscalia">
-                    <input class="form-control" name="nombre" placeholder="Ej: Fiscalía de Violencia Familiar N° 2">
-                    <button class="btn btn-primary">Agregar</button>
-                </form>
-                <ul class="mb-0">
+
+    {# —— Fiscalías —— #}
+    <div class="tab-pane fade" id="tab-fis" role="tabpanel">
+        <form method="POST" class="row g-2 mb-3 align-items-end">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="catalog_action" value="add_fiscalia">
+            <div class="col-md-10">
+                <label class="form-label small text-muted mb-0">Agregar fiscalía</label>
+                <input class="form-control" name="nombre" placeholder="Ej: Fiscalía de Violencia Familiar N° 2">
+            </div>
+            <div class="col-md-2"><button class="btn btn-primary w-100" type="submit">Agregar</button></div>
+        </form>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle">
+                <thead><tr><th style="width:5rem;">#</th><th>Nombre</th><th class="text-end" style="width:11rem;">Acciones</th></tr></thead>
+                <tbody>
                     {% for f in fiscalias %}
-                    <li>{{ f.nombre }}</li>
+                    <tr>
+                        <td>{{ f.id }}</td>
+                        <td>
+                            <form method="POST" class="d-flex flex-wrap gap-2 align-items-center">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="catalog_action" value="edit_fiscalia">
+                                <input type="hidden" name="item_id" value="{{ f.id }}">
+                                <input class="form-control form-control-sm flex-grow-1" name="nombre" value="{{ f.nombre }}" required>
+                                <button class="btn btn-sm btn-primary" type="submit">Guardar</button>
+                            </form>
+                        </td>
+                        <td class="text-end">
+                            <form method="POST" class="d-inline" onsubmit="return confirm('¿Eliminar esta fiscalía del catálogo?');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="catalog_action" value="delete_fiscalia">
+                                <input type="hidden" name="item_id" value="{{ f.id }}">
+                                <button class="btn btn-sm btn-outline-danger" type="submit">Eliminar</button>
+                            </form>
+                        </td>
+                    </tr>
                     {% else %}
-                    <li class="text-muted">Sin datos.</li>
+                    <tr><td colspan="3" class="text-muted text-center">Sin datos.</td></tr>
                     {% endfor %}
-                </ul>
-            </div>
+                </tbody>
+            </table>
         </div>
     </div>
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header"><strong>Barrios (JSON/Excel)</strong></div>
+
+    {# —— Barrios —— #}
+    <div class="tab-pane fade" id="tab-bar" role="tabpanel">
+        <div class="card mb-3">
+            <div class="card-header"><strong>Importar barrios</strong></div>
             <div class="card-body">
-                <div class="d-flex flex-wrap gap-2 mb-3">
-                    <form method="POST">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input type="hidden" name="catalog_action" value="import_barrios_json">
-                        <button class="btn btn-outline-primary">Importar desde barrios.json</button>
-                    </form>
-                    <form method="POST" enctype="multipart/form-data" class="d-flex gap-2">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input type="hidden" name="catalog_action" value="import_barrios_excel">
-                        <input class="form-control" type="file" name="barrios_excel" accept=".xlsx,.xls" required>
-                        <button class="btn btn-outline-success">Importar Excel</button>
-                    </form>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <p class="small text-muted mb-2">Desde archivo en el servidor (si existe <code>barrios.json</code> junto a la app).</p>
+                        <form method="POST">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="catalog_action" value="import_barrios_json">
+                            <button class="btn btn-outline-primary" type="submit">Importar barrios.json del servidor</button>
+                        </form>
+                    </div>
+                    <div class="col-md-4">
+                        <p class="small text-muted mb-2">Subí vos el GeoJSON (mismo formato que <code>barrios.json</code>: FeatureCollection con <code>properties.name</code>).</p>
+                        <form method="POST" enctype="multipart/form-data" class="d-flex flex-column gap-2">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="catalog_action" value="import_barrios_json_upload">
+                            <input class="form-control form-control-sm" type="file" name="barrios_json" accept=".json,.geojson,application/json">
+                            <button class="btn btn-outline-success" type="submit">Importar archivo JSON</button>
+                        </form>
+                    </div>
+                    <div class="col-md-4">
+                        <p class="small text-muted mb-2">Excel con columnas <code>barrios</code>, <code>barrios_nombre</code>, <code>dependencia</code>, <code>dependencia_nombre</code>.</p>
+                        <form method="POST" enctype="multipart/form-data" class="d-flex flex-column gap-2">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="catalog_action" value="import_barrios_excel">
+                            <input class="form-control form-control-sm" type="file" name="barrios_excel" accept=".xlsx,.xls">
+                            <button class="btn btn-outline-success" type="submit">Importar Excel</button>
+                        </form>
+                    </div>
                 </div>
-                <small class="text-muted d-block mb-2">Vista previa (máx. 200):</small>
-                <ul class="mb-0">
-                    {% for b in barrios %}
-                    <li>
-                        {{ b.nombre }}
-                        {% if b.codigo %}<span class="text-muted">({{ b.codigo }})</span>{% endif %}
-                        {% if b.dependencia_nombre %}<span class="text-muted"> - {{ b.dependencia_nombre }}</span>{% endif %}
-                    </li>
-                    {% else %}
-                    <li class="text-muted">Sin datos.</li>
-                    {% endfor %}
-                </ul>
             </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle">
+                <thead>
+                    <tr>
+                        <th style="width:3.5rem;">#</th>
+                        <th style="width:6rem;">Código</th>
+                        <th>Nombre</th>
+                        <th style="width:6rem;">Dep. código</th>
+                        <th>Dependencia</th>
+                        <th class="text-end" style="width:12rem;">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for b in barrios %}
+                    <tr>
+                        <td>
+                            <form id="form-barrio-{{ b.id }}" method="POST" class="d-none">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="catalog_action" value="edit_barrio">
+                                <input type="hidden" name="item_id" value="{{ b.id }}">
+                            </form>
+                            {{ b.id }}
+                        </td>
+                        <td><input class="form-control form-control-sm" form="form-barrio-{{ b.id }}" name="codigo" value="{{ b.codigo or '' }}" placeholder="—"></td>
+                        <td><input class="form-control form-control-sm" form="form-barrio-{{ b.id }}" name="nombre" value="{{ b.nombre }}" required></td>
+                        <td><input class="form-control form-control-sm" form="form-barrio-{{ b.id }}" name="dependencia_codigo" value="{{ b.dependencia_codigo or '' }}" placeholder="—"></td>
+                        <td><input class="form-control form-control-sm" form="form-barrio-{{ b.id }}" name="dependencia_nombre" value="{{ b.dependencia_nombre or '' }}" placeholder="—"></td>
+                        <td class="text-end text-nowrap">
+                            <button type="submit" form="form-barrio-{{ b.id }}" class="btn btn-sm btn-primary">Guardar</button>
+                            <form method="POST" class="d-inline" onsubmit="return confirm('¿Eliminar este barrio del catálogo?');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="catalog_action" value="delete_barrio">
+                                <input type="hidden" name="item_id" value="{{ b.id }}">
+                                <button class="btn btn-sm btn-outline-danger" type="submit">Eliminar</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="6" class="text-muted text-center">Sin barrios cargados. Importá JSON o Excel.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
     </div>
 </div>

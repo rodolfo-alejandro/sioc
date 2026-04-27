@@ -7,7 +7,7 @@ import re
 from datetime import datetime, timedelta, date
 
 import pandas as pd
-from flask import Response, abort, flash, redirect, render_template, request, url_for
+from flask import Response, abort, current_app, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import false, func, inspect, or_, text
 
@@ -67,6 +67,26 @@ except Exception:
 
 
 _schema_checked = False
+
+
+def _import_barrios_desde_geojson(payload: dict) -> int:
+    """Inserta barrios desde GeoJSON FeatureCollection (properties.name). Devuelve cantidad de altas nuevas."""
+    added = 0
+    try:
+        for ft in payload.get("features") or []:
+            props = (ft or {}).get("properties") or {}
+            nombre = _clean(props.get("name"))
+            if not nombre:
+                continue
+            if not CatalogoBarrio.query.filter(func.lower(CatalogoBarrio.nombre) == nombre.lower()).first():
+                db.session.add(CatalogoBarrio(nombre=nombre, activo=True))
+                added += 1
+        if added:
+            db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
+    return added
 _MIN_PDF_TEXT_LEN = 120
 _OCR_GOOD_ENOUGH_LEN = 900
 _MAX_PDF_OCR_PAGES = 3
@@ -1886,6 +1906,7 @@ def catalogos():
     _ensure_schema()
     action = _clean(request.form.get("catalog_action"))
     if request.method == "POST":
+        mostrar_ok = True
         if action == "add_juzgado":
             nombre = _clean(request.form.get("nombre"))
             if nombre and not CatalogoJuzgado.query.filter_by(nombre=nombre).first():
@@ -1912,16 +1933,25 @@ def catalogos():
                 if os.path.exists(json_path):
                     with open(json_path, "r", encoding="utf-8") as f:
                         payload = json.load(f)
-                    for ft in (payload.get("features") or []):
-                        props = (ft or {}).get("properties") or {}
-                        nombre = _clean(props.get("name"))
-                        if not nombre:
-                            continue
-                        if not CatalogoBarrio.query.filter_by(nombre=nombre).first():
-                            db.session.add(CatalogoBarrio(nombre=nombre, activo=True))
-                    db.session.commit()
+                    _import_barrios_desde_geojson(payload)
+                else:
+                    mostrar_ok = False
+                    flash("No se encontró barrios.json en el servidor (/opt/sioc/barrios.json). Subí el archivo abajo.", "warning")
             except Exception:
                 db.session.rollback()
+                mostrar_ok = False
+                flash("No se pudo importar desde barrios.json del servidor.", "danger")
+        elif action == "import_barrios_json_upload":
+            up = request.files.get("barrios_json")
+            if up and _clean(up.filename):
+                try:
+                    raw = up.read().decode("utf-8")
+                    payload = json.loads(raw)
+                    _import_barrios_desde_geojson(payload)
+                except Exception:
+                    db.session.rollback()
+                    mostrar_ok = False
+                    flash("Archivo JSON inválido o no es GeoJSON esperado.", "danger")
         elif action == "import_barrios_excel":
             f = request.files.get("barrios_excel")
             if f and _clean(f.filename):
@@ -1963,13 +1993,114 @@ def catalogos():
                         db.session.commit()
                 except Exception:
                     db.session.rollback()
-        flash("Catálogo actualizado.", "success")
+        elif action == "edit_juzgado":
+            rid = _to_int_or_none(request.form.get("item_id"))
+            nombre = _clean(request.form.get("nombre"))
+            row = CatalogoJuzgado.query.get(rid) if rid else None
+            if row and nombre:
+                dup = CatalogoJuzgado.query.filter(
+                    CatalogoJuzgado.id != row.id, func.lower(CatalogoJuzgado.nombre) == nombre.lower()
+                ).first()
+                if dup:
+                    flash("Ya existe un juzgado con ese nombre.", "warning")
+                else:
+                    row.nombre = nombre
+                    row.clave = _juzgado_key(nombre)
+                    db.session.commit()
+        elif action == "delete_juzgado":
+            rid = _to_int_or_none(request.form.get("item_id"))
+            row = CatalogoJuzgado.query.get(rid) if rid else None
+            if row:
+                db.session.delete(row)
+                db.session.commit()
+        elif action == "edit_tipo_medida":
+            rid = _to_int_or_none(request.form.get("item_id"))
+            nombre = _clean(request.form.get("nombre"))
+            row = CatalogoTipoMedida.query.get(rid) if rid else None
+            if row and nombre:
+                dup = CatalogoTipoMedida.query.filter(
+                    CatalogoTipoMedida.id != row.id, func.lower(CatalogoTipoMedida.nombre) == nombre.lower()
+                ).first()
+                if dup:
+                    flash("Ya existe ese tipo de medida.", "warning")
+                else:
+                    row.nombre = nombre
+                    db.session.commit()
+        elif action == "delete_tipo_medida":
+            rid = _to_int_or_none(request.form.get("item_id"))
+            row = CatalogoTipoMedida.query.get(rid) if rid else None
+            if row:
+                db.session.delete(row)
+                db.session.commit()
+        elif action == "edit_tipo_consigna":
+            rid = _to_int_or_none(request.form.get("item_id"))
+            nombre = _clean(request.form.get("nombre"))
+            row = CatalogoTipoConsigna.query.get(rid) if rid else None
+            if row and nombre:
+                dup = CatalogoTipoConsigna.query.filter(
+                    CatalogoTipoConsigna.id != row.id, func.lower(CatalogoTipoConsigna.nombre) == nombre.lower()
+                ).first()
+                if dup:
+                    flash("Ya existe ese tipo de consigna.", "warning")
+                else:
+                    row.nombre = nombre
+                    db.session.commit()
+        elif action == "delete_tipo_consigna":
+            rid = _to_int_or_none(request.form.get("item_id"))
+            row = CatalogoTipoConsigna.query.get(rid) if rid else None
+            if row:
+                db.session.delete(row)
+                db.session.commit()
+        elif action == "edit_fiscalia":
+            rid = _to_int_or_none(request.form.get("item_id"))
+            nombre = _clean(request.form.get("nombre"))
+            row = CatalogoFiscalia.query.get(rid) if rid else None
+            if row and nombre:
+                dup = CatalogoFiscalia.query.filter(
+                    CatalogoFiscalia.id != row.id, func.lower(CatalogoFiscalia.nombre) == nombre.lower()
+                ).first()
+                if dup:
+                    flash("Ya existe esa fiscalía.", "warning")
+                else:
+                    row.nombre = nombre
+                    row.clave = _fiscalia_key(nombre)
+                    db.session.commit()
+        elif action == "delete_fiscalia":
+            rid = _to_int_or_none(request.form.get("item_id"))
+            row = CatalogoFiscalia.query.get(rid) if rid else None
+            if row:
+                db.session.delete(row)
+                db.session.commit()
+        elif action == "edit_barrio":
+            rid = _to_int_or_none(request.form.get("item_id"))
+            nombre = _clean(request.form.get("nombre"))
+            row = CatalogoBarrio.query.get(rid) if rid else None
+            if row and nombre:
+                dup = CatalogoBarrio.query.filter(
+                    CatalogoBarrio.id != row.id, func.lower(CatalogoBarrio.nombre) == nombre.lower()
+                ).first()
+                if dup:
+                    flash("Ya existe un barrio con ese nombre.", "warning")
+                else:
+                    row.nombre = nombre
+                    row.codigo = _clean(request.form.get("codigo")) or None
+                    row.dependencia_codigo = _clean(request.form.get("dependencia_codigo")) or None
+                    row.dependencia_nombre = _clean(request.form.get("dependencia_nombre")) or None
+                    db.session.commit()
+        elif action == "delete_barrio":
+            rid = _to_int_or_none(request.form.get("item_id"))
+            row = CatalogoBarrio.query.get(rid) if rid else None
+            if row:
+                db.session.delete(row)
+                db.session.commit()
+        if mostrar_ok:
+            flash("Catálogo actualizado.", "success")
         return redirect(url_for("oficios_judiciales.catalogos"))
     juzgados = CatalogoJuzgado.query.order_by(CatalogoJuzgado.nombre.asc()).all()
     tipos_medida = CatalogoTipoMedida.query.order_by(CatalogoTipoMedida.nombre.asc()).all()
     tipos_consigna = CatalogoTipoConsigna.query.order_by(CatalogoTipoConsigna.nombre.asc()).all()
     fiscalias = CatalogoFiscalia.query.order_by(CatalogoFiscalia.nombre.asc()).all()
-    barrios = CatalogoBarrio.query.order_by(CatalogoBarrio.nombre.asc()).limit(200).all()
+    barrios = CatalogoBarrio.query.order_by(CatalogoBarrio.nombre.asc()).all()
     return render_template(
         "oficios_judiciales/catalogos.html",
         juzgados=juzgados,
