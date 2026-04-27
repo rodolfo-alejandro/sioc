@@ -368,6 +368,8 @@ def _pick_tipo_medida(text: str) -> str:
         ("consigna personalizada", "consigna personalizada"),
         ("prohibición de acercamiento", "prohibición de acercamiento"),
         ("prohibicion de acercamiento", "prohibición de acercamiento"),
+        ("prohibición de acercarse", "prohibición de acercamiento"),
+        ("prohibicion de acercarse", "prohibición de acercamiento"),
         ("exclusión del hogar", "exclusión del hogar"),
         ("exclusion del hogar", "exclusión del hogar"),
         ("rondas periódicas", "rondas periódicas"),
@@ -462,11 +464,11 @@ def _extract_dni_by_context(full: str, person_name: str = "") -> str:
         idx = txt.lower().find(person_name.lower())
         if idx >= 0:
             chunk = txt[max(0, idx - 160): idx + 240]
-            m = re.search(r"D\.?\s*N\.?\s*I\.?\s*(?:N[°ºo]\s*)?[:\-]?\s*([\d\.\-]{7,16})", chunk, flags=re.IGNORECASE)
+            m = re.search(r"D\.?\s*N\.?\s*I\.?\s*(?:N[°ºo\*]\s*)?[:\-]?\s*([\d\.\-]{7,16})", chunk, flags=re.IGNORECASE)
             if m:
                 return _normalize_dni(m.group(1))
         return ""
-    m2 = re.search(r"D\.?\s*N\.?\s*I\.?\s*(?:N[°ºo]\s*)?[:\-]?\s*([\d\.\-]{7,16})", txt, flags=re.IGNORECASE)
+    m2 = re.search(r"D\.?\s*N\.?\s*I\.?\s*(?:N[°ºo\*]\s*)?[:\-]?\s*([\d\.\-]{7,16})", txt, flags=re.IGNORECASE)
     if m2:
         return _normalize_dni(m2.group(1))
     return ""
@@ -506,6 +508,18 @@ def _extract_caratula(full: str) -> str:
     )
     if m:
         c = _normalize_spaces(m.group(1))
+        m2 = re.search(r"(.+?)\s+CONTRA\s+(.+)", c, flags=re.IGNORECASE)
+        if m2:
+            left = _normalize_spaces(m2.group(1))
+            right = _normalize_spaces(m2.group(2))
+            left = re.sub(r"^Expte\.?\s*N[°º\*]?\s*[^-]+-\s*", "", left, flags=re.IGNORECASE).strip()
+            seen = []
+            for p in re.split(r";|\s+Y\s+", left, flags=re.IGNORECASE):
+                pp = _clean_person_name(_smart_cut(p, 140))
+                if pp and pp not in seen:
+                    seen.append(pp)
+            if seen:
+                c = f"{'; '.join(seen)} CONTRA {right}"
         return _smart_cut(c, 420)
     return _smart_cut(_first_group(r"Ref\.?:\s*(.+)", txt), 420)
 
@@ -599,7 +613,7 @@ def _extract_dni_strict_for_name(full: str, person_name: str) -> str:
         return ""
     # Patrón estricto: nombre cercano a DNI, evitando arrastre de otra persona.
     pat = re.compile(
-        re.escape(nm) + r"[^.\n,;]{0,70}?D\.?\s*N\.?\s*I\.?\s*(?:N[°ºo]\s*)?[:\-]?\s*([\d\.\-]{7,16})",
+        re.escape(nm) + r"[^.\n,;]{0,90}?D\.?\s*N\.?\s*I\.?\s*(?:N[°ºo\*]\s*)?[:\-]?\s*([\d\.\-]{7,16})",
         flags=re.IGNORECASE,
     )
     m = pat.search(txt)
@@ -617,6 +631,7 @@ def _extract_victimas_from_text(full: str, acusado: str) -> list[str]:
         r"EN\s+CONTRA\s+DE\s+([A-ZÁÉÍÓÚÑ ,;]{8,180})",
         r"CONTRA\s+([A-ZÁÉÍÓÚÑ ,;]{8,180})\s*,\s*DEBIENDO",
         r"A\s+LA\s+DENUNCIANTE\s+([A-ZÁÉÍÓÚÑ ,;]{8,180})",
+        r"DONDE\s+CONCURRA\s+([A-ZÁÉÍÓÚÑ ,;]{8,220})",
     ]
     for pat in pats:
         for m in re.finditer(pat, txt, flags=re.MULTILINE):
@@ -694,6 +709,8 @@ def _extract_date_by_context(full: str) -> tuple[str, str]:
 
     # 2) Oficio/proveído/firma digital
     fecha_oficio = _first_group(r"prove[ií]do de fecha\s+(\d{1,2}\s+de\s+[A-Za-zÁÉÍÓÚÑáéíóúñ]+\s+de\s+\d{4})", full)
+    if not fecha_oficio:
+        fecha_oficio = _first_group(r"resoluci[oó]n\s+de\s+fecha\s+(\d{1,2}\s+de\s+[A-Za-zÁÉÍÓÚÑáéíóúñ]+\s+de\s+\d{4})", full)
     if not fecha_oficio:
         fecha_oficio = _first_group(r"resoluci[oó]n(?:\s+\w+){0,4}\s+de fecha\s+(\d{1,2}\s+de\s+[A-Za-zÁÉÍÓÚÑáéíóúñ]+\s+de\s+\d{4})", full)
     if not fecha_oficio:
@@ -860,6 +877,8 @@ def _parse_fields(text: str) -> dict:
     dom_vic = _first_group(r"domicilio de la victima\s*[:\-]?\s*([^.]+)", full)
     if not dom_vic:
         dom_vic = _first_group(r"sito en\s*([^.]+Cerrillos[^.]*)", full)
+    if not dom_vic:
+        dom_vic = _first_group(r"domicilio de la v[ií]ctima[^\n]{0,50}?sito en\s*([^\n.]+)", full)
 
     dist = _first_group(r"(\d{2,4}\s*metros?)", full)
     dias = _first_group(r"(\d{1,3})\s*d[ií]as", full)
