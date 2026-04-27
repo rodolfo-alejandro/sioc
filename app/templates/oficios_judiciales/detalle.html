@@ -15,6 +15,7 @@
             <div><strong>Juzgado:</strong> {{ row.juzgado or '—' }}</div>
             <div><strong>Carátula:</strong> {{ row.caratula or '—' }}</div>
             <div><strong>Tipo medida:</strong> {{ row.tipo_medida or '—' }}</div>
+            <div><strong>¿Acusado a notificar?:</strong> {{ row.acusado_notificar or 'indeterminada' }}</div>
             <div><strong>Tipo consigna:</strong> {{ row.tipo_consigna or '—' }}</div>
             <div><strong>Fecha oficio:</strong> {{ row.fecha_oficio|localtime('%d/%m/%Y') if row.fecha_oficio else '—' }}</div>
             <div><strong>Fecha notificación (inicio):</strong> {{ row.fecha_notificacion|localtime('%d/%m/%Y') if row.fecha_notificacion else '—' }}</div>

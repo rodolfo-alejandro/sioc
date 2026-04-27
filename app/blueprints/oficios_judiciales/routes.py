@@ -106,6 +106,9 @@ def _ensure_schema():
     if "dias_personalizada" not in cols:
         db.session.execute(text("ALTER TABLE oficios_consignas ADD COLUMN dias_personalizada INT NULL"))
         db.session.commit()
+    if "acusado_notificar" not in cols:
+        db.session.execute(text("ALTER TABLE oficios_consignas ADD COLUMN acusado_notificar VARCHAR(20) NULL"))
+        db.session.commit()
     _schema_checked = True
 
 
@@ -394,6 +397,7 @@ def _extract_dni_by_context(full: str, person_name: str = "") -> str:
             m = re.search(r"D\.?\s*N\.?\s*I\.?\s*(?:N[°ºo]\s*)?[:\-]?\s*([\d\.\-]{7,16})", chunk, flags=re.IGNORECASE)
             if m:
                 return _normalize_dni(m.group(1))
+        return ""
     m2 = re.search(r"D\.?\s*N\.?\s*I\.?\s*(?:N[°ºo]\s*)?[:\-]?\s*([\d\.\-]{7,16})", txt, flags=re.IGNORECASE)
     if m2:
         return _normalize_dni(m2.group(1))
@@ -436,6 +440,22 @@ def _extract_caratula(full: str) -> str:
         c = _normalize_spaces(m.group(1))
         return _smart_cut(c, 420)
     return _smart_cut(_first_group(r"Ref\.?:\s*(.+)", txt), 420)
+
+
+def _extract_victima_from_caratula(caratula: str) -> str:
+    c = _clean(caratula)
+    if not c:
+        return ""
+    # Normalizar delimitadores y buscar bloque previo a "CONTRA"
+    m = re.search(r"(.+?)\s+CONTRA\s+(.+)", c, flags=re.IGNORECASE)
+    if not m:
+        return ""
+    left = _normalize_spaces(m.group(1))
+    left = re.sub(r"^Ref\.?\s*:?\s*", "", left, flags=re.IGNORECASE).strip()
+    left = re.sub(r"^Expte\.?\s*N[°º]?\s*[^-]+-\s*", "", left, flags=re.IGNORECASE).strip()
+    # quedarse con primer nombre limpio antes de ';'
+    first = left.split(";")[0].strip(" -,:")
+    return _smart_cut(first, 140)
 
 
 def _smart_cut(value: str, max_len: int = 220) -> str:
@@ -619,6 +639,15 @@ def _parse_fields(text: str) -> dict:
     victima = _extract_person_after_label(full, r"(?:y a|a)\s+([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s]{6,})[,;]")
     if not victima:
         victima = _extract_person_after_label(full, r"victima\s*[:\-]?")
+    if not victima:
+        victima = _extract_victima_from_caratula(caratula)
+    # Evitar duplicidad acusado/víctima por OCR ruidoso
+    if _clean(victima).lower() == _clean(denunciado).lower():
+        alt_v = _extract_victima_from_caratula(caratula)
+        if _clean(alt_v) and _clean(alt_v).lower() != _clean(denunciado).lower():
+            victima = alt_v
+        else:
+            victima = ""
     dni_denunciado = _extract_dni_by_context(full, denunciado)
     dni_victima = _extract_dni_by_context(full, victima)
 
@@ -653,6 +682,7 @@ def _parse_fields(text: str) -> dict:
         "dias_ambulatoria": dias_tipo["ambulatoria"] or "",
         "dias_personalizada": dias_tipo["personalizada"] or "",
         "turnos": _smart_cut(turnos, 80),
+        "acusado_notificar": "indeterminada",
         "dni_denunciado": dni_denunciado,
         "dni_victima": dni_victima,
         "fecha_oficio": _smart_cut(fecha_oficio, 40),
@@ -768,6 +798,7 @@ def cargar():
                 dias_fija=_to_int_or_none(payload.get("dias_fija")),
                 dias_ambulatoria=_to_int_or_none(payload.get("dias_ambulatoria")),
                 dias_personalizada=_to_int_or_none(payload.get("dias_personalizada")),
+                acusado_notificar=_clean(payload.get("acusado_notificar")) or "indeterminada",
                 distancia=_clean(payload.get("distancia_restriccion")),
                 turnos=_clean(payload.get("turnos")),
                 estado=_clean(payload.get("estado")) or "activa",

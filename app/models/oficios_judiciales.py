@@ -26,6 +26,7 @@ class ConsignaJudicial(db.Model):
     dias_personalizada = db.Column(db.Integer, nullable=True)
     distancia = db.Column(db.String(80), nullable=True)
     turnos = db.Column(db.String(120), nullable=True)
+    acusado_notificar = db.Column(db.String(20), nullable=True)  # si | no | indeterminada
     estado = db.Column(db.String(40), nullable=False, default="activa", index=True)
     observaciones = db.Column(db.Text, nullable=True)
 
