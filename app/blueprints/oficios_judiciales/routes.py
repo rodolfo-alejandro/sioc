@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, date
 import pandas as pd
 from flask import Response, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
-from sqlalchemy import func, inspect, or_, text
+from sqlalchemy import false, func, inspect, or_, text
 
 from app.blueprints.oficios_judiciales import bp
 from app.extensions import db
@@ -111,9 +111,21 @@ def _ensure_schema():
     if "acusado_notificar" not in cols:
         db.session.execute(text("ALTER TABLE oficios_consignas ADD COLUMN acusado_notificar VARCHAR(20) NULL"))
         db.session.commit()
+    if "expediente_key" not in cols:
+        db.session.execute(text("ALTER TABLE oficios_consignas ADD COLUMN expediente_key VARCHAR(120) NULL"))
+        db.session.commit()
+    if "juzgado_key" not in cols:
+        db.session.execute(text("ALTER TABLE oficios_consignas ADD COLUMN juzgado_key VARCHAR(255) NULL"))
+        db.session.commit()
     pcols = {c.get("name") for c in insp.get_columns(ConsignaPersona.__tablename__)}
     if "notificar" not in pcols:
         db.session.execute(text("ALTER TABLE oficios_consigna_personas ADD COLUMN notificar VARCHAR(20) NULL"))
+        db.session.commit()
+    if "nombre_key" not in pcols:
+        db.session.execute(text("ALTER TABLE oficios_consigna_personas ADD COLUMN nombre_key VARCHAR(255) NULL"))
+        db.session.commit()
+    if "dni_key" not in pcols:
+        db.session.execute(text("ALTER TABLE oficios_consigna_personas ADD COLUMN dni_key VARCHAR(20) NULL"))
         db.session.commit()
     _schema_checked = True
 
@@ -122,6 +134,28 @@ def _clean(v):
     if v is None:
         return ""
     return str(v).strip()
+
+
+def _digits_only(v: str) -> str:
+    return "".join(re.findall(r"\d", _clean(v)))
+
+
+def _name_key(v: str) -> str:
+    s = _clean_person_name(v)
+    s = s.lower()
+    s = re.sub(r"[^a-z0-9áéíóúñ ]", "", s)
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
+
+def _juzgado_key(v: str) -> str:
+    s = _clean(v).lower()
+    if not s:
+        return ""
+    s = re.sub(r"n[°º\*]\s*", "n ", s, flags=re.IGNORECASE)
+    s = re.sub(r"\bnominaci[oó]n\b", "nominacion", s, flags=re.IGNORECASE)
+    s = re.sub(r"[^a-z0-9]", "", s)
+    return s
 
 
 def _file_order_key(filename: str):
@@ -1024,33 +1058,43 @@ def cargar():
 
             exp = _clean(payload.get("expediente"))
             juz = _clean(payload.get("juzgado"))
+            exp_key = _expediente_key(exp)
+            juz_key = _juzgado_key(juz)
             acusado_notificar = _normalize_notificar(payload.get("acusado_notificar"), "si")
             victima_notificar = _normalize_notificar(payload.get("victima_notificar"), "no")
             victima_2_notificar = _normalize_notificar(payload.get("victima_2_notificar"), "no")
 
             row = None
-            exp_key = _expediente_key(exp)
             fecha_oficio_new = _parse_date(_clean(payload.get("fecha_oficio")))
-            if exp:
+            if exp_key:
                 q = ConsignaJudicial.query.filter(
                     ConsignaJudicial.unidad_id == current_user.unidad_id,
                 )
-                if juz:
-                    q = q.filter(ConsignaJudicial.juzgado == juz)
-                candidates = q.order_by(ConsignaJudicial.id.desc()).limit(250).all()
-                for cand in candidates:
-                    if _clean(cand.expediente) == exp:
-                        row = cand
-                        break
-                    if exp_key and _expediente_key(cand.expediente) == exp_key:
-                        row = cand
-                        break
+                q = q.filter(ConsignaJudicial.expediente_key == exp_key)
+                if juz_key:
+                    q = q.filter(ConsignaJudicial.juzgado_key == juz_key)
+                row = q.order_by(ConsignaJudicial.id.desc()).first()
+                if row is None:
+                    # Compatibilidad con datos viejos sin keys persistidas.
+                    q_legacy = ConsignaJudicial.query.filter(ConsignaJudicial.unidad_id == current_user.unidad_id)
+                    if juz_key:
+                        q_legacy = q_legacy.filter(
+                            or_(
+                                ConsignaJudicial.juzgado_key == juz_key,
+                                ConsignaJudicial.juzgado.ilike(f"%{juz}%"),
+                            )
+                        )
+                    candidates = q_legacy.order_by(ConsignaJudicial.id.desc()).limit(300).all()
+                    for cand in candidates:
+                        if _expediente_key(cand.expediente) == exp_key:
+                            row = cand
+                            break
             # Fallback: algunos OCR no extraen expediente; consolidar por juzgado + fecha oficio.
-            if row is None and (not exp_key) and juz and fecha_oficio_new:
+            if row is None and (not exp_key) and juz_key and fecha_oficio_new:
                 row = (
                     ConsignaJudicial.query.filter(
                         ConsignaJudicial.unidad_id == current_user.unidad_id,
-                        ConsignaJudicial.juzgado == juz,
+                        ConsignaJudicial.juzgado_key == juz_key,
                         ConsignaJudicial.fecha_oficio == fecha_oficio_new,
                     )
                     .order_by(ConsignaJudicial.id.desc())
@@ -1063,7 +1107,9 @@ def cargar():
                     unidad_id=current_user.unidad_id,
                     creado_por=current_user.id,
                     expediente=exp,
+                    expediente_key=exp_key,
                     juzgado=juz,
+                    juzgado_key=juz_key,
                     caratula=_clean(payload.get("caratula")),
                     tipo_medida=_clean(payload.get("tipo_medida")),
                     tipo_consigna=_clean(payload.get("tipo_consigna")),
@@ -1087,6 +1133,10 @@ def cargar():
                 db.session.flush()
             else:
                 row.acusado_notificar = acusado_notificar
+                row.expediente = row.expediente or exp
+                row.expediente_key = row.expediente_key or exp_key
+                row.juzgado = row.juzgado or juz
+                row.juzgado_key = row.juzgado_key or juz_key
                 row.caratula = row.caratula or _clean(payload.get("caratula"))
                 row.tipo_medida = row.tipo_medida or _clean(payload.get("tipo_medida"))
                 row.tipo_consigna = row.tipo_consigna or _clean(payload.get("tipo_consigna"))
@@ -1114,20 +1164,42 @@ def cargar():
                 if not nom:
                     return
                 dni_n = _normalize_dni(dni)
+                dni_k = _digits_only(dni_n)
+                nombre_k = _name_key(nom)
+                exists = None
+                if dni_k:
+                    exists = ConsignaPersona.query.filter_by(
+                        consigna_id=row.id,
+                        tipo=tipo,
+                        dni_key=dni_k,
+                    ).first()
+                if not exists and nombre_k:
+                    exists = ConsignaPersona.query.filter_by(
+                        consigna_id=row.id,
+                        tipo=tipo,
+                        nombre_key=nombre_k,
+                    ).first()
                 exists = ConsignaPersona.query.filter_by(
                     consigna_id=row.id,
                     tipo=tipo,
                     nombre=nom,
                     dni=dni_n,
-                ).first()
+                ).first() if not exists else exists
                 if exists:
                     exists.notificar = _normalize_notificar(notificar, exists.notificar or "no")
+                    if dni_n and not _clean(exists.dni):
+                        exists.dni = dni_n
+                        exists.dni_key = dni_k
+                    if nombre_k and not _clean(getattr(exists, "nombre_key", "")):
+                        exists.nombre_key = nombre_k
                     return
                 db.session.add(
                     ConsignaPersona(
                         consigna_id=row.id,
                         nombre=nom,
+                        nombre_key=nombre_k,
                         dni=dni_n,
+                        dni_key=dni_k,
                         tipo=tipo,
                         notificar=_normalize_notificar(notificar, "no"),
                     )
@@ -1386,11 +1458,17 @@ def listado():
     if tipo_consigna:
         q = q.filter(ConsignaJudicial.tipo_consigna == tipo_consigna)
     if juzgado:
-        q = q.filter(ConsignaJudicial.juzgado.ilike(f"%{juzgado}%"))
+        jk = _juzgado_key(juzgado)
+        if jk:
+            q = q.filter(or_(ConsignaJudicial.juzgado_key == jk, ConsignaJudicial.juzgado.ilike(f"%{juzgado}%")))
+        else:
+            q = q.filter(ConsignaJudicial.juzgado.ilike(f"%{juzgado}%"))
     if qtxt:
         pat = f"%{qtxt}%"
+        eq = _expediente_key(qtxt)
         q = q.filter(
             or_(
+                ConsignaJudicial.expediente_key == eq if eq else false(),
                 ConsignaJudicial.expediente.ilike(pat),
                 ConsignaJudicial.caratula.ilike(pat),
                 ConsignaJudicial.observaciones.ilike(pat),
@@ -1401,8 +1479,12 @@ def listado():
     if fhasta:
         q = q.filter(ConsignaJudicial.fecha_notificacion <= fhasta)
     if persona:
+        persona_key = _name_key(persona)
+        dni_key = _digits_only(persona)
         q = q.join(ConsignaPersona, ConsignaPersona.consigna_id == ConsignaJudicial.id).filter(
             or_(
+                ConsignaPersona.nombre_key == persona_key if persona_key else false(),
+                ConsignaPersona.dni_key == dni_key if dni_key else false(),
                 ConsignaPersona.nombre.ilike(f"%{persona}%"),
                 ConsignaPersona.dni.ilike(f"%{persona}%"),
             )

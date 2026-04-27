@@ -14,7 +14,9 @@ class ConsignaJudicial(db.Model):
     creado_por = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)
 
     expediente = db.Column(db.String(120), nullable=True, index=True)
+    expediente_key = db.Column(db.String(120), nullable=True, index=True)
     juzgado = db.Column(db.String(255), nullable=True, index=True)
+    juzgado_key = db.Column(db.String(255), nullable=True, index=True)
     caratula = db.Column(db.Text, nullable=True)
     tipo_medida = db.Column(db.String(80), nullable=True, index=True)
     tipo_consigna = db.Column(db.String(30), nullable=True, index=True)  # fija | ambulatoria | personalizada | indeterminada
@@ -67,7 +69,9 @@ class ConsignaPersona(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     consigna_id = db.Column(db.Integer, db.ForeignKey("oficios_consignas.id"), nullable=False, index=True)
     nombre = db.Column(db.String(255), nullable=False, index=True)
+    nombre_key = db.Column(db.String(255), nullable=True, index=True)
     dni = db.Column(db.String(40), nullable=True, index=True)
+    dni_key = db.Column(db.String(20), nullable=True, index=True)
     tipo = db.Column(db.String(30), nullable=False, index=True)  # victima | denunciado | notificado
     notificar = db.Column(db.String(20), nullable=True)  # si | no | indeterminada
 
