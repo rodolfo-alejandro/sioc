@@ -69,6 +69,7 @@ class ConsignaPersona(db.Model):
     nombre = db.Column(db.String(255), nullable=False, index=True)
     dni = db.Column(db.String(40), nullable=True, index=True)
     tipo = db.Column(db.String(30), nullable=False, index=True)  # victima | denunciado | notificado
+    notificar = db.Column(db.String(20), nullable=True)  # si | no | indeterminada
 
 
 class ConsignaDomicilio(db.Model):

@@ -36,7 +36,7 @@
         <div class="card"><div class="card-header">Personas y domicilios</div><div class="card-body">
             <div class="mb-2"><strong>Personas</strong></div>
             {% for p in row.personas %}
-            <div>- {{ p.tipo }}: {{ p.nombre }} {% if p.dni %}({{ p.dni }}){% endif %}</div>
+            <div>- {{ p.tipo }}: {{ p.nombre }} {% if p.dni %}({{ p.dni }}){% endif %} {% if p.notificar %}<span class="text-muted">[notificar: {{ p.notificar }}]</span>{% endif %}</div>
             {% else %}
             <div class="text-muted">Sin personas.</div>
             {% endfor %}

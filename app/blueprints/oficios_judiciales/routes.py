@@ -109,6 +109,10 @@ def _ensure_schema():
     if "acusado_notificar" not in cols:
         db.session.execute(text("ALTER TABLE oficios_consignas ADD COLUMN acusado_notificar VARCHAR(20) NULL"))
         db.session.commit()
+    pcols = {c.get("name") for c in insp.get_columns(ConsignaPersona.__tablename__)}
+    if "notificar" not in pcols:
+        db.session.execute(text("ALTER TABLE oficios_consigna_personas ADD COLUMN notificar VARCHAR(20) NULL"))
+        db.session.commit()
     _schema_checked = True
 
 
@@ -458,6 +462,54 @@ def _extract_victima_from_caratula(caratula: str) -> str:
     return _smart_cut(first, 140)
 
 
+def _extract_victimas_from_caratula(caratula: str, acusado: str) -> list[str]:
+    c = _clean(caratula)
+    if not c:
+        return []
+    m = re.search(r"(.+?)\s+CONTRA\s+(.+)", c, flags=re.IGNORECASE)
+    if not m:
+        return []
+    left = _normalize_spaces(m.group(1))
+    left = re.sub(r"^Ref\.?\s*:?\s*", "", left, flags=re.IGNORECASE).strip()
+    left = re.sub(r"^Expte\.?\s*N[°º]?\s*[^-]+-\s*", "", left, flags=re.IGNORECASE).strip()
+    parts = [p.strip(" -,:") for p in re.split(r";|\s+Y\s+", left, flags=re.IGNORECASE) if _clean(p)]
+    uniq = []
+    acusado_l = _clean(acusado).lower()
+    for p in parts:
+        pp = _smart_cut(p, 140)
+        if not pp:
+            continue
+        if acusado_l and _clean(pp).lower() == acusado_l:
+            continue
+        if pp not in uniq:
+            uniq.append(pp)
+    return uniq
+
+
+def _extract_victimas_from_text(full: str, acusado: str) -> list[str]:
+    txt = full or ""
+    acusado_l = _clean(acusado).lower()
+    out = []
+    # Patrones de víctimas en frases de prohibición/acercamiento.
+    pats = [
+        r"contra\s+([A-ZÁÉÍÓÚÑ ,;]{8,120})\s*,\s*debiendo",
+        r"en contra de\s+([A-ZÁÉÍÓÚÑ ,;]{8,120})",
+        r"a la denunciante\s+([A-ZÁÉÍÓÚÑ ,;]{8,120})",
+    ]
+    for pat in pats:
+        for m in re.finditer(pat, txt, flags=re.IGNORECASE):
+            block = _normalize_spaces(m.group(1))
+            for p in re.split(r";|\s+Y\s+", block, flags=re.IGNORECASE):
+                pp = _smart_cut(p.strip(" -,:"), 140)
+                if not pp:
+                    continue
+                if acusado_l and _clean(pp).lower() == acusado_l:
+                    continue
+                if pp not in out:
+                    out.append(pp)
+    return out
+
+
 def _smart_cut(value: str, max_len: int = 220) -> str:
     s = _clean(value)
     if len(s) <= max_len:
@@ -636,18 +688,19 @@ def _parse_fields(text: str) -> dict:
     juzgado = _extract_juzgado(full)
     caratula = _extract_caratula(full)
     denunciado = _extract_person_after_label(full, r"Señor/?a?:")
-    victima = _extract_person_after_label(full, r"(?:y a|a)\s+([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s]{6,})[,;]")
-    if not victima:
-        victima = _extract_person_after_label(full, r"victima\s*[:\-]?")
-    if not victima:
-        victima = _extract_victima_from_caratula(caratula)
-    # Evitar duplicidad acusado/víctima por OCR ruidoso
-    if _clean(victima).lower() == _clean(denunciado).lower():
-        alt_v = _extract_victima_from_caratula(caratula)
-        if _clean(alt_v) and _clean(alt_v).lower() != _clean(denunciado).lower():
-            victima = alt_v
-        else:
-            victima = ""
+    victimas = []
+    v_from_car = _extract_victimas_from_caratula(caratula, denunciado)
+    v_from_txt = _extract_victimas_from_text(full, denunciado)
+    for v in v_from_car + v_from_txt:
+        vv = _smart_cut(v, 140)
+        if vv and vv not in victimas:
+            victimas.append(vv)
+    if not victimas:
+        v_single = _extract_person_after_label(full, r"victima\s*[:\-]?")
+        if v_single and _clean(v_single).lower() != _clean(denunciado).lower():
+            victimas.append(_smart_cut(v_single, 140))
+    victima = victimas[0] if victimas else ""
+    victimas_extra = victimas[1:] if len(victimas) > 1 else []
     dni_denunciado = _extract_dni_by_context(full, denunciado)
     dni_victima = _extract_dni_by_context(full, victima)
 
@@ -672,6 +725,7 @@ def _parse_fields(text: str) -> dict:
         "caratula": _smart_cut(caratula, 320),
         "persona_denunciada": _smart_cut(denunciado, 120),
         "victima": _smart_cut(victima, 120),
+        "victimas_adicionales": victimas_extra,
         "domicilio_denunciado": _smart_cut(dom_den, 220),
         "domicilio_victima": _smart_cut(dom_vic, 220),
         "tipo_medida": _pick_tipo_medida(full),
@@ -683,6 +737,7 @@ def _parse_fields(text: str) -> dict:
         "dias_personalizada": dias_tipo["personalizada"] or "",
         "turnos": _smart_cut(turnos, 80),
         "acusado_notificar": "indeterminada",
+        "victima_notificar": "indeterminada",
         "dni_denunciado": dni_denunciado,
         "dni_victima": dni_victima,
         "fecha_oficio": _smart_cut(fecha_oficio, 40),
@@ -818,6 +873,7 @@ def cargar():
                         nombre=_clean(payload.get("persona_denunciada")),
                         dni=_clean(payload.get("dni_denunciado")),
                         tipo="denunciado",
+                        notificar=_clean(payload.get("acusado_notificar")) or "indeterminada",
                     )
                 )
             if _clean(payload.get("victima")):
@@ -827,8 +883,20 @@ def cargar():
                         nombre=_clean(payload.get("victima")),
                         dni=_clean(payload.get("dni_victima")),
                         tipo="victima",
+                        notificar=_clean(payload.get("victima_notificar")) or "indeterminada",
                     )
                 )
+            for vextra in (payload.get("victimas_adicionales") or []):
+                if _clean(vextra):
+                    db.session.add(
+                        ConsignaPersona(
+                            consigna_id=row.id,
+                            nombre=_clean(vextra),
+                            dni="",
+                            tipo="victima",
+                            notificar=_clean(payload.get("victima_notificar")) or "indeterminada",
+                        )
+                    )
             if _clean(payload.get("domicilio_denunciado")):
                 db.session.add(
                     ConsignaDomicilio(consigna_id=row.id, direccion=_clean(payload.get("domicilio_denunciado")), tipo="denunciado")
