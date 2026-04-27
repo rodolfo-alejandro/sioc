@@ -4,12 +4,12 @@ import io
 import json
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timedelta, date
 
 import pandas as pd
 from flask import Response, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
-from sqlalchemy import func, inspect, or_
+from sqlalchemy import func, inspect, or_, text
 
 from app.blueprints.oficios_judiciales import bp
 from app.extensions import db
@@ -93,6 +93,10 @@ def _ensure_schema():
     for model in (ConsignaJudicial, ConsignaPersona, ConsignaDomicilio, ConsignaMedidaDetalle):
         if model.__tablename__ not in existing:
             model.__table__.create(bind=db.engine)
+    cols = {c.get("name") for c in insp.get_columns(ConsignaJudicial.__tablename__)}
+    if "tipo_consigna" not in cols:
+        db.session.execute(text("ALTER TABLE oficios_consignas ADD COLUMN tipo_consigna VARCHAR(30) NULL"))
+        db.session.commit()
     _schema_checked = True
 
 
@@ -314,6 +318,48 @@ def _pick_tipo_medida(text: str) -> str:
     return ""
 
 
+def _pick_tipo_consigna(text: str) -> str:
+    t = (text or "").lower()
+    if "consigna ambulatoria" in t:
+        return "ambulatoria"
+    if "consigna fija" in t:
+        return "fija"
+    if "consigna personalizada" in t:
+        return "personalizada"
+    if "consigna indeterminada" in t:
+        return "indeterminada"
+    return ""
+
+
+def _normalize_dni(v: str) -> str:
+    s = _clean(v)
+    if not s:
+        return ""
+    nums = re.findall(r"\d", s)
+    if len(nums) < 7:
+        return ""
+    out = "".join(nums[:8])
+    if len(out) == 8:
+        return f"{out[:2]}.{out[2:5]}.{out[5:]}"
+    return out
+
+
+def _extract_dni_by_context(full: str, person_name: str = "") -> str:
+    txt = full or ""
+    if person_name:
+        # Buscar un DNI cercano al nombre de la persona.
+        idx = txt.lower().find(person_name.lower())
+        if idx >= 0:
+            chunk = txt[max(0, idx - 160): idx + 240]
+            m = re.search(r"D\.?\s*N\.?\s*I\.?\s*(?:N[°ºo]\s*)?[:\-]?\s*([\d\.\-]{7,16})", chunk, flags=re.IGNORECASE)
+            if m:
+                return _normalize_dni(m.group(1))
+    m2 = re.search(r"D\.?\s*N\.?\s*I\.?\s*(?:N[°ºo]\s*)?[:\-]?\s*([\d\.\-]{7,16})", txt, flags=re.IGNORECASE)
+    if m2:
+        return _normalize_dni(m2.group(1))
+    return ""
+
+
 def _first_group(pattern: str, text: str) -> str:
     m = re.search(pattern, text, flags=re.IGNORECASE | re.MULTILINE)
     if not m:
@@ -401,6 +447,8 @@ def _parse_fields(text: str) -> dict:
     victima = _extract_person_after_label(full, r"(?:y a|a)\s+([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s]{6,})[,;]")
     if not victima:
         victima = _extract_person_after_label(full, r"victima\s*[:\-]?")
+    dni_denunciado = _extract_dni_by_context(full, denunciado)
+    dni_victima = _extract_dni_by_context(full, victima)
 
     dom_den = _first_group(r"Domicilio\s*[:\-]?\s*([^\n]+)", full)
     dom_vic = _first_group(r"domicilio de la victima\s*[:\-]?\s*([^.]+)", full)
@@ -425,9 +473,12 @@ def _parse_fields(text: str) -> dict:
         "domicilio_denunciado": _smart_cut(dom_den, 220),
         "domicilio_victima": _smart_cut(dom_vic, 220),
         "tipo_medida": _pick_tipo_medida(full),
+        "tipo_consigna": _pick_tipo_consigna(full),
         "distancia_restriccion": _smart_cut(dist, 40),
         "cantidad_dias": _smart_cut(dias, 12),
         "turnos": _smart_cut(turnos, 80),
+        "dni_denunciado": dni_denunciado,
+        "dni_victima": dni_victima,
         "fecha_oficio": _smart_cut(fecha_oficio, 40),
         "fecha_notificacion": _smart_cut(fecha_notif, 40),
         "observaciones": "",
@@ -468,6 +519,23 @@ def _q_base():
     return ConsignaJudicial.query.filter(ConsignaJudicial.unidad_id == current_user.unidad_id)
 
 
+def _vencimiento_info(row: ConsignaJudicial, today: date | None = None) -> dict:
+    tdy = today or datetime.utcnow().date()
+    inicio = row.fecha_notificacion
+    dias = row.cantidad_dias
+    if not inicio:
+        return {"estado": "sin_inicio", "label": "Sin fecha de inicio", "dias_restantes": None, "fecha_vencimiento": None}
+    if not dias or dias <= 0:
+        return {"estado": "indeterminada", "label": "Sin plazo determinado", "dias_restantes": None, "fecha_vencimiento": None}
+    fecha_vto = inicio + timedelta(days=dias)
+    restantes = (fecha_vto - tdy).days
+    if restantes < 0:
+        return {"estado": "vencida", "label": f"Vencida hace {abs(restantes)} día(s)", "dias_restantes": restantes, "fecha_vencimiento": fecha_vto}
+    if restantes <= 3:
+        return {"estado": "por_vencer", "label": f"Por vencer en {restantes} día(s)", "dias_restantes": restantes, "fecha_vencimiento": fecha_vto}
+    return {"estado": "vigente", "label": f"Vigente ({restantes} día(s) restantes)", "dias_restantes": restantes, "fecha_vencimiento": fecha_vto}
+
+
 @bp.before_request
 @login_required
 def _before():
@@ -503,6 +571,7 @@ def cargar():
                 juzgado=_clean(payload.get("juzgado")),
                 caratula=_clean(payload.get("caratula")),
                 tipo_medida=_clean(payload.get("tipo_medida")),
+                tipo_consigna=_clean(payload.get("tipo_consigna")),
                 fecha_oficio=_parse_date(_clean(payload.get("fecha_oficio"))),
                 fecha_notificacion=_parse_date(_clean(payload.get("fecha_notificacion"))),
                 cantidad_dias=int(payload.get("cantidad_dias") or 0) if str(payload.get("cantidad_dias") or "").isdigit() else None,
@@ -543,6 +612,19 @@ def cargar():
             if _clean(payload.get("domicilio_victima")):
                 db.session.add(
                     ConsignaDomicilio(consigna_id=row.id, direccion=_clean(payload.get("domicilio_victima")), tipo="victima")
+                )
+            if _clean(payload.get("tercero_nombre")):
+                db.session.add(
+                    ConsignaPersona(
+                        consigna_id=row.id,
+                        nombre=_clean(payload.get("tercero_nombre")),
+                        dni=_clean(payload.get("tercero_dni")),
+                        tipo="tercero",
+                    )
+                )
+            if _clean(payload.get("tercero_domicilio")):
+                db.session.add(
+                    ConsignaDomicilio(consigna_id=row.id, direccion=_clean(payload.get("tercero_domicilio")), tipo="tercero")
                 )
             for m in (payload.get("medidas_detalle") or []):
                 if _clean(m):
@@ -701,6 +783,7 @@ def listado():
     q = _q_base()
 
     tipo = _clean(request.args.get("tipo"))
+    tipo_consigna = _clean(request.args.get("tipo_consigna"))
     juzgado = _clean(request.args.get("juzgado"))
     persona = _clean(request.args.get("persona"))
     qtxt = _clean(request.args.get("q"))
@@ -709,6 +792,8 @@ def listado():
 
     if tipo:
         q = q.filter(ConsignaJudicial.tipo_medida == tipo)
+    if tipo_consigna:
+        q = q.filter(ConsignaJudicial.tipo_consigna == tipo_consigna)
     if juzgado:
         q = q.filter(ConsignaJudicial.juzgado.ilike(f"%{juzgado}%"))
     if qtxt:
@@ -734,7 +819,31 @@ def listado():
 
     rows = q.order_by(ConsignaJudicial.created_at.desc()).limit(300).all()
     tipos = [r[0] for r in _q_base().with_entities(ConsignaJudicial.tipo_medida).distinct().all() if r[0]]
-    return render_template("oficios_judiciales/listado.html", rows=rows, tipos=tipos, selected=request.args)
+    tipos_consigna = [r[0] for r in _q_base().with_entities(ConsignaJudicial.tipo_consigna).distinct().all() if r[0]]
+    venc = {r.id: _vencimiento_info(r) for r in rows}
+    return render_template("oficios_judiciales/listado.html", rows=rows, tipos=tipos, tipos_consigna=tipos_consigna, venc=venc, selected=request.args)
+
+
+@bp.route("/alertas")
+def alertas():
+    if not _can_view():
+        abort(403)
+    rows = _q_base().order_by(ConsignaJudicial.fecha_notificacion.desc(), ConsignaJudicial.id.desc()).limit(500).all()
+    cards = []
+    for r in rows:
+        info = _vencimiento_info(r)
+        cards.append({"row": r, "venc": info})
+    vencidas = [x for x in cards if x["venc"]["estado"] == "vencida"]
+    por_vencer = [x for x in cards if x["venc"]["estado"] == "por_vencer"]
+    vigentes = [x for x in cards if x["venc"]["estado"] == "vigente"]
+    indeterminadas = [x for x in cards if x["venc"]["estado"] in ("indeterminada", "sin_inicio")]
+    return render_template(
+        "oficios_judiciales/alertas.html",
+        vencidas=vencidas,
+        por_vencer=por_vencer,
+        vigentes=vigentes,
+        indeterminadas=indeterminadas,
+    )
 
 
 @bp.route("/detalle/<int:consigna_id>")
@@ -742,7 +851,8 @@ def detalle(consigna_id: int):
     if not _can_view():
         abort(403)
     row = _q_base().filter(ConsignaJudicial.id == consigna_id).first_or_404()
-    return render_template("oficios_judiciales/detalle.html", row=row)
+    venc = _vencimiento_info(row)
+    return render_template("oficios_judiciales/detalle.html", row=row, venc=venc)
 
 
 @bp.route("/export.csv")
@@ -753,7 +863,7 @@ def export_csv():
     out = io.StringIO()
     import csv
     w = csv.writer(out)
-    w.writerow(["id", "expediente", "juzgado", "tipo_medida", "fecha_notificacion", "estado", "caratula"])
+    w.writerow(["id", "expediente", "juzgado", "tipo_medida", "tipo_consigna", "fecha_notificacion", "cantidad_dias", "estado", "caratula"])
     for r in q.yield_per(300):
         w.writerow(
             [
@@ -761,7 +871,9 @@ def export_csv():
                 r.expediente or "",
                 r.juzgado or "",
                 r.tipo_medida or "",
+                r.tipo_consigna or "",
                 r.fecha_notificacion.isoformat() if r.fecha_notificacion else "",
+                r.cantidad_dias or "",
                 r.estado or "",
                 r.caratula or "",
             ]
@@ -785,7 +897,9 @@ def export_xlsx():
                 "expediente": r.expediente,
                 "juzgado": r.juzgado,
                 "tipo_medida": r.tipo_medida,
+                "tipo_consigna": r.tipo_consigna,
                 "fecha_notificacion": r.fecha_notificacion,
+                "cantidad_dias": r.cantidad_dias,
                 "estado": r.estado,
                 "caratula": r.caratula,
             }

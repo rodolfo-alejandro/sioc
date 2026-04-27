@@ -15,9 +15,17 @@
             <div><strong>Juzgado:</strong> {{ row.juzgado or '—' }}</div>
             <div><strong>Carátula:</strong> {{ row.caratula or '—' }}</div>
             <div><strong>Tipo medida:</strong> {{ row.tipo_medida or '—' }}</div>
+            <div><strong>Tipo consigna:</strong> {{ row.tipo_consigna or '—' }}</div>
             <div><strong>Fecha oficio:</strong> {{ row.fecha_oficio|localtime('%d/%m/%Y') if row.fecha_oficio else '—' }}</div>
             <div><strong>Fecha notificación (inicio):</strong> {{ row.fecha_notificacion|localtime('%d/%m/%Y') if row.fecha_notificacion else '—' }}</div>
             <div><strong>Días:</strong> {{ row.cantidad_dias or '—' }}</div>
+            <div><strong>Vencimiento:</strong>
+                {% if venc.fecha_vencimiento %}
+                    {{ venc.fecha_vencimiento.strftime('%d/%m/%Y') }} ({{ venc.label }})
+                {% else %}
+                    {{ venc.label }}
+                {% endif %}
+            </div>
             <div><strong>Distancia:</strong> {{ row.distancia or '—' }}</div>
             <div><strong>Turnos:</strong> {{ row.turnos or '—' }}</div>
         </div></div>

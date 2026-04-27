@@ -7,6 +7,7 @@
 
 <div class="d-flex gap-2 mb-3">
     <a class="btn btn-primary btn-sm" href="{{ url_for('oficios_judiciales.cargar') }}"><i class="bi bi-cloud-upload"></i> Carga inteligente</a>
+    <a class="btn btn-outline-warning btn-sm" href="{{ url_for('oficios_judiciales.alertas') }}"><i class="bi bi-bell"></i> Alertas vencimiento</a>
     <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('oficios_judiciales.export_csv') }}">CSV</a>
     <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('oficios_judiciales.export_xlsx') }}">Excel</a>
     <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('oficios_judiciales.export_pdf') }}">PDF</a>
@@ -25,6 +26,14 @@
                     {% endfor %}
                 </select>
             </div>
+            <div class="col-md-2">
+                <select name="tipo_consigna" class="form-select form-select-sm">
+                    <option value="">Todas las consignas</option>
+                    {% for t in tipos_consigna %}
+                    <option value="{{ t }}" {{ 'selected' if selected.get('tipo_consigna') == t else '' }}>{{ t|title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
             <div class="col-md-2"><input class="form-control form-control-sm" name="juzgado" placeholder="Juzgado" value="{{ selected.get('juzgado','') }}"></div>
             <div class="col-md-2"><input class="form-control form-control-sm" name="persona" placeholder="Persona / DNI" value="{{ selected.get('persona','') }}"></div>
             <div class="col-md-2"><input class="form-control form-control-sm" name="q" placeholder="Expediente / texto" value="{{ selected.get('q','') }}"></div>
@@ -40,7 +49,7 @@
     <table class="table table-sm align-middle">
         <thead>
             <tr>
-                <th>ID</th><th>Expediente</th><th>Tipo</th><th>Juzgado</th><th>Inicio</th><th>Estado</th><th></th>
+                <th>ID</th><th>Expediente</th><th>Tipo</th><th>Consigna</th><th>Juzgado</th><th>Inicio</th><th>Vencimiento</th><th>Estado</th><th></th>
             </tr>
         </thead>
         <tbody>
@@ -49,13 +58,22 @@
                 <td>{{ r.id }}</td>
                 <td>{{ r.expediente or '—' }}</td>
                 <td>{{ r.tipo_medida or '—' }}</td>
+                <td>{{ r.tipo_consigna or '—' }}</td>
                 <td>{{ r.juzgado or '—' }}</td>
                 <td>{{ r.fecha_notificacion|localtime('%d/%m/%Y') if r.fecha_notificacion else '—' }}</td>
+                <td>
+                    {% set v = venc.get(r.id) %}
+                    {% if v and v.fecha_vencimiento %}
+                        {{ v.fecha_vencimiento.strftime('%d/%m/%Y') }}<br><small class="{% if v.estado == 'vencida' %}text-danger{% elif v.estado == 'por_vencer' %}text-warning{% else %}text-success{% endif %}">{{ v.label }}</small>
+                    {% else %}
+                        <small class="text-muted">{{ v.label if v else '—' }}</small>
+                    {% endif %}
+                </td>
                 <td>{{ r.estado }}</td>
                 <td><a class="btn btn-sm btn-outline-primary" href="{{ url_for('oficios_judiciales.detalle', consigna_id=r.id) }}">Detalle</a></td>
             </tr>
             {% else %}
-            <tr><td colspan="7" class="text-muted text-center">Sin resultados.</td></tr>
+            <tr><td colspan="9" class="text-muted text-center">Sin resultados.</td></tr>
             {% endfor %}
         </tbody>
     </table>

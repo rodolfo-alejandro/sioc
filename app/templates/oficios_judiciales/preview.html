@@ -68,15 +68,54 @@
     <div class="col-md-4"><label class="form-label">Juzgado</label><input class="form-control" id="f-juzgado" value="{{ data.juzgado }}"></div>
     <div class="col-md-4"><label class="form-label">Expediente</label><input class="form-control" id="f-expediente" value="{{ data.expediente }}"></div>
     <div class="col-md-4"><label class="form-label">Tipo medida</label><input class="form-control" id="f-tipo_medida" value="{{ data.tipo_medida }}"></div>
+    <div class="col-md-4">
+        <label class="form-label">Tipo de consigna</label>
+        <select class="form-select" id="f-tipo_consigna">
+            {% set tc = (data.tipo_consigna or '') %}
+            <option value="" {{ 'selected' if not tc else '' }}>Sin clasificar</option>
+            <option value="fija" {{ 'selected' if tc == 'fija' else '' }}>Fija</option>
+            <option value="ambulatoria" {{ 'selected' if tc == 'ambulatoria' else '' }}>Ambulatoria</option>
+            <option value="personalizada" {{ 'selected' if tc == 'personalizada' else '' }}>Personalizada</option>
+            <option value="indeterminada" {{ 'selected' if tc == 'indeterminada' else '' }}>Indeterminada</option>
+        </select>
+    </div>
 
     <div class="col-md-6"><label class="form-label">Carátula</label><input class="form-control" id="f-caratula" value="{{ data.caratula }}"></div>
     <div class="col-md-3"><label class="form-label">Fecha oficio</label><input class="form-control" id="f-fecha_oficio" value="{{ data.fecha_oficio }}"></div>
     <div class="col-md-3"><label class="form-label">Fecha notificación (inicio)</label><input class="form-control" id="f-fecha_notificacion" value="{{ data.fecha_notificacion }}"></div>
 
-    <div class="col-md-6"><label class="form-label">Persona denunciada / notificada</label><input class="form-control" id="f-persona_denunciada" value="{{ data.persona_denunciada }}"></div>
-    <div class="col-md-6"><label class="form-label">Víctima</label><input class="form-control" id="f-victima" value="{{ data.victima }}"></div>
-    <div class="col-md-6"><label class="form-label">Domicilio denunciado</label><input class="form-control" id="f-domicilio_denunciado" value="{{ data.domicilio_denunciado }}"></div>
-    <div class="col-md-6"><label class="form-label">Domicilio víctima</label><input class="form-control" id="f-domicilio_victima" value="{{ data.domicilio_victima }}"></div>
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header"><strong>Parte denunciada / notificada</strong></div>
+            <div class="card-body row g-2">
+                <div class="col-md-5"><label class="form-label">Nombre y apellido</label><input class="form-control" id="f-persona_denunciada" value="{{ data.persona_denunciada }}"></div>
+                <div class="col-md-3"><label class="form-label">DNI</label><input class="form-control" id="f-dni_denunciado" value="{{ data.dni_denunciado or '' }}" placeholder="ej: 38.652.149"></div>
+                <div class="col-md-4"><label class="form-label">Domicilio</label><input class="form-control" id="f-domicilio_denunciado" value="{{ data.domicilio_denunciado }}"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header"><strong>Parte víctima / denunciante</strong></div>
+            <div class="card-body row g-2">
+                <div class="col-md-5"><label class="form-label">Nombre y apellido</label><input class="form-control" id="f-victima" value="{{ data.victima }}"></div>
+                <div class="col-md-3"><label class="form-label">DNI</label><input class="form-control" id="f-dni_victima" value="{{ data.dni_victima or '' }}" placeholder="ej: 42.584.414"></div>
+                <div class="col-md-4"><label class="form-label">Domicilio</label><input class="form-control" id="f-domicilio_victima" value="{{ data.domicilio_victima }}"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header"><strong>Tercero relacionado (opcional)</strong></div>
+            <div class="card-body row g-2">
+                <div class="col-md-5"><label class="form-label">Nombre y apellido</label><input class="form-control" id="f-tercero_nombre" value="{{ data.tercero_nombre or '' }}"></div>
+                <div class="col-md-3"><label class="form-label">DNI</label><input class="form-control" id="f-tercero_dni" value="{{ data.tercero_dni or '' }}"></div>
+                <div class="col-md-4"><label class="form-label">Domicilio</label><input class="form-control" id="f-tercero_domicilio" value="{{ data.tercero_domicilio or '' }}"></div>
+            </div>
+        </div>
+    </div>
 
     <div class="col-md-4"><label class="form-label">Distancia restricción</label><input class="form-control" id="f-distancia_restriccion" value="{{ data.distancia_restriccion }}"></div>
     <div class="col-md-4"><label class="form-label">Cantidad días</label><input class="form-control" id="f-cantidad_dias" value="{{ data.cantidad_dias }}"></div>
@@ -108,12 +147,18 @@
             expediente: v('f-expediente'),
             caratula: v('f-caratula'),
             tipo_medida: v('f-tipo_medida'),
+            tipo_consigna: v('f-tipo_consigna'),
             fecha_oficio: v('f-fecha_oficio'),
             fecha_notificacion: v('f-fecha_notificacion'),
             persona_denunciada: v('f-persona_denunciada'),
+            dni_denunciado: v('f-dni_denunciado'),
             victima: v('f-victima'),
+            dni_victima: v('f-dni_victima'),
             domicilio_denunciado: v('f-domicilio_denunciado'),
             domicilio_victima: v('f-domicilio_victima'),
+            tercero_nombre: v('f-tercero_nombre'),
+            tercero_dni: v('f-tercero_dni'),
+            tercero_domicilio: v('f-tercero_domicilio'),
             distancia_restriccion: v('f-distancia_restriccion'),
             cantidad_dias: v('f-cantidad_dias'),
             turnos: v('f-turnos'),

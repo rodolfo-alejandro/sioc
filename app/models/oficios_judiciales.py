@@ -17,6 +17,7 @@ class ConsignaJudicial(db.Model):
     juzgado = db.Column(db.String(255), nullable=True, index=True)
     caratula = db.Column(db.Text, nullable=True)
     tipo_medida = db.Column(db.String(80), nullable=True, index=True)
+    tipo_consigna = db.Column(db.String(30), nullable=True, index=True)  # fija | ambulatoria | personalizada | indeterminada
     fecha_oficio = db.Column(db.Date, nullable=True, index=True)
     fecha_notificacion = db.Column(db.Date, nullable=True, index=True)  # inicio real
     cantidad_dias = db.Column(db.Integer, nullable=True)

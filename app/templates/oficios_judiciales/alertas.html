@@ -1,0 +1,81 @@
+{% extends "layouts/base.html" %}
+{% block title %}Alertas Oficios Judiciales{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-bell"></i> Alertas de vencimiento de consignas</h1>
+    <p class="text-muted">Control operativo por fecha de inicio + cantidad de días.</p>
+</div>
+
+<div class="d-flex gap-2 mb-3">
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('oficios_judiciales.listado') }}">Volver al listado</a>
+    <a class="btn btn-primary btn-sm" href="{{ url_for('oficios_judiciales.cargar') }}">Nueva carga</a>
+</div>
+
+<div class="row g-3">
+    <div class="col-md-6">
+        <div class="card border-danger">
+            <div class="card-header text-danger"><strong>Vencidas</strong> ({{ vencidas|length }})</div>
+            <div class="card-body">
+                {% for x in vencidas %}
+                <div class="mb-2">
+                    <div><strong>#{{ x.row.id }}</strong> {{ x.row.expediente or '—' }} - {{ x.row.tipo_consigna or '—' }}</div>
+                    <div class="small text-muted">{{ x.row.caratula or '—' }}</div>
+                    <div class="small text-danger">{{ x.venc.label }}</div>
+                </div>
+                {% else %}
+                <div class="text-muted">Sin consignas vencidas.</div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card border-warning">
+            <div class="card-header text-warning"><strong>Por vencer (0-3 días)</strong> ({{ por_vencer|length }})</div>
+            <div class="card-body">
+                {% for x in por_vencer %}
+                <div class="mb-2">
+                    <div><strong>#{{ x.row.id }}</strong> {{ x.row.expediente or '—' }} - {{ x.row.tipo_consigna or '—' }}</div>
+                    <div class="small text-muted">{{ x.row.caratula or '—' }}</div>
+                    <div class="small text-warning">{{ x.venc.label }}</div>
+                </div>
+                {% else %}
+                <div class="text-muted">Sin consignas por vencer.</div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card border-success">
+            <div class="card-header text-success"><strong>Vigentes</strong> ({{ vigentes|length }})</div>
+            <div class="card-body">
+                {% for x in vigentes %}
+                <div class="mb-2">
+                    <div><strong>#{{ x.row.id }}</strong> {{ x.row.expediente or '—' }} - {{ x.row.tipo_consigna or '—' }}</div>
+                    <div class="small text-muted">{{ x.row.caratula or '—' }}</div>
+                    <div class="small text-success">{{ x.venc.label }}</div>
+                </div>
+                {% else %}
+                <div class="text-muted">Sin consignas vigentes con plazo.</div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card border-secondary">
+            <div class="card-header text-secondary"><strong>Indeterminadas / Sin inicio</strong> ({{ indeterminadas|length }})</div>
+            <div class="card-body">
+                {% for x in indeterminadas %}
+                <div class="mb-2">
+                    <div><strong>#{{ x.row.id }}</strong> {{ x.row.expediente or '—' }} - {{ x.row.tipo_consigna or '—' }}</div>
+                    <div class="small text-muted">{{ x.row.caratula or '—' }}</div>
+                    <div class="small text-secondary">{{ x.venc.label }}</div>
+                </div>
+                {% else %}
+                <div class="text-muted">Sin consignas indeterminadas.</div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

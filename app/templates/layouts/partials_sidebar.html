@@ -170,6 +170,7 @@
                     <ul class="nav flex-column collapse" id="submenuOficiosJudiciales">
                         {% if current_user.has_permission('OFICIOS_JUDICIALES_VIEW') %}
                         <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('oficios_judiciales.listado') }}"><i class="bi bi-table"></i> Listado</a></li>
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('oficios_judiciales.alertas') }}"><i class="bi bi-bell"></i> Alertas</a></li>
                         {% endif %}
                         {% if current_user.has_permission('OFICIOS_JUDICIALES_UPLOAD') %}
                         <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('oficios_judiciales.cargar') }}"><i class="bi bi-cloud-upload"></i> Carga inteligente</a></li>
