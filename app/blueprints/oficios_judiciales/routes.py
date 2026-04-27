@@ -6,7 +6,6 @@ import re
 from datetime import datetime
 
 import pandas as pd
-import requests
 from flask import Response, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import func, inspect, or_
@@ -19,6 +18,11 @@ from app.models.oficios_judiciales import (
     ConsignaMedidaDetalle,
     ConsignaPersona,
 )
+
+try:
+    import requests
+except Exception:
+    requests = None
 
 try:
     import pytesseract
@@ -243,6 +247,8 @@ def _resolve_qr_payload(qr_payload: str) -> tuple[str, str]:
     if not payload:
         return "", ""
     if payload.lower().startswith("http://") or payload.lower().startswith("https://"):
+        if requests is None:
+            return "", payload
         try:
             resp = requests.get(payload, timeout=12)
             if resp.ok:
@@ -341,6 +347,18 @@ def _merge_parsed(a: dict, b: dict) -> dict:
         if not _clean(out.get(k)) and _clean(v):
             out[k] = v
     return out
+
+
+def _parsed_score(parsed: dict) -> int:
+    if not parsed:
+        return 0
+    score = 0
+    for k, v in parsed.items():
+        if k == "medidas_detalle":
+            score += len(v or [])
+        elif _clean(v):
+            score += 1
+    return score
 
 
 def _q_base():
@@ -502,23 +520,38 @@ def cargar():
             src_kind = "QR" if _clean(txt_qr) else source_used or "OCR imagen"
             if not best_source and src_kind:
                 best_source = src_kind
-            if _clean(src_text):
-                full_text_parts.append(src_text)
-                parsed = _parse_fields(src_text)
-                merged = _merge_parsed(merged, parsed)
-                for k, v in parsed.items():
+            parsed_qr = _parse_fields(txt_qr) if _clean(txt_qr) else {}
+            parsed_ocr = _parse_fields(txt_ocr) if _clean(txt_ocr) else {}
+            score_qr = _parsed_score(parsed_qr)
+            score_ocr = _parsed_score(parsed_ocr)
+
+            # QR tiene prioridad cuando es contenido válido/rico; si no, usar OCR.
+            qr_is_useful = _clean(txt_qr) and (score_qr >= 2 or len(_clean(txt_qr)) >= 180 or bool(resolved_url))
+            primary_text = txt_qr if qr_is_useful else txt_ocr
+            primary_kind = "QR" if qr_is_useful else (source_used or "OCR imagen")
+
+            # Siempre consolidar ambas fuentes cuando existan para no perder datos.
+            if _clean(txt_qr):
+                full_text_parts.append(txt_qr)
+                merged = _merge_parsed(merged, parsed_qr)
+            if _clean(txt_ocr):
+                full_text_parts.append(txt_ocr)
+                merged = _merge_parsed(merged, parsed_ocr)
+
+            if _clean(primary_text):
+                for k, v in merged.items():
                     if k == "medidas_detalle":
                         if v:
                             detected_fields_set.add(k)
                     elif _clean(v):
                         detected_fields_set.add(k)
-                if src_kind == "QR":
-                    best_source = "QR"
-                elif not best_source:
-                    best_source = src_kind
+                # Si OCR detecta más campos que QR, reflejar fuente real usada.
+                if _clean(txt_qr) and _clean(txt_ocr) and score_ocr > score_qr:
+                    primary_kind = "OCR PDF escaneado" if name.lower().endswith(".pdf") and "OCR PDF escaneado" in (source_used or "") else "OCR imagen"
+                best_source = primary_kind
                 if resolved_url:
                     qr_url = resolved_url
-                processed_files.append({"archivo": name, "fuente": src_kind, "ok": True})
+                processed_files.append({"archivo": name, "fuente": primary_kind, "ok": True})
             else:
                 processed_files.append({"archivo": name, "fuente": source_used or "sin lectura", "ok": False})
                 warnings.append(f"{name}: no se pudo extraer texto útil (OCR/QR).")
