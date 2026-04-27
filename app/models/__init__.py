@@ -62,6 +62,7 @@ from app.models.oficios_judiciales import (
     ConsignaDomicilio,
     ConsignaMedidaDetalle,
 )
+from app.models.analisis_llamadas_se import LlamadaSE
 
 __all__ = [
     'User', 'Role', 'Permission', 'Unidad', 'AuditLog', 'Dataset', 'DenunciaWeb',
@@ -85,5 +86,6 @@ __all__ = [
     'BilleteraCarga', 'BilleteraCargaCompartida', 'BilleteraMovimiento', 'BilleteraSalida',
     'DenunciaWebDroga',
     'ConsignaJudicial', 'ConsignaPersona', 'ConsignaDomicilio', 'ConsignaMedidaDetalle',
+    'LlamadaSE',
 ]
 

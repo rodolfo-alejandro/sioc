@@ -1,0 +1,17 @@
+.als-kpi .value {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.als-map {
+  height: 70vh;
+  min-height: 460px;
+  border: 1px solid #dee2e6;
+  border-radius: 0.5rem;
+}
+
+.als-pre {
+  white-space: pre-wrap;
+  line-height: 1.35;
+}
+

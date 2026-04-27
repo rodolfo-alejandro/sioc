@@ -114,6 +114,12 @@ def create_seed_data():
             ('OFICIOS_JUDICIALES_VIEW', 'Ver oficios judiciales'),
             ('OFICIOS_JUDICIALES_UPLOAD', 'Cargar oficios judiciales con OCR/QR'),
             ('OFICIOS_JUDICIALES_EXPORT', 'Exportar oficios judiciales'),
+            # Analisis llamadas SE
+            ('LLAMADAS_SE_VIEW', 'Ver llamadas SE'),
+            ('LLAMADAS_SE_IMPORT', 'Importar llamadas SE desde CSV'),
+            ('LLAMADAS_SE_EXPORT', 'Exportar llamadas SE filtradas'),
+            ('LLAMADAS_SE_DASHBOARD', 'Ver dashboard de llamadas SE'),
+            ('LLAMADAS_SE_MAPA', 'Ver mapa de llamadas SE'),
         ]
         
         permisos_creados = {}
@@ -161,7 +167,9 @@ def create_seed_data():
                           'SABANA_LLAMADAS_VIEW', 'SABANA_LLAMADAS_UPLOAD',
                           'DENUNCIAS_WEB_VIEW', 'DENUNCIAS_WEB_IMPORT', 'DENUNCIAS_WEB_EXPORT',
                           'DENUNCIAS_WEB_DASHBOARD', 'DENUNCIAS_WEB_MAPA',
-                          'OFICIOS_JUDICIALES_VIEW', 'OFICIOS_JUDICIALES_UPLOAD', 'OFICIOS_JUDICIALES_EXPORT']
+                          'OFICIOS_JUDICIALES_VIEW', 'OFICIOS_JUDICIALES_UPLOAD', 'OFICIOS_JUDICIALES_EXPORT',
+                          'LLAMADAS_SE_VIEW', 'LLAMADAS_SE_IMPORT', 'LLAMADAS_SE_EXPORT',
+                          'LLAMADAS_SE_DASHBOARD', 'LLAMADAS_SE_MAPA']
             for perm_code in admin_perms:
                 if perm_code in permisos_creados:
                     admin_role.permissions.append(permisos_creados[perm_code])
@@ -179,7 +187,9 @@ def create_seed_data():
                 'CORE_VIEW', 'DATALAB_VIEW', 'DATALAB_UPLOAD', 'SABANA_LLAMADAS_VIEW', 'SABANA_LLAMADAS_UPLOAD',
                 'DENUNCIAS_WEB_VIEW', 'DENUNCIAS_WEB_IMPORT', 'DENUNCIAS_WEB_EXPORT',
                 'DENUNCIAS_WEB_DASHBOARD', 'DENUNCIAS_WEB_MAPA',
-                'OFICIOS_JUDICIALES_VIEW', 'OFICIOS_JUDICIALES_UPLOAD', 'OFICIOS_JUDICIALES_EXPORT'
+                'OFICIOS_JUDICIALES_VIEW', 'OFICIOS_JUDICIALES_UPLOAD', 'OFICIOS_JUDICIALES_EXPORT',
+                'LLAMADAS_SE_VIEW', 'LLAMADAS_SE_IMPORT', 'LLAMADAS_SE_EXPORT',
+                'LLAMADAS_SE_DASHBOARD', 'LLAMADAS_SE_MAPA'
             ]
             for perm_code in analista_perms:
                 if perm_code in permisos_creados:

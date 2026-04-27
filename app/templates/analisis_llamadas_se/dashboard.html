@@ -1,0 +1,95 @@
+{% extends "layouts/base.html" %}
+{% block title %}Dashboard Llamadas SE - SIOC{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/analisis_llamadas_se.css') }}">
+{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-bar-chart-line"></i> Dashboard de llamadas SE</h1>
+  <p class="text-muted">KPIs y tendencias sobre llamadas filtradas.</p>
+</div>
+
+{% include "analisis_llamadas_se/_filtros.html" %}
+
+<div class="d-flex gap-2 my-2">
+  {% if can_view %}<a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_llamadas_se.listado', **request.args) }}">Listado</a>{% endif %}
+  {% if can_map %}<a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_llamadas_se.mapa', **request.args) }}">Mapa</a>{% endif %}
+</div>
+
+<div class="card mb-3">
+  <div class="card-body py-2">
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      <strong class="small mb-0">Vista de valores en gráficos:</strong>
+      <div class="btn-group btn-group-sm" role="group">
+        <input type="radio" class="btn-check" name="als-chart-mode" id="als-chart-mode-cantidad" value="cantidad" checked>
+        <label class="btn btn-outline-primary" for="als-chart-mode-cantidad">Cantidad</label>
+        <input type="radio" class="btn-check" name="als-chart-mode" id="als-chart-mode-porcentaje" value="porcentaje">
+        <label class="btn btn-outline-primary" for="als-chart-mode-porcentaje">Porcentaje</label>
+      </div>
+      <span class="small text-muted">Visible en barras y tortas (sin depender de hover).</span>
+    </div>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <div><strong>Interacción:</strong> hacé click en gráficos para filtro cruzado.</div>
+    <button class="btn btn-outline-secondary btn-sm" id="als-clear-chart-filters" type="button">Limpiar selección de gráficos</button>
+    <div id="als-active-chart-filters" class="small text-muted w-100"></div>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-md-3"><div class="card als-kpi"><div class="card-body"><div>Total llamadas</div><div class="value" id="als-kpi-total">{{ kpis.total|number_format }}</div></div></div></div>
+  <div class="col-md-3"><div class="card als-kpi"><div class="card-body"><div>Con coordenadas</div><div class="value" id="als-kpi-concoords">{{ kpis.con_coords|number_format }}</div></div></div></div>
+  <div class="col-md-3"><div class="card als-kpi"><div class="card-body"><div>Alerta venta</div><div class="value" id="als-kpi-venta">{{ kpis.venta|number_format }}</div></div></div></div>
+  <div class="col-md-3"><div class="card als-kpi"><div class="card-body"><div>Alerta consumo</div><div class="value" id="als-kpi-consumo">{{ kpis.consumo|number_format }}</div></div></div></div>
+</div>
+
+<div class="row g-3">
+  <ul class="nav nav-tabs mb-3" id="als-dashboard-tabs" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" id="als-tab-graficos-tab" data-bs-toggle="tab" data-bs-target="#als-tab-graficos" type="button" role="tab">Gráficos</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="als-tab-analisis-tab" data-bs-toggle="tab" data-bs-target="#als-tab-analisis" type="button" role="tab">Análisis IA</button>
+    </li>
+  </ul>
+
+  <div class="tab-content" id="als-dashboard-tabs-content">
+    <div class="tab-pane fade show active" id="als-tab-graficos" role="tabpanel">
+      <div class="row g-3">
+        <div class="col-lg-6"><div class="card"><div class="card-header">Tipos de alerta</div><div class="card-body"><div id="als-chart-alertas" style="height:320px;"></div></div></div></div>
+        <div class="col-lg-6"><div class="card"><div class="card-header">Top barrios</div><div class="card-body"><div id="als-chart-barrios" style="height:320px;"></div></div></div></div>
+        <div class="col-lg-6"><div class="card"><div class="card-header">Top dependencias</div><div class="card-body"><div id="als-chart-deps" style="height:320px;"></div></div></div></div>
+        <div class="col-lg-6"><div class="card"><div class="card-header">Top jurisdicciones</div><div class="card-body"><div id="als-chart-juris" style="height:320px;"></div></div></div></div>
+        <div class="col-lg-6"><div class="card"><div class="card-header">Evolución diaria</div><div class="card-body"><div id="als-chart-diario" style="height:320px;"></div></div></div></div>
+        <div class="col-lg-6"><div class="card"><div class="card-header">Día de semana</div><div class="card-body"><div id="als-chart-dia" style="height:320px;"></div></div></div></div>
+      </div>
+    </div>
+    <div class="tab-pane fade" id="als-tab-analisis" role="tabpanel">
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <h6 class="mb-0">Informe analítico automatizado</h6>
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-primary btn-sm" id="als-export-report-txt">Exportar informe (.txt)</button>
+            <button type="button" class="btn btn-outline-danger btn-sm" id="als-export-report-pdf">Exportar informe (.pdf)</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="als-export-report-csv">Exportar datos (.csv)</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div id="als-ai-report" class="als-pre"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<textarea id="als-dashboard-data" class="d-none">{{ datos_json }}</textarea>
+<textarea id="als-dashboard-rows" class="d-none">{{ rows_plot_json }}</textarea>
+{% endblock %}
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/analisis_llamadas_se_filtros.js') }}"></script>
+<script src="{{ url_for('static', filename='js/analisis_llamadas_se_dashboard.js') }}"></script>
+{% endblock %}
+

@@ -1,0 +1,72 @@
+{% extends "layouts/base.html" %}
+{% block title %}Listado Llamadas SE - SIOC{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-table"></i> Llamadas SE 2026</h1>
+  <p class="text-muted">Listado con filtros operativos.</p>
+</div>
+
+{% include "analisis_llamadas_se/_filtros.html" %}
+
+<div class="d-flex gap-2 my-2">
+  {% if can_import %}<a class="btn btn-outline-primary btn-sm" href="{{ url_for('analisis_llamadas_se.importar') }}">Importar CSV</a>{% endif %}
+  {% if can_dashboard %}<a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_llamadas_se.dashboard', **request.args) }}">Dashboard</a>{% endif %}
+  {% if can_map %}<a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_llamadas_se.mapa', **request.args) }}">Mapa</a>{% endif %}
+  {% if can_export %}
+    <a class="btn btn-outline-success btn-sm" href="{{ url_for('analisis_llamadas_se.export_csv', **request.args) }}">CSV</a>
+    <a class="btn btn-outline-success btn-sm" href="{{ url_for('analisis_llamadas_se.export_xlsx', **request.args) }}">Excel</a>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="card-header d-flex justify-content-between">
+    <h6 class="mb-0">Resultados</h6>
+    <span class="badge bg-light text-dark border">Total: {{ total|number_format }}</span>
+  </div>
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-sm align-middle">
+        <thead>
+          <tr>
+            <th>Fecha</th><th>Alerta</th><th>Dependencia</th><th>Jurisdicción</th><th>Localidad</th><th>Barrio</th><th>Detalle</th><th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+          <tr>
+            <td>{{ r.llamada_fecha|localtime('%d/%m/%Y %H:%M') if r.llamada_fecha else '—' }}</td>
+            <td>{{ r.llamada_alerta_desc or '—' }}</td>
+            <td>{{ r.llamada_dep_nombre or '—' }}</td>
+            <td>{{ r.llamada_jurisdiccion or '—' }}</td>
+            <td>{{ r.llamada_local_nombre or '—' }}</td>
+            <td>{{ r.llamada_barrio_nombre or '—' }}</td>
+            <td>{{ (r.llamada_detalle or '—')[:120] }}</td>
+            <td><a class="btn btn-outline-primary btn-sm" href="{{ url_for('analisis_llamadas_se.detalle', llamada_id=r.id) }}">Detalle</a></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="8" class="text-muted text-center">Sin resultados.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<nav class="mt-3">
+  <ul class="pagination pagination-sm">
+    {% set prev_page = page - 1 %}
+    {% set next_page = page + 1 %}
+    <li class="page-item {% if page <= 1 %}disabled{% endif %}">
+      <a class="page-link" href="{{ url_for('analisis_llamadas_se.listado') }}?{{ qs_no_page }}{% if qs_no_page %}&{% endif %}page={{ prev_page }}">Anterior</a>
+    </li>
+    <li class="page-item disabled"><span class="page-link">Página {{ page }} / {{ pages }}</span></li>
+    <li class="page-item {% if page >= pages %}disabled{% endif %}">
+      <a class="page-link" href="{{ url_for('analisis_llamadas_se.listado') }}?{{ qs_no_page }}{% if qs_no_page %}&{% endif %}page={{ next_page }}">Siguiente</a>
+    </li>
+  </ul>
+</nav>
+{% endblock %}
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/analisis_llamadas_se_filtros.js') }}"></script>
+{% endblock %}
+

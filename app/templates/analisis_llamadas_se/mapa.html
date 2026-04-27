@@ -1,0 +1,43 @@
+{% extends "layouts/base.html" %}
+{% block title %}Mapa Llamadas SE - SIOC{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/analisis_llamadas_se.css') }}">
+{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-geo-alt"></i> Mapa operativo de llamadas SE</h1>
+  <p class="text-muted">Puntos georreferenciados según filtros.</p>
+</div>
+
+{% include "analisis_llamadas_se/_filtros.html" %}
+
+<div class="d-flex gap-2 my-2">
+  {% if can_view %}<a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_llamadas_se.listado', **request.args) }}">Listado</a>{% endif %}
+  {% if can_dashboard %}<a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_llamadas_se.dashboard', **request.args) }}">Dashboard</a>{% endif %}
+</div>
+
+<div class="alert alert-secondary py-2 small">
+  Total georreferenciado filtrado: <strong>{{ total_filtrado|number_format }}</strong>
+</div>
+<div class="card mb-2">
+  <div class="card-body py-2 d-flex align-items-center gap-2">
+    <strong class="small mb-0">Visualización:</strong>
+    <div class="btn-group btn-group-sm" role="group">
+      <input type="radio" class="btn-check" name="als-map-mode" id="als-map-mode-markers" value="markers" checked>
+      <label class="btn btn-outline-primary" for="als-map-mode-markers">Marcadores</label>
+      <input type="radio" class="btn-check" name="als-map-mode" id="als-map-mode-heat" value="heat">
+      <label class="btn btn-outline-primary" for="als-map-mode-heat">Mapa de calor</label>
+    </div>
+  </div>
+</div>
+<div id="als-map" class="als-map"></div>
+<textarea id="als-map-markers" class="d-none">{{ markers_json }}</textarea>
+{% endblock %}
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/analisis_llamadas_se_filtros.js') }}"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
+<script src="{{ url_for('static', filename='js/analisis_llamadas_se_mapa.js') }}"></script>
+{% endblock %}
+
