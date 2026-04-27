@@ -82,6 +82,8 @@ class ConsignaDomicilio(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     consigna_id = db.Column(db.Integer, db.ForeignKey("oficios_consignas.id"), nullable=False, index=True)
     direccion = db.Column(db.Text, nullable=False)
+    latitud = db.Column(db.Float, nullable=True, index=True)
+    longitud = db.Column(db.Float, nullable=True, index=True)
     tipo = db.Column(db.String(30), nullable=False, index=True)  # victima | denunciado
 
 
@@ -91,4 +93,21 @@ class ConsignaMedidaDetalle(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     consigna_id = db.Column(db.Integer, db.ForeignKey("oficios_consignas.id"), nullable=False, index=True)
     descripcion = db.Column(db.Text, nullable=False)
+
+
+class CatalogoJuzgado(db.Model):
+    __tablename__ = "oficios_catalogo_juzgados"
+
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(255), nullable=False, unique=True, index=True)
+    clave = db.Column(db.String(255), nullable=True, index=True)
+    activo = db.Column(db.Boolean, nullable=False, default=True, index=True)
+
+
+class CatalogoTipoMedida(db.Model):
+    __tablename__ = "oficios_catalogo_tipos_medida"
+
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(120), nullable=False, unique=True, index=True)
+    activo = db.Column(db.Boolean, nullable=False, default=True, index=True)
 

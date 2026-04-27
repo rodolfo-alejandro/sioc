@@ -1,0 +1,50 @@
+{% extends "layouts/base.html" %}
+{% block title %}Catálogos Oficios{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-list-ul"></i> Catálogos de Oficios VIF</h1>
+</div>
+
+<div class="row g-3">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header"><strong>Juzgados</strong></div>
+            <div class="card-body">
+                <form method="POST" class="d-flex gap-2 mb-3">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="catalog_action" value="add_juzgado">
+                    <input class="form-control" name="nombre" placeholder="Ej: Juzgado de Violencia Familiar 2° Nominación">
+                    <button class="btn btn-primary">Agregar</button>
+                </form>
+                <ul class="mb-0">
+                    {% for j in juzgados %}
+                    <li>{{ j.nombre }}</li>
+                    {% else %}
+                    <li class="text-muted">Sin datos.</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header"><strong>Tipos de medida</strong></div>
+            <div class="card-body">
+                <form method="POST" class="d-flex gap-2 mb-3">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="catalog_action" value="add_tipo_medida">
+                    <input class="form-control" name="nombre" placeholder="Ej: prohibición de acercamiento">
+                    <button class="btn btn-primary">Agregar</button>
+                </form>
+                <ul class="mb-0">
+                    {% for t in tipos_medida %}
+                    <li>{{ t.nombre }}</li>
+                    {% else %}
+                    <li class="text-muted">Sin datos.</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

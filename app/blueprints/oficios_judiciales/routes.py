@@ -14,6 +14,8 @@ from sqlalchemy import false, func, inspect, or_, text
 from app.blueprints.oficios_judiciales import bp
 from app.extensions import db
 from app.models.oficios_judiciales import (
+    CatalogoJuzgado,
+    CatalogoTipoMedida,
     ConsignaDomicilio,
     ConsignaJudicial,
     ConsignaMedidaDetalle,
@@ -92,7 +94,7 @@ def _ensure_schema():
         return
     insp = inspect(db.engine)
     existing = set(insp.get_table_names())
-    for model in (ConsignaJudicial, ConsignaPersona, ConsignaDomicilio, ConsignaMedidaDetalle):
+    for model in (ConsignaJudicial, ConsignaPersona, ConsignaDomicilio, ConsignaMedidaDetalle, CatalogoJuzgado, CatalogoTipoMedida):
         if model.__tablename__ not in existing:
             model.__table__.create(bind=db.engine)
     cols = {c.get("name") for c in insp.get_columns(ConsignaJudicial.__tablename__)}
@@ -126,6 +128,13 @@ def _ensure_schema():
         db.session.commit()
     if "dni_key" not in pcols:
         db.session.execute(text("ALTER TABLE oficios_consigna_personas ADD COLUMN dni_key VARCHAR(20) NULL"))
+        db.session.commit()
+    dcols = {c.get("name") for c in insp.get_columns(ConsignaDomicilio.__tablename__)}
+    if "latitud" not in dcols:
+        db.session.execute(text("ALTER TABLE oficios_consigna_domicilios ADD COLUMN latitud DOUBLE NULL"))
+        db.session.commit()
+    if "longitud" not in dcols:
+        db.session.execute(text("ALTER TABLE oficios_consigna_domicilios ADD COLUMN longitud DOUBLE NULL"))
         db.session.commit()
     _schema_checked = True
 
@@ -463,6 +472,16 @@ def _to_int_or_none(v):
         return None
     try:
         return int(nums[0])
+    except Exception:
+        return None
+
+
+def _to_float_or_none(v):
+    s = _clean(v).replace(",", ".")
+    if not s:
+        return None
+    try:
+        return float(s)
     except Exception:
         return None
 
@@ -1488,6 +1507,191 @@ def cargar():
         return render_template("oficios_judiciales/preview.html", data=base, data_json=json.dumps(base))
 
     return render_template("oficios_judiciales/cargar.html")
+
+
+@bp.route("/manual")
+def manual_listado():
+    if not _can_view():
+        abort(403)
+    estado = _clean(request.args.get("estado")) or "activa"
+    qtxt = _clean(request.args.get("q"))
+    q = _q_base().filter(ConsignaJudicial.fuente_principal == "manual")
+    if estado == "activa":
+        q = q.filter(ConsignaJudicial.estado == "activa")
+    elif estado == "finalizada":
+        q = q.filter(ConsignaJudicial.estado == "finalizada")
+    if qtxt:
+        pat = f"%{qtxt}%"
+        eq = _expediente_key(qtxt)
+        q = q.filter(
+            or_(
+                ConsignaJudicial.expediente_key == eq if eq else false(),
+                ConsignaJudicial.expediente.ilike(pat),
+                ConsignaJudicial.caratula.ilike(pat),
+            )
+        )
+    rows = q.order_by(ConsignaJudicial.created_at.desc()).limit(300).all()
+    return render_template("oficios_judiciales/manual_listado.html", rows=rows, selected=request.args)
+
+
+@bp.route("/manual/nuevo", methods=["GET", "POST"])
+def manual_nuevo():
+    if not _can_upload():
+        abort(403)
+    juzgados = CatalogoJuzgado.query.filter_by(activo=True).order_by(CatalogoJuzgado.nombre.asc()).all()
+    tipos_medida = CatalogoTipoMedida.query.filter_by(activo=True).order_by(CatalogoTipoMedida.nombre.asc()).all()
+    if request.method == "POST":
+        exp = _clean(request.form.get("expediente"))
+        caratula = _clean(request.form.get("caratula"))
+        tipo_consigna = _clean(request.form.get("tipo_consigna"))
+        estado = _clean(request.form.get("estado")) or "activa"
+        juz_id = _to_int_or_none(request.form.get("juzgado_id"))
+        tipo_id = _to_int_or_none(request.form.get("tipo_medida_id"))
+        juz_row = CatalogoJuzgado.query.get(juz_id) if juz_id else None
+        tipo_row = CatalogoTipoMedida.query.get(tipo_id) if tipo_id else None
+        juz = _clean(juz_row.nombre if juz_row else request.form.get("juzgado_txt"))
+        tipo_medida = _clean(tipo_row.nombre if tipo_row else request.form.get("tipo_medida_txt"))
+        exp_key = _expediente_key(exp)
+        juz_key = _juzgado_key(juz)
+
+        row = None
+        if exp_key:
+            q = ConsignaJudicial.query.filter(
+                ConsignaJudicial.unidad_id == current_user.unidad_id,
+                ConsignaJudicial.expediente_key == exp_key,
+                ConsignaJudicial.fuente_principal == "manual",
+            )
+            if juz_key:
+                q = q.filter(ConsignaJudicial.juzgado_key == juz_key)
+            row = q.order_by(ConsignaJudicial.id.desc()).first()
+
+        is_new = row is None
+        if is_new:
+            row = ConsignaJudicial(
+                unidad_id=current_user.unidad_id,
+                creado_por=current_user.id,
+                expediente=exp,
+                expediente_key=exp_key,
+                juzgado=juz,
+                juzgado_key=juz_key,
+                caratula=caratula,
+                tipo_medida=tipo_medida,
+                tipo_consigna=tipo_consigna,
+                fecha_oficio=_parse_date(_clean(request.form.get("fecha_oficio"))),
+                fecha_notificacion=_parse_date(_clean(request.form.get("fecha_notificacion"))),
+                cantidad_dias=_to_int_or_none(request.form.get("cantidad_dias")),
+                dias_fija=_to_int_or_none(request.form.get("dias_fija")),
+                dias_ambulatoria=_to_int_or_none(request.form.get("dias_ambulatoria")),
+                dias_personalizada=_to_int_or_none(request.form.get("dias_personalizada")),
+                estado=estado,
+                fuente_principal="manual",
+                archivo_origen="carga_manual",
+            )
+            db.session.add(row)
+            db.session.flush()
+        else:
+            row.juzgado = row.juzgado or juz
+            row.juzgado_key = row.juzgado_key or juz_key
+            row.caratula = row.caratula or caratula
+            row.tipo_medida = row.tipo_medida or tipo_medida
+            row.tipo_consigna = row.tipo_consigna or tipo_consigna
+
+        def _add_person_manual(nombre, dni, tipo, notificar):
+            nom = _clean(nombre)
+            if not nom:
+                return
+            dni_n = _normalize_dni(dni)
+            dni_k = _digits_only(dni_n)
+            nom_k = _name_key(nom)
+            exists = None
+            if dni_k:
+                exists = ConsignaPersona.query.filter_by(consigna_id=row.id, tipo=tipo, dni_key=dni_k).first()
+            if not exists and nom_k:
+                exists = ConsignaPersona.query.filter_by(consigna_id=row.id, tipo=tipo, nombre_key=nom_k).first()
+            if exists:
+                exists.notificar = _normalize_notificar(notificar, exists.notificar or "no")
+                return
+            db.session.add(
+                ConsignaPersona(
+                    consigna_id=row.id,
+                    nombre=nom,
+                    nombre_key=nom_k,
+                    dni=dni_n,
+                    dni_key=dni_k,
+                    tipo=tipo,
+                    notificar=_normalize_notificar(notificar, "no"),
+                )
+            )
+
+        def _add_domicilio_manual(direccion, tipo, lat, lng):
+            d = _clean(direccion)
+            if not d:
+                return
+            lat_f = _to_float_or_none(lat)
+            lng_f = _to_float_or_none(lng)
+            exists = ConsignaDomicilio.query.filter_by(consigna_id=row.id, tipo=tipo, direccion=d).first()
+            if exists:
+                if exists.latitud is None:
+                    exists.latitud = lat_f
+                if exists.longitud is None:
+                    exists.longitud = lng_f
+                return
+            db.session.add(
+                ConsignaDomicilio(
+                    consigna_id=row.id,
+                    direccion=d,
+                    tipo=tipo,
+                    latitud=lat_f,
+                    longitud=lng_f,
+                )
+            )
+
+        p_nombres = request.form.getlist("persona_nombre[]")
+        p_dnis = request.form.getlist("persona_dni[]")
+        p_tipos = request.form.getlist("persona_tipo[]")
+        p_noti = request.form.getlist("persona_notificar[]")
+        p_dom = request.form.getlist("persona_domicilio[]")
+        p_lat = request.form.getlist("persona_lat[]")
+        p_lng = request.form.getlist("persona_lng[]")
+        total = max(len(p_nombres), len(p_dnis), len(p_tipos), len(p_noti), len(p_dom), len(p_lat), len(p_lng))
+        for i in range(total):
+            nombre = p_nombres[i] if i < len(p_nombres) else ""
+            dni = p_dnis[i] if i < len(p_dnis) else ""
+            tipo = _clean(p_tipos[i] if i < len(p_tipos) else "victima") or "victima"
+            noti = p_noti[i] if i < len(p_noti) else "no"
+            dom = p_dom[i] if i < len(p_dom) else ""
+            lat = p_lat[i] if i < len(p_lat) else ""
+            lng = p_lng[i] if i < len(p_lng) else ""
+            _add_person_manual(nombre, dni, tipo, noti)
+            _add_domicilio_manual(dom, tipo, lat, lng)
+
+        db.session.commit()
+        flash("Consigna manual guardada.", "success")
+        return redirect(url_for("oficios_judiciales.detalle", consigna_id=row.id))
+    return render_template("oficios_judiciales/manual_form.html", juzgados=juzgados, tipos_medida=tipos_medida)
+
+
+@bp.route("/catalogos", methods=["GET", "POST"])
+def catalogos():
+    if not _can_upload():
+        abort(403)
+    action = _clean(request.form.get("catalog_action"))
+    if request.method == "POST":
+        if action == "add_juzgado":
+            nombre = _clean(request.form.get("nombre"))
+            if nombre and not CatalogoJuzgado.query.filter_by(nombre=nombre).first():
+                db.session.add(CatalogoJuzgado(nombre=nombre, clave=_juzgado_key(nombre), activo=True))
+                db.session.commit()
+        elif action == "add_tipo_medida":
+            nombre = _clean(request.form.get("nombre"))
+            if nombre and not CatalogoTipoMedida.query.filter_by(nombre=nombre).first():
+                db.session.add(CatalogoTipoMedida(nombre=nombre, activo=True))
+                db.session.commit()
+        flash("Catálogo actualizado.", "success")
+        return redirect(url_for("oficios_judiciales.catalogos"))
+    juzgados = CatalogoJuzgado.query.order_by(CatalogoJuzgado.nombre.asc()).all()
+    tipos_medida = CatalogoTipoMedida.query.order_by(CatalogoTipoMedida.nombre.asc()).all()
+    return render_template("oficios_judiciales/catalogos.html", juzgados=juzgados, tipos_medida=tipos_medida)
 
 
 @bp.route("/listado")
