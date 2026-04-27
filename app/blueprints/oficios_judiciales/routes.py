@@ -124,6 +124,24 @@ def _clean(v):
     return str(v).strip()
 
 
+def _file_order_key(filename: str):
+    """
+    Orden natural para archivos tipo "...Parte_1_de_2..." o similares.
+    """
+    name = _clean(filename).lower()
+    m = re.search(r"(?:parte|part|hoja|pag(?:ina)?)\D{0,8}(\d{1,3})\D{0,8}(?:de|/)\D{0,8}(\d{1,3})", name)
+    if m:
+        try:
+            part = int(m.group(1))
+            total = int(m.group(2))
+            return (0, total, part, name)
+        except Exception:
+            pass
+    nums = re.findall(r"\d+", name)
+    first_num = int(nums[0]) if nums else 9999
+    return (1, 9999, first_num, name)
+
+
 def _parse_date(s: str):
     if not s:
         return None
@@ -224,6 +242,16 @@ def _ocr_from_pil_with_error(img) -> tuple[str, str]:
             except Exception as exc:
                 last_err = str(exc)
                 continue
+    # Fallback de precisión: si quedó muy corto, intentar inglés para OCR difícil.
+    if len(best) < 260:
+        for im in attempts:
+            try:
+                txt = _normalize_spaces(pytesseract.image_to_string(im, lang="eng"))
+                if len(txt) > len(best):
+                    best = txt
+            except Exception as exc:
+                last_err = str(exc)
+                continue
     if best:
         return best, ""
     return "", (last_err or "Tesseract no devolvió texto.")
@@ -290,7 +318,8 @@ def _scan_pdf_as_images(raw: bytes) -> tuple[str, str, str, list[str]]:
         warnings.append(
             f"OCR rápido activo: se procesaron {_MAX_PDF_OCR_PAGES} de {total_pages} páginas escaneadas."
         )
-    for img in pages[:_MAX_PDF_OCR_PAGES]:
+    first_batch = pages[:_MAX_PDF_OCR_PAGES]
+    for img in first_batch:
         payload, _ = _extract_qr_text_from_pil_image(img)
         if payload:
             resolved, resolved_url = _resolve_qr_payload(payload)
@@ -303,6 +332,14 @@ def _scan_pdf_as_images(raw: bytes) -> tuple[str, str, str, list[str]]:
         txt = _extract_ocr_text_from_pil_image(img)
         if _clean(txt):
             ocr_parts.append(txt)
+
+    # Si el lote rápido no alcanza, completar OCR del resto de páginas.
+    ocr_joined = _normalize_spaces("\n\n".join(ocr_parts))
+    if len(pages) > _MAX_PDF_OCR_PAGES and len(ocr_joined) < 700:
+        for img in pages[_MAX_PDF_OCR_PAGES:]:
+            txt = _extract_ocr_text_from_pil_image(img)
+            if _clean(txt):
+                ocr_parts.append(txt)
 
     return _normalize_spaces("\n\n".join(qr_parts)), _normalize_spaces("\n\n".join(ocr_parts)), qr_url, warnings
 
@@ -599,6 +636,21 @@ def _extract_victimas_from_text(full: str, acusado: str) -> list[str]:
     return out
 
 
+def _extract_acusado_from_caratula(caratula: str) -> str:
+    c = _clean(caratula)
+    if not c:
+        return ""
+    m = re.search(r"\s+CONTRA\s+(.+?)(?:\s+POR\s+|$)", c, flags=re.IGNORECASE)
+    if not m:
+        return ""
+    right = _normalize_spaces(m.group(1))
+    cand = right.split(";")[0].strip(" -,:")
+    cand = _clean_person_name(_smart_cut(cand, 140))
+    if _is_probable_person_name(cand):
+        return cand
+    return ""
+
+
 def _smart_cut(value: str, max_len: int = 220) -> str:
     s = _clean(value)
     if len(s) <= max_len:
@@ -778,6 +830,8 @@ def _parse_fields(text: str) -> dict:
     caratula = _extract_caratula(full)
     denunciado = _extract_person_after_label(full, r"Señor/?a?:")
     denunciado = _clean_person_name(denunciado)
+    if not _is_probable_person_name(denunciado):
+        denunciado = _extract_acusado_from_caratula(caratula)
     victimas = []
     v_from_car = _extract_victimas_from_caratula(caratula, denunciado)
     v_from_txt = _extract_victimas_from_text(full, denunciado)
@@ -788,7 +842,7 @@ def _parse_fields(text: str) -> dict:
     if not victimas:
         v_single = _extract_person_after_label(full, r"victima\s*[:\-]?")
         v_single = _clean_person_name(v_single)
-        if v_single and _clean(v_single).lower() != _clean(denunciado).lower():
+        if v_single and _is_probable_person_name(v_single) and _clean(v_single).lower() != _clean(denunciado).lower():
             victimas.append(_smart_cut(v_single, 140))
     victima = victimas[0] if victimas else ""
     victima_2 = victimas[1] if len(victimas) > 1 else ""
@@ -1105,6 +1159,7 @@ def cargar():
         if not files:
             flash("Debe seleccionar al menos un archivo.", "warning")
             return redirect(url_for("oficios_judiciales.cargar"))
+        files = sorted(files, key=lambda ff: _file_order_key(getattr(ff, "filename", "")))
 
         full_text_parts = []
         best_source = ""
