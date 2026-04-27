@@ -133,6 +133,42 @@
             </div>
         </div>
     </div>
+    <div class="col-12">
+        <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#personas-extra-collapse" aria-expanded="false">
+            Cargar más personas (opcional)
+        </button>
+        <div class="collapse mt-2" id="personas-extra-collapse">
+            <div class="card">
+                <div class="card-header"><strong>Acusados/Víctimas adicionales</strong></div>
+                <div class="card-body row g-2">
+                    <div class="col-md-3"><label class="form-label">Acusado 2</label><input class="form-control" id="f-acusado_2" value="{{ data.acusado_2 or '' }}"></div>
+                    <div class="col-md-2"><label class="form-label">DNI acusado 2</label><input class="form-control" id="f-dni_acusado_2" value="{{ data.dni_acusado_2 or '' }}"></div>
+                    <div class="col-md-4"><label class="form-label">Domicilio acusado 2</label><input class="form-control" id="f-domicilio_acusado_2" value="{{ data.domicilio_acusado_2 or '' }}"></div>
+                    <div class="col-md-1">
+                        <label class="form-label">¿Notificar?</label>
+                        <select class="form-select" id="f-acusado_2_notificar">
+                            {% set an2 = (data.acusado_2_notificar or 'si') %}
+                            <option value="si" {{ 'selected' if an2 == 'si' else '' }}>Sí</option>
+                            <option value="no" {{ 'selected' if an2 == 'no' else '' }}>No</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2"></div>
+                    <div class="col-md-3"><label class="form-label">Víctima 3</label><input class="form-control" id="f-victima_3" value="{{ data.victima_3 or '' }}"></div>
+                    <div class="col-md-2"><label class="form-label">DNI víctima 3</label><input class="form-control" id="f-dni_victima_3" value="{{ data.dni_victima_3 or '' }}"></div>
+                    <div class="col-md-4"><label class="form-label">Domicilio víctima 3</label><input class="form-control" id="f-domicilio_victima_3" value="{{ data.domicilio_victima_3 or '' }}"></div>
+                    <div class="col-md-1">
+                        <label class="form-label">¿Notificar?</label>
+                        <select class="form-select" id="f-victima_3_notificar">
+                            {% set vn3 = (data.victima_3_notificar or 'no') %}
+                            <option value="si" {{ 'selected' if vn3 == 'si' else '' }}>Sí</option>
+                            <option value="no" {{ 'selected' if vn3 == 'no' else '' }}>No</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2"></div>
+                </div>
+            </div>
+        </div>
+    </div>
     <input type="hidden" id="f-cantidad_dias" value="{{ data.cantidad_dias }}">
     <div class="col-md-12"><label class="form-label">Texto fuente consolidado</label><textarea class="form-control" rows="8" id="f-texto_fuente">{{ data.texto_fuente }}</textarea></div>
 
@@ -201,6 +237,14 @@
             victima_2: v('f-victima_2'),
             dni_victima_2: v('f-dni_victima_2'),
             domicilio_victima_2: v('f-domicilio_victima_2'),
+            acusado_2: v('f-acusado_2'),
+            dni_acusado_2: v('f-dni_acusado_2'),
+            domicilio_acusado_2: v('f-domicilio_acusado_2'),
+            acusado_2_notificar: v('f-acusado_2_notificar'),
+            victima_3: v('f-victima_3'),
+            dni_victima_3: v('f-dni_victima_3'),
+            domicilio_victima_3: v('f-domicilio_victima_3'),
+            victima_3_notificar: v('f-victima_3_notificar'),
             acusado_notificar: v('f-acusado_notificar'),
             victima_notificar: v('f-victima_notificar'),
             victima_2_notificar: v('f-victima_2_notificar'),

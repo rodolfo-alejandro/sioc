@@ -520,8 +520,8 @@ def _extract_caratula(full: str) -> str:
                     seen.append(pp)
             if seen:
                 c = f"{'; '.join(seen)} CONTRA {right}"
-        return _smart_cut(c, 420)
-    return _smart_cut(_first_group(r"Ref\.?:\s*(.+)", txt), 420)
+        return c[:420].strip()
+    return _clean(_first_group(r"Ref\.?:\s*(.+)", txt))[:420].strip()
 
 
 def _extract_victima_from_caratula(caratula: str) -> str:
@@ -632,9 +632,10 @@ def _extract_victimas_from_text(full: str, acusado: str) -> list[str]:
         r"CONTRA\s+([A-ZÁÉÍÓÚÑ ,;]{8,180})\s*,\s*DEBIENDO",
         r"A\s+LA\s+DENUNCIANTE\s+([A-ZÁÉÍÓÚÑ ,;]{8,180})",
         r"DONDE\s+CONCURRA\s+([A-ZÁÉÍÓÚÑ ,;]{8,220})",
+        r"ACERCARSE\s+A\s+([A-Za-zÁÉÍÓÚÑáéíóúñ ,;]{8,220})",
     ]
     for pat in pats:
-        for m in re.finditer(pat, txt, flags=re.MULTILINE):
+        for m in re.finditer(pat, txt, flags=re.MULTILINE | re.IGNORECASE):
             groups = [g for g in m.groups() if g]
             for gg in groups:
                 block = _normalize_spaces(gg)
@@ -863,15 +864,19 @@ def _parse_fields(text: str) -> dict:
             victimas.append(_smart_cut(v_single, 140))
     victima = victimas[0] if victimas else ""
     victima_2 = victimas[1] if len(victimas) > 1 else ""
-    victimas_extra = victimas[2:] if len(victimas) > 2 else []
+    victima_3 = victimas[2] if len(victimas) > 2 else ""
+    victimas_extra = victimas[3:] if len(victimas) > 3 else []
     dni_denunciado = _extract_dni_strict_for_name(full, denunciado) or _extract_dni_by_context(full, denunciado)
     dni_victima = _extract_dni_strict_for_name(full, victima)
     dni_victima_2 = _extract_dni_strict_for_name(full, victima_2)
+    dni_victima_3 = _extract_dni_strict_for_name(full, victima_3)
     # Evitar que víctima herede DNI del acusado por proximidad OCR.
     if dni_victima and dni_denunciado and _normalize_dni(dni_victima) == _normalize_dni(dni_denunciado):
         dni_victima = ""
     if dni_victima_2 and dni_denunciado and _normalize_dni(dni_victima_2) == _normalize_dni(dni_denunciado):
         dni_victima_2 = ""
+    if dni_victima_3 and dni_denunciado and _normalize_dni(dni_victima_3) == _normalize_dni(dni_denunciado):
+        dni_victima_3 = ""
 
     dom_den = _first_group(r"Domicilio\s*[:\-]?\s*([^\n]+)", full)
     dom_vic = _first_group(r"domicilio de la victima\s*[:\-]?\s*([^.]+)", full)
@@ -879,6 +884,8 @@ def _parse_fields(text: str) -> dict:
         dom_vic = _first_group(r"sito en\s*([^.]+Cerrillos[^.]*)", full)
     if not dom_vic:
         dom_vic = _first_group(r"domicilio de la v[ií]ctima[^\n]{0,50}?sito en\s*([^\n.]+)", full)
+    if not dom_vic:
+        dom_vic = _first_group(r"domicilio de la v[ií]ctima[^\n]{0,120}?sito en\s*([^,\n]+(?:,[^,\n]+){0,3})", full)
 
     dist = _first_group(r"(\d{2,4}\s*metros?)", full)
     dias = _first_group(r"(\d{1,3})\s*d[ií]as", full)
@@ -893,10 +900,11 @@ def _parse_fields(text: str) -> dict:
     return {
         "juzgado": _smart_cut(juzgado, 180),
         "expediente": _smart_cut(expediente, 80),
-        "caratula": _smart_cut(caratula, 320),
+        "caratula": _clean(caratula)[:320],
         "persona_denunciada": _smart_cut(denunciado, 120),
         "victima": _smart_cut(victima, 120),
         "victima_2": _smart_cut(victima_2, 120),
+        "victima_3": _smart_cut(victima_3, 120),
         "victimas_adicionales": victimas_extra,
         "domicilio_denunciado": _smart_cut(dom_den, 220),
         "domicilio_victima": _smart_cut(dom_vic, 220),
@@ -910,9 +918,11 @@ def _parse_fields(text: str) -> dict:
         "turnos": _smart_cut(turnos, 80),
         "acusado_notificar": "si",
         "victima_notificar": "no",
+        "victima_3_notificar": "no",
         "dni_denunciado": dni_denunciado,
         "dni_victima": dni_victima,
         "dni_victima_2": dni_victima_2,
+        "dni_victima_3": dni_victima_3,
         "fecha_oficio": _smart_cut(fecha_oficio, 40),
         "fecha_notificacion": _smart_cut(fecha_notif, 40),
         "observaciones": "",
@@ -1141,8 +1151,26 @@ def cargar():
                 _add_person_if_new(payload.get("victima"), payload.get("dni_victima"), "victima", victima_notificar)
             if _clean(payload.get("victima_2")):
                 _add_person_if_new(payload.get("victima_2"), payload.get("dni_victima_2"), "victima", victima_2_notificar)
+            if _clean(payload.get("acusado_2")):
+                _add_person_if_new(
+                    payload.get("acusado_2"),
+                    payload.get("dni_acusado_2"),
+                    "denunciado",
+                    _normalize_notificar(payload.get("acusado_2_notificar"), "si"),
+                )
+            if _clean(payload.get("victima_3")):
+                _add_person_if_new(
+                    payload.get("victima_3"),
+                    payload.get("dni_victima_3"),
+                    "victima",
+                    _normalize_notificar(payload.get("victima_3_notificar"), "no"),
+                )
             if _clean(payload.get("domicilio_victima_2")):
                 _add_domicilio_if_new(payload.get("domicilio_victima_2"), "victima")
+            if _clean(payload.get("domicilio_acusado_2")):
+                _add_domicilio_if_new(payload.get("domicilio_acusado_2"), "denunciado")
+            if _clean(payload.get("domicilio_victima_3")):
+                _add_domicilio_if_new(payload.get("domicilio_victima_3"), "victima")
             for vextra in (payload.get("victimas_adicionales") or []):
                 if _clean(vextra):
                     _add_person_if_new(vextra, "", "victima", victima_notificar)
