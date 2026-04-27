@@ -216,8 +216,6 @@ def _ocr_from_pil_with_error(img) -> tuple[str, str]:
                 txt = _normalize_spaces(pytesseract.image_to_string(im, lang=lang))
                 if len(txt) > len(best):
                     best = txt
-                if len(txt) >= 60:
-                    return txt, ""
             except Exception as exc:
                 last_err = str(exc)
                 continue
@@ -1176,13 +1174,13 @@ def cargar():
             primary_text = txt_qr if qr_is_useful else txt_ocr
             primary_kind = "QR" if qr_is_useful else (source_used or "OCR imagen")
 
-            # Siempre consolidar ambas fuentes cuando existan para no perder datos.
-            if _clean(txt_qr):
-                full_text_parts.append(txt_qr)
-                merged = _merge_parsed(merged, parsed_qr)
+            # Consolidar priorizando texto del archivo subido (OCR/PDF) y QR como complemento.
             if _clean(txt_ocr):
                 full_text_parts.append(txt_ocr)
                 merged = _merge_parsed(merged, parsed_ocr)
+            if _clean(txt_qr):
+                full_text_parts.append(txt_qr)
+                merged = _merge_parsed(merged, parsed_qr)
 
             if _clean(primary_text):
                 for k, v in merged.items():
