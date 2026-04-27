@@ -629,11 +629,21 @@ def _is_probable_person_name(name: str) -> bool:
         "resolucion",
         "notificacion",
         "domicilio",
+        "prohibicion",
+        "acercarse",
+        "acercamiento",
+        "reciproca",
+        "debera",
+        "deberá",
+        "hagas saber",
+        "ordenar",
     )
     if any(b in low for b in blacklist):
         return False
     toks = [t for t in re.split(r"\s+", n) if t]
     if len(toks) < 2:
+        return False
+    if len(toks) > 5:
         return False
     if any(re.search(r"\d", t) for t in toks):
         return False
@@ -1435,6 +1445,47 @@ def cargar():
         if "medidas_detalle" not in merged:
             merged["medidas_detalle"] = []
         return render_template("oficios_judiciales/preview.html", data=merged, data_json=json.dumps(merged))
+
+    if _clean(request.args.get("manual")) == "1":
+        base = {
+            "juzgado": "",
+            "expediente": "",
+            "caratula": "",
+            "tipo_medida": "",
+            "tipo_consigna": "",
+            "fecha_oficio": "",
+            "fecha_notificacion": "",
+            "persona_denunciada": "",
+            "dni_denunciado": "",
+            "domicilio_denunciado": "",
+            "victima": "",
+            "dni_victima": "",
+            "domicilio_victima": "",
+            "victima_2": "",
+            "dni_victima_2": "",
+            "domicilio_victima_2": "",
+            "acusado_notificar": "si",
+            "victima_notificar": "no",
+            "victima_2_notificar": "no",
+            "victimas_adicionales": [],
+            "cantidad_dias": "",
+            "dias_fija": "",
+            "dias_ambulatoria": "",
+            "dias_personalizada": "",
+            "turnos": "",
+            "observaciones": "",
+            "medidas_detalle": [],
+            "texto_fuente": "",
+            "fuente_principal": "manual",
+            "qr_url": "",
+            "archivo_origen": "carga_manual",
+            "archivos_procesados": [],
+            "advertencias": [],
+            "campos_detectados": [],
+            "campos_vacios": [],
+            "estado": "activa",
+        }
+        return render_template("oficios_judiciales/preview.html", data=base, data_json=json.dumps(base))
 
     return render_template("oficios_judiciales/cargar.html")
 
