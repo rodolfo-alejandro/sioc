@@ -130,31 +130,10 @@
                         <option value="no" {{ 'selected' if vn2 == 'no' else '' }}>No</option>
                     </select>
                 </div>
-                <div class="col-md-12">
-                    <label class="form-label">Víctimas adicionales (una por línea)</label>
-                    <textarea class="form-control" rows="2" id="f-victimas_adicionales">{{ (data.victimas_adicionales or [])|join('\n') }}</textarea>
-                </div>
             </div>
         </div>
     </div>
-
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header"><strong>Tercero relacionado (opcional)</strong></div>
-            <div class="card-body row g-2">
-                <div class="col-md-5"><label class="form-label">Nombre y apellido</label><input class="form-control" id="f-tercero_nombre" value="{{ data.tercero_nombre or '' }}"></div>
-                <div class="col-md-3"><label class="form-label">DNI</label><input class="form-control" id="f-tercero_dni" value="{{ data.tercero_dni or '' }}"></div>
-                <div class="col-md-4"><label class="form-label">Domicilio</label><input class="form-control" id="f-tercero_domicilio" value="{{ data.tercero_domicilio or '' }}"></div>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-md-3"><label class="form-label">Distancia restricción</label><input class="form-control" id="f-distancia_restriccion" value="{{ data.distancia_restriccion }}"></div>
-    <div class="col-md-3"><label class="form-label">Días (general)</label><input class="form-control" id="f-cantidad_dias" value="{{ data.cantidad_dias }}"></div>
-    <div class="col-md-3"><label class="form-label">Turnos</label><input class="form-control" id="f-turnos" value="{{ data.turnos }}"></div>
-
-    <div class="col-md-12"><label class="form-label">Observaciones</label><textarea class="form-control" rows="2" id="f-observaciones">{{ data.observaciones }}</textarea></div>
-    <div class="col-md-12"><label class="form-label">Medidas detalle (una por línea)</label><textarea class="form-control" rows="4" id="f-medidas_detalle">{{ (data.medidas_detalle or [])|join('\n') }}</textarea></div>
+    <input type="hidden" id="f-cantidad_dias" value="{{ data.cantidad_dias }}">
     <div class="col-md-12"><label class="form-label">Texto fuente consolidado</label><textarea class="form-control" rows="8" id="f-texto_fuente">{{ data.texto_fuente }}</textarea></div>
 
     <div class="col-md-6"><label class="form-label">Fuente principal</label><input class="form-control" id="f-fuente_principal" value="{{ data.fuente_principal }}"></div>
@@ -222,21 +201,18 @@
             victima_2: v('f-victima_2'),
             dni_victima_2: v('f-dni_victima_2'),
             domicilio_victima_2: v('f-domicilio_victima_2'),
-            tercero_nombre: v('f-tercero_nombre'),
-            tercero_dni: v('f-tercero_dni'),
-            tercero_domicilio: v('f-tercero_domicilio'),
             acusado_notificar: v('f-acusado_notificar'),
             victima_notificar: v('f-victima_notificar'),
             victima_2_notificar: v('f-victima_2_notificar'),
-            victimas_adicionales: v('f-victimas_adicionales').split('\n').map(function (x) { return x.trim(); }).filter(Boolean),
-            distancia_restriccion: v('f-distancia_restriccion'),
+            victimas_adicionales: [],
+            distancia_restriccion: '',
             cantidad_dias: v('f-cantidad_dias'),
             dias_fija: v('f-dias_fija'),
             dias_ambulatoria: v('f-dias_ambulatoria'),
             dias_personalizada: v('f-dias_personalizada'),
-            turnos: v('f-turnos'),
-            observaciones: v('f-observaciones'),
-            medidas_detalle: v('f-medidas_detalle').split('\n').map(function (x) { return x.trim(); }).filter(Boolean),
+            turnos: '',
+            observaciones: '',
+            medidas_detalle: [],
             texto_fuente: v('f-texto_fuente'),
             fuente_principal: v('f-fuente_principal'),
             qr_url: v('f-qr_url'),
