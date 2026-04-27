@@ -66,21 +66,22 @@
     <input type="hidden" id="preview-json" name="preview_json" value='{{ data_json|safe }}'>
 
     <div class="col-md-4"><label class="form-label">Juzgado</label><input class="form-control" id="f-juzgado" value="{{ data.juzgado }}"></div>
-    <div class="col-md-4"><label class="form-label">Expediente</label><input class="form-control" id="f-expediente" value="{{ data.expediente }}"></div>
+    <div class="col-md-4"><label class="form-label">Expte</label><input class="form-control" id="f-expediente" value="{{ data.expediente }}"></div>
+    <div class="col-md-4"><label class="form-label">Carátula</label><input class="form-control" id="f-caratula" value="{{ data.caratula }}"></div>
+
     <div class="col-md-4"><label class="form-label">Tipo medida</label><input class="form-control" id="f-tipo_medida" value="{{ data.tipo_medida }}"></div>
-    <div class="col-md-4">
-        <label class="form-label">Tipo de consigna</label>
-        <select class="form-select" id="f-tipo_consigna">
-            {% set tc = (data.tipo_consigna or '') %}
-            <option value="" {{ 'selected' if not tc else '' }}>Sin clasificar</option>
-            <option value="fija" {{ 'selected' if tc == 'fija' else '' }}>Fija</option>
-            <option value="ambulatoria" {{ 'selected' if tc == 'ambulatoria' else '' }}>Ambulatoria</option>
-            <option value="personalizada" {{ 'selected' if tc == 'personalizada' else '' }}>Personalizada</option>
-            <option value="indeterminada" {{ 'selected' if tc == 'indeterminada' else '' }}>Indeterminada</option>
+    <div class="col-md-2"><label class="form-label">Personalizada (días)</label><input class="form-control" id="f-dias_personalizada" value="{{ data.dias_personalizada or '' }}"></div>
+    <div class="col-md-2"><label class="form-label">Fija (días)</label><input class="form-control" id="f-dias_fija" value="{{ data.dias_fija or '' }}"></div>
+    <div class="col-md-2"><label class="form-label">Ambulatoria (días)</label><input class="form-control" id="f-dias_ambulatoria" value="{{ data.dias_ambulatoria or '' }}"></div>
+    <div class="col-md-2">
+        <label class="form-label">Indeterminada</label>
+        <select class="form-select" id="f-indeterminada">
+            {% set ind = (data.tipo_consigna or '') == 'indeterminada' %}
+            <option value="no" {{ 'selected' if not ind else '' }}>No</option>
+            <option value="si" {{ 'selected' if ind else '' }}>Sí</option>
         </select>
     </div>
-
-    <div class="col-md-6"><label class="form-label">Carátula</label><input class="form-control" id="f-caratula" value="{{ data.caratula }}"></div>
+    <input type="hidden" id="f-tipo_consigna" value="{{ data.tipo_consigna or '' }}">
     <div class="col-md-3"><label class="form-label">Fecha oficio</label><input type="date" class="form-control" id="f-fecha_oficio" value="{{ data.fecha_oficio }}"></div>
     <div class="col-md-3"><label class="form-label">Fecha notificación (inicio)</label><input type="date" class="form-control" id="f-fecha_notificacion" value="{{ data.fecha_notificacion }}"></div>
 
@@ -119,9 +120,6 @@
 
     <div class="col-md-3"><label class="form-label">Distancia restricción</label><input class="form-control" id="f-distancia_restriccion" value="{{ data.distancia_restriccion }}"></div>
     <div class="col-md-3"><label class="form-label">Días (general)</label><input class="form-control" id="f-cantidad_dias" value="{{ data.cantidad_dias }}"></div>
-    <div class="col-md-3"><label class="form-label">Días consigna fija</label><input class="form-control" id="f-dias_fija" value="{{ data.dias_fija or '' }}"></div>
-    <div class="col-md-3"><label class="form-label">Días consigna ambulatoria</label><input class="form-control" id="f-dias_ambulatoria" value="{{ data.dias_ambulatoria or '' }}"></div>
-    <div class="col-md-3"><label class="form-label">Días consigna personalizada</label><input class="form-control" id="f-dias_personalizada" value="{{ data.dias_personalizada or '' }}"></div>
     <div class="col-md-3"><label class="form-label">Turnos</label><input class="form-control" id="f-turnos" value="{{ data.turnos }}"></div>
 
     <div class="col-md-12"><label class="form-label">Observaciones</label><textarea class="form-control" rows="2" id="f-observaciones">{{ data.observaciones }}</textarea></div>
@@ -143,31 +141,39 @@
     var form = document.querySelector('form');
     var target = document.getElementById('preview-json');
     if (!form || !target) return;
-    function syncDiasPorTipo() {
-        var tc = document.getElementById('f-tipo_consigna');
-        var general = document.getElementById('f-cantidad_dias');
-        if (!tc || !general) return;
-        var map = {
-            fija: document.getElementById('f-dias_fija'),
-            ambulatoria: document.getElementById('f-dias_ambulatoria'),
-            personalizada: document.getElementById('f-dias_personalizada')
-        };
-        var src = map[tc.value];
-        if (src && String(src.value || '').trim()) {
-            general.value = src.value;
+    function v(id) { var el = document.getElementById(id); return el ? el.value : ''; }
+    function recomputeTipoConsignaYDias() {
+        var ind = v('f-indeterminada') === 'si';
+        var dPer = v('f-dias_personalizada');
+        var dFija = v('f-dias_fija');
+        var dAmb = v('f-dias_ambulatoria');
+        var tipo = '';
+        var total = '';
+        if (ind) {
+            tipo = 'indeterminada';
+        } else {
+            var flags = [];
+            if (String(dPer).trim()) flags.push('personalizada');
+            if (String(dFija).trim()) flags.push('fija');
+            if (String(dAmb).trim()) flags.push('ambulatoria');
+            if (flags.length === 1) tipo = flags[0];
+            else if (flags.length > 1) tipo = 'mixta';
+            if (String(dPer).trim()) total = dPer;
+            else if (String(dFija).trim()) total = dFija;
+            else if (String(dAmb).trim()) total = dAmb;
         }
+        var tc = document.getElementById('f-tipo_consigna');
+        if (tc) tc.value = tipo;
+        var cd = document.getElementById('f-cantidad_dias');
+        if (cd) cd.value = total;
     }
-    var tipoConsigna = document.getElementById('f-tipo_consigna');
-    if (tipoConsigna) {
-        tipoConsigna.addEventListener('change', syncDiasPorTipo);
-    }
-    ['f-dias_fija', 'f-dias_ambulatoria', 'f-dias_personalizada'].forEach(function (id) {
+    ['f-indeterminada', 'f-dias_fija', 'f-dias_ambulatoria', 'f-dias_personalizada'].forEach(function (id) {
         var el = document.getElementById(id);
-        if (el) el.addEventListener('change', syncDiasPorTipo);
+        if (el) el.addEventListener('change', recomputeTipoConsignaYDias);
     });
-    syncDiasPorTipo();
+    recomputeTipoConsignaYDias();
     form.addEventListener('submit', function () {
-        function v(id) { var el = document.getElementById(id); return el ? el.value : ''; }
+        recomputeTipoConsignaYDias();
         var payload = {
             juzgado: v('f-juzgado'),
             expediente: v('f-expediente'),

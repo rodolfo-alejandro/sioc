@@ -434,7 +434,7 @@ def _extract_date_by_context(full: str) -> tuple[str, str]:
     Devuelve (fecha_oficio, fecha_notificacion)
     """
     # 1) Notificación explícita
-    fecha_notif = _first_group(r"Constancia de notificación[^\n]*?(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})", full)
+    fecha_notif = _first_group(r"Constancia de notificaci[oó]n[^\n]*?(?:R\.\s*Fecha\s*[:=]\s*)?(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})", full)
     if not fecha_notif:
         fecha_notif = _first_group(r"notificad[oa][^\n]{0,60}?(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})", full)
     if not fecha_notif:
@@ -442,6 +442,8 @@ def _extract_date_by_context(full: str) -> tuple[str, str]:
 
     # 2) Oficio/proveído/firma digital
     fecha_oficio = _first_group(r"prove[ií]do de fecha\s+(\d{1,2}\s+de\s+[A-Za-zÁÉÍÓÚÑáéíóúñ]+\s+de\s+\d{4})", full)
+    if not fecha_oficio:
+        fecha_oficio = _first_group(r"resoluci[oó]n(?:\s+\w+){0,4}\s+de fecha\s+(\d{1,2}\s+de\s+[A-Za-zÁÉÍÓÚÑáéíóúñ]+\s+de\s+\d{4})", full)
     if not fecha_oficio:
         fecha_oficio = _first_group(r"FIRMADO DIGITALMENTE[^\n]{0,80}?(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})", full)
     if not fecha_oficio:
