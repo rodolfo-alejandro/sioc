@@ -110,6 +110,10 @@ def create_seed_data():
             ('DENUNCIAS_WEB_EXPORT', 'Exportar denuncias web filtradas'),
             ('DENUNCIAS_WEB_DASHBOARD', 'Ver dashboard de denuncias web'),
             ('DENUNCIAS_WEB_MAPA', 'Ver mapa de denuncias web'),
+            # Oficios judiciales
+            ('OFICIOS_JUDICIALES_VIEW', 'Ver oficios judiciales'),
+            ('OFICIOS_JUDICIALES_UPLOAD', 'Cargar oficios judiciales con OCR/QR'),
+            ('OFICIOS_JUDICIALES_EXPORT', 'Exportar oficios judiciales'),
         ]
         
         permisos_creados = {}
@@ -156,7 +160,8 @@ def create_seed_data():
                           'OPERATIVOS_VIEW', 'OPERATIVOS_CREATE',
                           'SABANA_LLAMADAS_VIEW', 'SABANA_LLAMADAS_UPLOAD',
                           'DENUNCIAS_WEB_VIEW', 'DENUNCIAS_WEB_IMPORT', 'DENUNCIAS_WEB_EXPORT',
-                          'DENUNCIAS_WEB_DASHBOARD', 'DENUNCIAS_WEB_MAPA']
+                          'DENUNCIAS_WEB_DASHBOARD', 'DENUNCIAS_WEB_MAPA',
+                          'OFICIOS_JUDICIALES_VIEW', 'OFICIOS_JUDICIALES_UPLOAD', 'OFICIOS_JUDICIALES_EXPORT']
             for perm_code in admin_perms:
                 if perm_code in permisos_creados:
                     admin_role.permissions.append(permisos_creados[perm_code])
@@ -173,7 +178,8 @@ def create_seed_data():
             analista_perms = [
                 'CORE_VIEW', 'DATALAB_VIEW', 'DATALAB_UPLOAD', 'SABANA_LLAMADAS_VIEW', 'SABANA_LLAMADAS_UPLOAD',
                 'DENUNCIAS_WEB_VIEW', 'DENUNCIAS_WEB_IMPORT', 'DENUNCIAS_WEB_EXPORT',
-                'DENUNCIAS_WEB_DASHBOARD', 'DENUNCIAS_WEB_MAPA'
+                'DENUNCIAS_WEB_DASHBOARD', 'DENUNCIAS_WEB_MAPA',
+                'OFICIOS_JUDICIALES_VIEW', 'OFICIOS_JUDICIALES_UPLOAD', 'OFICIOS_JUDICIALES_EXPORT'
             ]
             for perm_code in analista_perms:
                 if perm_code in permisos_creados:

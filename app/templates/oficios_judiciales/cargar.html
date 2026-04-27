@@ -1,0 +1,24 @@
+{% extends "layouts/base.html" %}
+{% block title %}Carga Inteligente de Oficios{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-file-earmark-richtext"></i> Carga inteligente de oficios judiciales</h1>
+    <p class="text-muted">Subí imágenes o PDF, el sistema extrae OCR + QR y te muestra una previsualización editable antes de guardar.</p>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST" enctype="multipart/form-data" class="row g-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="col-12">
+                <label class="form-label">Archivos (jpg, png, pdf) - múltiple</label>
+                <input type="file" name="archivos" class="form-control" accept=".jpg,.jpeg,.png,.webp,.pdf" multiple required>
+            </div>
+            <div class="col-12 d-grid">
+                <button class="btn btn-primary" type="submit"><i class="bi bi-cpu"></i> Procesar OCR / QR</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+

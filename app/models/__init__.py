@@ -56,6 +56,12 @@ from app.models.billeteras_virtuales import (
     BilleteraSalida,
 )
 from app.models.analisis_denuncias import DenunciaWeb as DenunciaWebDroga
+from app.models.oficios_judiciales import (
+    ConsignaJudicial,
+    ConsignaPersona,
+    ConsignaDomicilio,
+    ConsignaMedidaDetalle,
+)
 
 __all__ = [
     'User', 'Role', 'Permission', 'Unidad', 'AuditLog', 'Dataset', 'DenunciaWeb',
@@ -78,5 +84,6 @@ __all__ = [
     'AnalisisPuntoCasoMapaPunto',
     'BilleteraCarga', 'BilleteraCargaCompartida', 'BilleteraMovimiento', 'BilleteraSalida',
     'DenunciaWebDroga',
+    'ConsignaJudicial', 'ConsignaPersona', 'ConsignaDomicilio', 'ConsignaMedidaDetalle',
 ]
 

@@ -1,0 +1,64 @@
+{% extends "layouts/base.html" %}
+{% block title %}Oficios Judiciales{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-list-check"></i> Consignas judiciales</h1>
+</div>
+
+<div class="d-flex gap-2 mb-3">
+    <a class="btn btn-primary btn-sm" href="{{ url_for('oficios_judiciales.cargar') }}"><i class="bi bi-cloud-upload"></i> Carga inteligente</a>
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('oficios_judiciales.export_csv') }}">CSV</a>
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('oficios_judiciales.export_xlsx') }}">Excel</a>
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('oficios_judiciales.export_pdf') }}">PDF</a>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="GET" class="row g-2">
+            <div class="col-md-2"><input class="form-control form-control-sm" name="fecha_desde" placeholder="Fecha desde" value="{{ selected.get('fecha_desde','') }}"></div>
+            <div class="col-md-2"><input class="form-control form-control-sm" name="fecha_hasta" placeholder="Fecha hasta" value="{{ selected.get('fecha_hasta','') }}"></div>
+            <div class="col-md-2">
+                <select name="tipo" class="form-select form-select-sm">
+                    <option value="">Todos los tipos</option>
+                    {% for t in tipos %}
+                    <option value="{{ t }}" {{ 'selected' if selected.get('tipo') == t else '' }}>{{ t }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2"><input class="form-control form-control-sm" name="juzgado" placeholder="Juzgado" value="{{ selected.get('juzgado','') }}"></div>
+            <div class="col-md-2"><input class="form-control form-control-sm" name="persona" placeholder="Persona / DNI" value="{{ selected.get('persona','') }}"></div>
+            <div class="col-md-2"><input class="form-control form-control-sm" name="q" placeholder="Expediente / texto" value="{{ selected.get('q','') }}"></div>
+            <div class="col-12 d-flex gap-2">
+                <button class="btn btn-sm btn-outline-primary" type="submit">Aplicar</button>
+                <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('oficios_judiciales.listado') }}">Limpiar</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-sm align-middle">
+        <thead>
+            <tr>
+                <th>ID</th><th>Expediente</th><th>Tipo</th><th>Juzgado</th><th>Inicio</th><th>Estado</th><th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in rows %}
+            <tr>
+                <td>{{ r.id }}</td>
+                <td>{{ r.expediente or '—' }}</td>
+                <td>{{ r.tipo_medida or '—' }}</td>
+                <td>{{ r.juzgado or '—' }}</td>
+                <td>{{ r.fecha_notificacion|localtime('%d/%m/%Y') if r.fecha_notificacion else '—' }}</td>
+                <td>{{ r.estado }}</td>
+                <td><a class="btn btn-sm btn-outline-primary" href="{{ url_for('oficios_judiciales.detalle', consigna_id=r.id) }}">Detalle</a></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7" class="text-muted text-center">Sin resultados.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+

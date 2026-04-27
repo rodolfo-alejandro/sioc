@@ -1,0 +1,137 @@
+{% extends "layouts/base.html" %}
+{% block title %}Previsualización Oficio{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-eye"></i> Previsualización obligatoria</h1>
+    <p class="text-muted">Revisá y corregí campos antes de guardar. La fecha de inicio real es la de notificación.</p>
+</div>
+
+<div class="row g-3 mb-3">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header"><strong>Validación de procesamiento</strong></div>
+            <div class="card-body">
+                <div><strong>Fuente principal usada:</strong> {{ data.fuente_principal or '—' }}</div>
+                <div><strong>Archivo origen:</strong> {{ data.archivo_origen or '—' }}</div>
+                <div><strong>QR URL:</strong> {{ data.qr_url or '—' }}</div>
+                <hr>
+                <div class="mb-1"><strong>Archivos procesados</strong></div>
+                <ul class="mb-0">
+                    {% for x in data.archivos_procesados or [] %}
+                    <li>{{ x.archivo }} — {{ x.fuente }} {% if x.ok %}<span class="text-success">(ok)</span>{% else %}<span class="text-danger">(sin lectura)</span>{% endif %}</li>
+                    {% else %}
+                    <li class="text-muted">Sin detalle.</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header"><strong>Control de campos</strong></div>
+            <div class="card-body">
+                <div class="mb-1"><strong>Campos detectados automáticamente</strong></div>
+                <div class="small mb-2">
+                    {% for c in data.campos_detectados or [] %}
+                    <span class="badge bg-success me-1">{{ c }}</span>
+                    {% else %}
+                    <span class="text-muted">Sin detecciones automáticas.</span>
+                    {% endfor %}
+                </div>
+                <div class="mb-1"><strong>Campos vacíos (revisión manual)</strong></div>
+                <div class="small">
+                    {% for c in data.campos_vacios or [] %}
+                    <span class="badge bg-warning text-dark me-1">{{ c }}</span>
+                    {% else %}
+                    <span class="text-success">No hay campos clave vacíos.</span>
+                    {% endfor %}
+                </div>
+                {% if data.advertencias %}
+                <hr>
+                <div class="mb-1"><strong>Advertencias</strong></div>
+                <ul class="mb-0 small text-danger">
+                    {% for w in data.advertencias %}
+                    <li>{{ w }}</li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<form method="POST" class="row g-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="guardar">
+    <input type="hidden" id="preview-json" name="preview_json" value='{{ data_json|safe }}'>
+
+    <div class="col-md-4"><label class="form-label">Juzgado</label><input class="form-control" id="f-juzgado" value="{{ data.juzgado }}"></div>
+    <div class="col-md-4"><label class="form-label">Expediente</label><input class="form-control" id="f-expediente" value="{{ data.expediente }}"></div>
+    <div class="col-md-4"><label class="form-label">Tipo medida</label><input class="form-control" id="f-tipo_medida" value="{{ data.tipo_medida }}"></div>
+
+    <div class="col-md-6"><label class="form-label">Carátula</label><input class="form-control" id="f-caratula" value="{{ data.caratula }}"></div>
+    <div class="col-md-3"><label class="form-label">Fecha oficio</label><input class="form-control" id="f-fecha_oficio" value="{{ data.fecha_oficio }}"></div>
+    <div class="col-md-3"><label class="form-label">Fecha notificación (inicio)</label><input class="form-control" id="f-fecha_notificacion" value="{{ data.fecha_notificacion }}"></div>
+
+    <div class="col-md-6"><label class="form-label">Persona denunciada / notificada</label><input class="form-control" id="f-persona_denunciada" value="{{ data.persona_denunciada }}"></div>
+    <div class="col-md-6"><label class="form-label">Víctima</label><input class="form-control" id="f-victima" value="{{ data.victima }}"></div>
+    <div class="col-md-6"><label class="form-label">Domicilio denunciado</label><input class="form-control" id="f-domicilio_denunciado" value="{{ data.domicilio_denunciado }}"></div>
+    <div class="col-md-6"><label class="form-label">Domicilio víctima</label><input class="form-control" id="f-domicilio_victima" value="{{ data.domicilio_victima }}"></div>
+
+    <div class="col-md-4"><label class="form-label">Distancia restricción</label><input class="form-control" id="f-distancia_restriccion" value="{{ data.distancia_restriccion }}"></div>
+    <div class="col-md-4"><label class="form-label">Cantidad días</label><input class="form-control" id="f-cantidad_dias" value="{{ data.cantidad_dias }}"></div>
+    <div class="col-md-4"><label class="form-label">Turnos</label><input class="form-control" id="f-turnos" value="{{ data.turnos }}"></div>
+
+    <div class="col-md-12"><label class="form-label">Observaciones</label><textarea class="form-control" rows="2" id="f-observaciones">{{ data.observaciones }}</textarea></div>
+    <div class="col-md-12"><label class="form-label">Medidas detalle (una por línea)</label><textarea class="form-control" rows="4" id="f-medidas_detalle">{{ (data.medidas_detalle or [])|join('\n') }}</textarea></div>
+    <div class="col-md-12"><label class="form-label">Texto fuente consolidado</label><textarea class="form-control" rows="8" id="f-texto_fuente">{{ data.texto_fuente }}</textarea></div>
+
+    <div class="col-md-6"><label class="form-label">Fuente principal</label><input class="form-control" id="f-fuente_principal" value="{{ data.fuente_principal }}"></div>
+    <div class="col-md-6"><label class="form-label">URL QR (si aplica)</label><input class="form-control" id="f-qr_url" value="{{ data.qr_url }}"></div>
+
+    <div class="col-12 d-flex gap-2">
+        <a href="{{ url_for('oficios_judiciales.cargar') }}" class="btn btn-outline-secondary">Cancelar</a>
+        <button class="btn btn-success" type="submit"><i class="bi bi-save"></i> Guardar consigna</button>
+    </div>
+</form>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+(function () {
+    var form = document.querySelector('form');
+    var target = document.getElementById('preview-json');
+    if (!form || !target) return;
+    form.addEventListener('submit', function () {
+        function v(id) { var el = document.getElementById(id); return el ? el.value : ''; }
+        var payload = {
+            juzgado: v('f-juzgado'),
+            expediente: v('f-expediente'),
+            caratula: v('f-caratula'),
+            tipo_medida: v('f-tipo_medida'),
+            fecha_oficio: v('f-fecha_oficio'),
+            fecha_notificacion: v('f-fecha_notificacion'),
+            persona_denunciada: v('f-persona_denunciada'),
+            victima: v('f-victima'),
+            domicilio_denunciado: v('f-domicilio_denunciado'),
+            domicilio_victima: v('f-domicilio_victima'),
+            distancia_restriccion: v('f-distancia_restriccion'),
+            cantidad_dias: v('f-cantidad_dias'),
+            turnos: v('f-turnos'),
+            observaciones: v('f-observaciones'),
+            medidas_detalle: v('f-medidas_detalle').split('\n').map(function (x) { return x.trim(); }).filter(Boolean),
+            texto_fuente: v('f-texto_fuente'),
+            fuente_principal: v('f-fuente_principal'),
+            qr_url: v('f-qr_url'),
+            archivo_origen: "{{ data.archivo_origen }}",
+            archivos_procesados: {{ (data.archivos_procesados or [])|tojson }},
+            advertencias: {{ (data.advertencias or [])|tojson }},
+            campos_detectados: {{ (data.campos_detectados or [])|tojson }},
+            campos_vacios: {{ (data.campos_vacios or [])|tojson }},
+            estado: "activa"
+        };
+        target.value = JSON.stringify(payload);
+    });
+})();
+</script>
+{% endblock %}
+

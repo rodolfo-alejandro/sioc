@@ -1,0 +1,56 @@
+{% extends "layouts/base.html" %}
+{% block title %}Detalle Consigna Judicial{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-file-earmark-text"></i> Detalle consigna #{{ row.id }}</h1>
+</div>
+<div class="d-flex gap-2 mb-3">
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('oficios_judiciales.listado') }}">Volver</a>
+</div>
+
+<div class="row g-3">
+    <div class="col-md-6">
+        <div class="card"><div class="card-header">Datos principales</div><div class="card-body">
+            <div><strong>Expediente:</strong> {{ row.expediente or '—' }}</div>
+            <div><strong>Juzgado:</strong> {{ row.juzgado or '—' }}</div>
+            <div><strong>Carátula:</strong> {{ row.caratula or '—' }}</div>
+            <div><strong>Tipo medida:</strong> {{ row.tipo_medida or '—' }}</div>
+            <div><strong>Fecha oficio:</strong> {{ row.fecha_oficio|localtime('%d/%m/%Y') if row.fecha_oficio else '—' }}</div>
+            <div><strong>Fecha notificación (inicio):</strong> {{ row.fecha_notificacion|localtime('%d/%m/%Y') if row.fecha_notificacion else '—' }}</div>
+            <div><strong>Días:</strong> {{ row.cantidad_dias or '—' }}</div>
+            <div><strong>Distancia:</strong> {{ row.distancia or '—' }}</div>
+            <div><strong>Turnos:</strong> {{ row.turnos or '—' }}</div>
+        </div></div>
+    </div>
+    <div class="col-md-6">
+        <div class="card"><div class="card-header">Personas y domicilios</div><div class="card-body">
+            <div class="mb-2"><strong>Personas</strong></div>
+            {% for p in row.personas %}
+            <div>- {{ p.tipo }}: {{ p.nombre }} {% if p.dni %}({{ p.dni }}){% endif %}</div>
+            {% else %}
+            <div class="text-muted">Sin personas.</div>
+            {% endfor %}
+            <hr>
+            <div class="mb-2"><strong>Domicilios</strong></div>
+            {% for d in row.domicilios %}
+            <div>- {{ d.tipo }}: {{ d.direccion }}</div>
+            {% else %}
+            <div class="text-muted">Sin domicilios.</div>
+            {% endfor %}
+        </div></div>
+    </div>
+    <div class="col-md-12">
+        <div class="card"><div class="card-header">Medidas detalle</div><div class="card-body">
+            {% for m in row.medidas_detalle %}
+            <div>- {{ m.descripcion }}</div>
+            {% else %}
+            <div class="text-muted">Sin detalle.</div>
+            {% endfor %}
+        </div></div>
+    </div>
+    <div class="col-md-12">
+        <div class="card"><div class="card-header">Texto fuente consolidado</div><div class="card-body"><pre class="mb-0">{{ row.texto_fuente or '—' }}</pre></div></div>
+    </div>
+</div>
+{% endblock %}
+
