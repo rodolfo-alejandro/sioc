@@ -321,49 +321,115 @@ def _first_group(pattern: str, text: str) -> str:
     return _clean(m.group(1))
 
 
+def _smart_cut(value: str, max_len: int = 220) -> str:
+    s = _clean(value)
+    if len(s) <= max_len:
+        return s
+    # Cortar por delimitadores naturales para evitar basura OCR.
+    for sep in (".", ";", ",", " por ", " que ", " en "):
+        i = s.lower().find(sep)
+        if i > 25:
+            return s[:i].strip()
+    return s[:max_len].strip()
+
+
+def _extract_person_after_label(full: str, label_regex: str) -> str:
+    m = re.search(label_regex, full, flags=re.IGNORECASE)
+    if not m:
+        return ""
+    tail = full[m.end(): m.end() + 220]
+    # Nombre en mayúsculas (2 a 6 palabras) típico en cédulas/oficios.
+    mm = re.search(r"([A-ZÁÉÍÓÚÑ]{2,}(?:\s+[A-ZÁÉÍÓÚÑ]{2,}){1,6})", tail)
+    if mm:
+        return _smart_cut(mm.group(1), 120)
+    # fallback: hasta fin de línea
+    line = tail.splitlines()[0] if tail.splitlines() else tail
+    return _smart_cut(line, 120)
+
+
+def _extract_date_by_context(full: str) -> tuple[str, str]:
+    """
+    Devuelve (fecha_oficio, fecha_notificacion)
+    """
+    # 1) Notificación explícita
+    fecha_notif = _first_group(r"Constancia de notificación[^\n]*?(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})", full)
+    if not fecha_notif:
+        fecha_notif = _first_group(r"notificad[oa][^\n]{0,60}?(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})", full)
+    if not fecha_notif:
+        fecha_notif = _first_group(r"Salta,\s*(\d{1,2}\s+de\s+[A-Za-zÁÉÍÓÚÑáéíóúñ]+\s+de\s+\d{4})", full)
+
+    # 2) Oficio/proveído/firma digital
+    fecha_oficio = _first_group(r"prove[ií]do de fecha\s+(\d{1,2}\s+de\s+[A-Za-zÁÉÍÓÚÑáéíóúñ]+\s+de\s+\d{4})", full)
+    if not fecha_oficio:
+        fecha_oficio = _first_group(r"FIRMADO DIGITALMENTE[^\n]{0,80}?(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})", full)
+    if not fecha_oficio:
+        fecha_oficio = _first_group(r"Salta,\s*(\d{1,2}\s+de\s+[A-Za-zÁÉÍÓÚÑáéíóúñ]+\s+de\s+\d{4})", full)
+
+    return _clean(fecha_oficio), _clean(fecha_notif)
+
+
+def _extract_medidas_detalle(full: str) -> list[str]:
+    medidas = []
+    patterns = [
+        r"PROHIBICI[ÓO]N DE ACERCAMIENTO[^.]*\.",
+        r"ORDENAR RONDAS[^.]*\.",
+        r"EXCLUSI[ÓO]N DEL HOGAR[^.]*\.",
+        r"CONSIGNA\s+(?:FIJA|AMBULATORIA|PERSONALIZADA)[^.]*\.",
+    ]
+    for pat in patterns:
+        for m in re.findall(pat, full, flags=re.IGNORECASE):
+            txt = _smart_cut(m, 220)
+            if txt and txt not in medidas:
+                medidas.append(txt)
+
+    # Filtro anti-ruido OCR: descartar fragmentos que no parezcan medidas.
+    clean = []
+    keywords = ("acercamiento", "rondas", "exclus", "consigna", "allanamiento")
+    for m in medidas:
+        low = m.lower()
+        if any(k in low for k in keywords):
+            clean.append(m)
+    return clean
+
+
 def _parse_fields(text: str) -> dict:
     full = text or ""
     expediente = _first_group(r"(EXP[-.\s]*\d+[\/\d\-]*)", full)
     juzgado = _first_group(r"(JUZGADO[^\n]+)", full)
     caratula = _first_group(r"Ref\.?:\s*(.+)", full)
-    denunciado = _first_group(r"Señor/?a?:\s*([^\n]+)", full)
-    victima = _first_group(r"victima\s*[:\-]?\s*([^\n]+)", full)
+    denunciado = _extract_person_after_label(full, r"Señor/?a?:")
+    victima = _extract_person_after_label(full, r"(?:y a|a)\s+([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s]{6,})[,;]")
+    if not victima:
+        victima = _extract_person_after_label(full, r"victima\s*[:\-]?")
+
     dom_den = _first_group(r"Domicilio\s*[:\-]?\s*([^\n]+)", full)
-    dom_vic = _first_group(r"domicilio de la victima\s*[:\-]?\s*([^\n]+)", full)
+    dom_vic = _first_group(r"domicilio de la victima\s*[:\-]?\s*([^.]+)", full)
+    if not dom_vic:
+        dom_vic = _first_group(r"sito en\s*([^.]+Cerrillos[^.]*)", full)
+
     dist = _first_group(r"(\d{2,4}\s*metros?)", full)
     dias = _first_group(r"(\d{1,3})\s*d[ií]as", full)
-    turnos = _first_group(r"(\d+\s*turnos?[^\n,.]*)", full)
-    fecha_oficio = _first_group(r"(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}).{0,30}JUEZ|JUEZA|Secretar", full)
-    fecha_notif = _first_group(r"notificad[oa].{0,40}?(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})", full)
-    if not fecha_notif:
-        fecha_notif = _first_group(r"Constancia de notificación.*?(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})", full)
+    if not dias:
+        dias = _first_group(r"t[eé]rmino de\s+(\d{1,3})", full)
+    turnos = _first_group(r"((?:\d+|TRES|DOS|UNO)\s*TURNOS?[^\n,.]*)", full)
+    fecha_oficio, fecha_notif = _extract_date_by_context(full)
 
-    medidas = []
-    for pat in [
-        r"PROHIBICI[ÓO]N DE ACERCAMIENTO[^.]*\.",
-        r"ORDENAR RONDAS[^.]*\.",
-        r"EXCLUSI[ÓO]N DEL HOGAR[^.]*\.",
-        r"consigna[^.]*\.",
-    ]:
-        for m in re.findall(pat, full, flags=re.IGNORECASE):
-            txt = _clean(m)
-            if txt and txt not in medidas:
-                medidas.append(txt)
+    medidas = _extract_medidas_detalle(full)
 
     return {
-        "juzgado": juzgado,
-        "expediente": expediente,
-        "caratula": caratula,
-        "persona_denunciada": denunciado,
-        "victima": victima,
-        "domicilio_denunciado": dom_den,
-        "domicilio_victima": dom_vic,
+        "juzgado": _smart_cut(juzgado, 180),
+        "expediente": _smart_cut(expediente, 80),
+        "caratula": _smart_cut(caratula, 320),
+        "persona_denunciada": _smart_cut(denunciado, 120),
+        "victima": _smart_cut(victima, 120),
+        "domicilio_denunciado": _smart_cut(dom_den, 220),
+        "domicilio_victima": _smart_cut(dom_vic, 220),
         "tipo_medida": _pick_tipo_medida(full),
-        "distancia_restriccion": dist,
-        "cantidad_dias": dias,
-        "turnos": turnos,
-        "fecha_oficio": fecha_oficio,
-        "fecha_notificacion": fecha_notif,
+        "distancia_restriccion": _smart_cut(dist, 40),
+        "cantidad_dias": _smart_cut(dias, 12),
+        "turnos": _smart_cut(turnos, 80),
+        "fecha_oficio": _smart_cut(fecha_oficio, 40),
+        "fecha_notificacion": _smart_cut(fecha_notif, 40),
         "observaciones": "",
         "medidas_detalle": medidas,
     }
