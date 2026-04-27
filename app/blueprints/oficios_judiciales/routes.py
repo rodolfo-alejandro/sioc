@@ -407,6 +407,37 @@ def _first_group(pattern: str, text: str) -> str:
     return _clean(m.group(1))
 
 
+def _extract_juzgado(full: str) -> str:
+    txt = full or ""
+    # Intentar extraer denominación completa aun cuando OCR corte en líneas.
+    m = re.search(
+        r"(JUZGADO[\s\S]{0,180}?(?:NOMINACI[ÓO]N|NOMINACION|N[°º]\s*\d+))",
+        txt,
+        flags=re.IGNORECASE,
+    )
+    if m:
+        j = _normalize_spaces(m.group(1))
+        # cortar posibles colas de códigos/QR
+        j = re.split(r"\b(?:Ref\.?|CEDULA|C[ÉE]DULA)\b", j, maxsplit=1, flags=re.IGNORECASE)[0].strip()
+        return _smart_cut(j, 220)
+    # fallback simple
+    return _smart_cut(_first_group(r"(JUZGADO[^\n]+)", txt), 220)
+
+
+def _extract_caratula(full: str) -> str:
+    txt = full or ""
+    # Referencia puede romperse en varios saltos de línea.
+    m = re.search(
+        r"Ref\.?\s*:?\s*([\s\S]{0,420}?)(?:\bCEDULA\b|\bC[ÉE]DULA\b|\n\s*\n|Señor/?a?:)",
+        txt,
+        flags=re.IGNORECASE,
+    )
+    if m:
+        c = _normalize_spaces(m.group(1))
+        return _smart_cut(c, 420)
+    return _smart_cut(_first_group(r"Ref\.?:\s*(.+)", txt), 420)
+
+
 def _smart_cut(value: str, max_len: int = 220) -> str:
     s = _clean(value)
     if len(s) <= max_len:
@@ -463,6 +494,11 @@ def _extract_date_by_context(full: str) -> tuple[str, str]:
     if not fecha_notif:
         fecha_notif = _first_group(r"(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})", full)
 
+    # Si solo vino una de las dos, reutilizarla para precarga operativa.
+    if fecha_oficio and not fecha_notif:
+        fecha_notif = fecha_oficio
+    if fecha_notif and not fecha_oficio:
+        fecha_oficio = fecha_notif
     return _clean(fecha_oficio), _clean(fecha_notif)
 
 
@@ -521,9 +557,14 @@ def _extract_dias_por_consigna(full: str) -> dict:
 
     def _days_near_keyword(keyword_pat: str):
         for m in re.finditer(keyword_pat, txt, flags=re.IGNORECASE):
-            a = max(0, m.start() - 80)
-            b = min(len(txt), m.end() + 240)
-            d = _extract_days_value(txt[a:b])
+            # Limitar al bloque/sentencia para evitar contaminación de otros plazos.
+            a = max(txt.rfind(".", 0, m.start()), txt.rfind("\n", 0, m.start()), 0)
+            b_dot = txt.find(".", m.end())
+            b_nl = txt.find("\n", m.end())
+            candidates = [x for x in (b_dot, b_nl) if x != -1]
+            b = min(candidates) if candidates else min(len(txt), m.end() + 180)
+            chunk = txt[a:b + 1]
+            d = _extract_days_value(chunk)
             if d:
                 return d
         return None
@@ -537,11 +578,11 @@ def _extract_dias_por_consigna(full: str) -> dict:
         "ambulatoria": [
             r"CONSIGNA\s+AMBULATORIA[^.\n]{0,120}?(\d{1,3})\s*d[ií]as",
             r"(\d{1,3})\s*d[ií]as[^.\n]{0,120}?CONSIGNA\s+AMBULATORIA",
+            r"RONDAS?\s+PERI[ÓO]DICAS?",
         ],
         "personalizada": [
             r"CONSIGNA\s+PERSONALIZADA[^.\n]{0,120}?(\d{1,3})\s*d[ií]as",
             r"(\d{1,3})\s*d[ií]as[^.\n]{0,120}?CONSIGNA\s+PERSONALIZADA",
-            r"RONDAS?\s+PERI[ÓO]DICAS?",
         ],
     }
     for k, ls in pats.items():
@@ -572,8 +613,8 @@ def _extract_dias_por_consigna(full: str) -> dict:
 def _parse_fields(text: str) -> dict:
     full = text or ""
     expediente = _first_group(r"(EXP[-.\s]*\d+[\/\d\-]*)", full)
-    juzgado = _first_group(r"(JUZGADO[^\n]+)", full)
-    caratula = _first_group(r"Ref\.?:\s*(.+)", full)
+    juzgado = _extract_juzgado(full)
+    caratula = _extract_caratula(full)
     denunciado = _extract_person_after_label(full, r"Señor/?a?:")
     victima = _extract_person_after_label(full, r"(?:y a|a)\s+([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s]{6,})[,;]")
     if not victima:
@@ -623,6 +664,15 @@ def _parse_fields(text: str) -> dict:
 
 def _merge_parsed(a: dict, b: dict) -> dict:
     out = dict(a or {})
+    prefer_longer = {
+        "juzgado",
+        "caratula",
+        "expediente",
+        "persona_denunciada",
+        "victima",
+        "domicilio_denunciado",
+        "domicilio_victima",
+    }
     for k, v in (b or {}).items():
         if k == "medidas_detalle":
             prev = out.get(k) or []
@@ -633,7 +683,12 @@ def _merge_parsed(a: dict, b: dict) -> dict:
                     joined.append(x)
             out[k] = joined
             continue
-        if not _clean(out.get(k)) and _clean(v):
+        curr = _clean(out.get(k))
+        newv = _clean(v)
+        if not curr and newv:
+            out[k] = v
+            continue
+        if k in prefer_longer and newv and len(newv) > len(curr) + 8:
             out[k] = v
     return out
 
