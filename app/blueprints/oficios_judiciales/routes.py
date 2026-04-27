@@ -472,6 +472,7 @@ def _extract_victimas_from_caratula(caratula: str, acusado: str) -> list[str]:
     left = _normalize_spaces(m.group(1))
     left = re.sub(r"^Ref\.?\s*:?\s*", "", left, flags=re.IGNORECASE).strip()
     left = re.sub(r"^Expte\.?\s*N[°º]?\s*[^-]+-\s*", "", left, flags=re.IGNORECASE).strip()
+    left = re.sub(r"^[A-Za-z]*\s*-\s*\d+\/\d+\s*-\s*", "", left, flags=re.IGNORECASE).strip()
     parts = [p.strip(" -,:") for p in re.split(r";|\s+Y\s+", left, flags=re.IGNORECASE) if _clean(p)]
     uniq = []
     acusado_l = _clean(acusado).lower()
@@ -486,27 +487,56 @@ def _extract_victimas_from_caratula(caratula: str, acusado: str) -> list[str]:
     return uniq
 
 
+def _clean_person_name(name: str) -> str:
+    s = _clean(name)
+    if not s:
+        return ""
+    s = re.sub(r"^\d+\/\d+\s*-\s*", "", s).strip()
+    s = re.sub(r"^Expte\.?\s*N[°º]?\s*[^-]+-\s*", "", s, flags=re.IGNORECASE).strip()
+    s = re.sub(r"\s+", " ", s).strip(" -,;:")
+    return s
+
+
+def _extract_dni_strict_for_name(full: str, person_name: str) -> str:
+    txt = full or ""
+    nm = _clean_person_name(person_name)
+    if not nm:
+        return ""
+    # Patrón estricto: nombre cercano a DNI, evitando arrastre de otra persona.
+    pat = re.compile(
+        re.escape(nm) + r"[^.\n,;]{0,70}?D\.?\s*N\.?\s*I\.?\s*(?:N[°ºo]\s*)?[:\-]?\s*([\d\.\-]{7,16})",
+        flags=re.IGNORECASE,
+    )
+    m = pat.search(txt)
+    if m:
+        return _normalize_dni(m.group(1))
+    return ""
+
+
 def _extract_victimas_from_text(full: str, acusado: str) -> list[str]:
     txt = full or ""
     acusado_l = _clean(acusado).lower()
     out = []
     # Patrones de víctimas en frases de prohibición/acercamiento.
     pats = [
-        r"contra\s+([A-ZÁÉÍÓÚÑ ,;]{8,120})\s*,\s*debiendo",
-        r"en contra de\s+([A-ZÁÉÍÓÚÑ ,;]{8,120})",
-        r"a la denunciante\s+([A-ZÁÉÍÓÚÑ ,;]{8,120})",
+        r"contra\s+([A-ZÁÉÍÓÚÑ ,;]{8,160})\s*,\s*debiendo",
+        r"en contra de\s+([A-ZÁÉÍÓÚÑ ,;]{8,160})",
+        r"a la denunciante\s+([A-ZÁÉÍÓÚÑ ,;]{8,160})",
+        r"de\s+([A-ZÁÉÍÓÚÑ ,;]{8,160})\s+y\s+([A-ZÁÉÍÓÚÑ ,;]{8,160})",
     ]
     for pat in pats:
         for m in re.finditer(pat, txt, flags=re.IGNORECASE):
-            block = _normalize_spaces(m.group(1))
-            for p in re.split(r";|\s+Y\s+", block, flags=re.IGNORECASE):
-                pp = _smart_cut(p.strip(" -,:"), 140)
-                if not pp:
-                    continue
-                if acusado_l and _clean(pp).lower() == acusado_l:
-                    continue
-                if pp not in out:
-                    out.append(pp)
+            groups = [g for g in m.groups() if g]
+            for gg in groups:
+                block = _normalize_spaces(gg)
+                for p in re.split(r";|\s+Y\s+", block, flags=re.IGNORECASE):
+                    pp = _clean_person_name(_smart_cut(p.strip(" -,:"), 140))
+                    if not pp:
+                        continue
+                    if acusado_l and _clean(pp).lower() == acusado_l:
+                        continue
+                    if pp not in out:
+                        out.append(pp)
     return out
 
 
@@ -688,21 +718,30 @@ def _parse_fields(text: str) -> dict:
     juzgado = _extract_juzgado(full)
     caratula = _extract_caratula(full)
     denunciado = _extract_person_after_label(full, r"Señor/?a?:")
+    denunciado = _clean_person_name(denunciado)
     victimas = []
     v_from_car = _extract_victimas_from_caratula(caratula, denunciado)
     v_from_txt = _extract_victimas_from_text(full, denunciado)
     for v in v_from_car + v_from_txt:
-        vv = _smart_cut(v, 140)
+        vv = _clean_person_name(_smart_cut(v, 140))
         if vv and vv not in victimas:
             victimas.append(vv)
     if not victimas:
         v_single = _extract_person_after_label(full, r"victima\s*[:\-]?")
+        v_single = _clean_person_name(v_single)
         if v_single and _clean(v_single).lower() != _clean(denunciado).lower():
             victimas.append(_smart_cut(v_single, 140))
     victima = victimas[0] if victimas else ""
-    victimas_extra = victimas[1:] if len(victimas) > 1 else []
-    dni_denunciado = _extract_dni_by_context(full, denunciado)
-    dni_victima = _extract_dni_by_context(full, victima)
+    victima_2 = victimas[1] if len(victimas) > 1 else ""
+    victimas_extra = victimas[2:] if len(victimas) > 2 else []
+    dni_denunciado = _extract_dni_strict_for_name(full, denunciado) or _extract_dni_by_context(full, denunciado)
+    dni_victima = _extract_dni_strict_for_name(full, victima)
+    dni_victima_2 = _extract_dni_strict_for_name(full, victima_2)
+    # Evitar que víctima herede DNI del acusado por proximidad OCR.
+    if dni_victima and dni_denunciado and _normalize_dni(dni_victima) == _normalize_dni(dni_denunciado):
+        dni_victima = ""
+    if dni_victima_2 and dni_denunciado and _normalize_dni(dni_victima_2) == _normalize_dni(dni_denunciado):
+        dni_victima_2 = ""
 
     dom_den = _first_group(r"Domicilio\s*[:\-]?\s*([^\n]+)", full)
     dom_vic = _first_group(r"domicilio de la victima\s*[:\-]?\s*([^.]+)", full)
@@ -725,6 +764,7 @@ def _parse_fields(text: str) -> dict:
         "caratula": _smart_cut(caratula, 320),
         "persona_denunciada": _smart_cut(denunciado, 120),
         "victima": _smart_cut(victima, 120),
+        "victima_2": _smart_cut(victima_2, 120),
         "victimas_adicionales": victimas_extra,
         "domicilio_denunciado": _smart_cut(dom_den, 220),
         "domicilio_victima": _smart_cut(dom_vic, 220),
@@ -740,6 +780,7 @@ def _parse_fields(text: str) -> dict:
         "victima_notificar": "indeterminada",
         "dni_denunciado": dni_denunciado,
         "dni_victima": dni_victima,
+        "dni_victima_2": dni_victima_2,
         "fecha_oficio": _smart_cut(fecha_oficio, 40),
         "fecha_notificacion": _smart_cut(fecha_notif, 40),
         "observaciones": "",
@@ -884,6 +925,24 @@ def cargar():
                         dni=_clean(payload.get("dni_victima")),
                         tipo="victima",
                         notificar=_clean(payload.get("victima_notificar")) or "indeterminada",
+                    )
+                )
+            if _clean(payload.get("victima_2")):
+                db.session.add(
+                    ConsignaPersona(
+                        consigna_id=row.id,
+                        nombre=_clean(payload.get("victima_2")),
+                        dni=_clean(payload.get("dni_victima_2")),
+                        tipo="victima",
+                        notificar=_clean(payload.get("victima_2_notificar")) or "indeterminada",
+                    )
+                )
+            if _clean(payload.get("domicilio_victima_2")):
+                db.session.add(
+                    ConsignaDomicilio(
+                        consigna_id=row.id,
+                        direccion=_clean(payload.get("domicilio_victima_2")),
+                        tipo="victima",
                     )
                 )
             for vextra in (payload.get("victimas_adicionales") or []):

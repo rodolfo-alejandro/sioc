@@ -121,6 +121,18 @@
                         <option value="indeterminada" {{ 'selected' if vn == 'indeterminada' else '' }}>Ind.</option>
                     </select>
                 </div>
+                <div class="col-md-5"><label class="form-label">Víctima 2 (opcional)</label><input class="form-control" id="f-victima_2" value="{{ data.victima_2 or '' }}"></div>
+                <div class="col-md-3"><label class="form-label">DNI víctima 2</label><input class="form-control" id="f-dni_victima_2" value="{{ data.dni_victima_2 or '' }}"></div>
+                <div class="col-md-3"><label class="form-label">Domicilio víctima 2</label><input class="form-control" id="f-domicilio_victima_2" value="{{ data.domicilio_victima_2 or '' }}"></div>
+                <div class="col-md-1">
+                    <label class="form-label">¿Notificar?</label>
+                    <select class="form-select" id="f-victima_2_notificar">
+                        {% set vn2 = (data.victima_2_notificar or 'indeterminada') %}
+                        <option value="si" {{ 'selected' if vn2 == 'si' else '' }}>Sí</option>
+                        <option value="no" {{ 'selected' if vn2 == 'no' else '' }}>No</option>
+                        <option value="indeterminada" {{ 'selected' if vn2 == 'indeterminada' else '' }}>Ind.</option>
+                    </select>
+                </div>
                 <div class="col-md-12">
                     <label class="form-label">Víctimas adicionales (una por línea)</label>
                     <textarea class="form-control" rows="2" id="f-victimas_adicionales">{{ (data.victimas_adicionales or [])|join('\n') }}</textarea>
@@ -210,11 +222,15 @@
             dni_victima: v('f-dni_victima'),
             domicilio_denunciado: v('f-domicilio_denunciado'),
             domicilio_victima: v('f-domicilio_victima'),
+            victima_2: v('f-victima_2'),
+            dni_victima_2: v('f-dni_victima_2'),
+            domicilio_victima_2: v('f-domicilio_victima_2'),
             tercero_nombre: v('f-tercero_nombre'),
             tercero_dni: v('f-tercero_dni'),
             tercero_domicilio: v('f-tercero_domicilio'),
             acusado_notificar: v('f-acusado_notificar'),
             victima_notificar: v('f-victima_notificar'),
+            victima_2_notificar: v('f-victima_2_notificar'),
             victimas_adicionales: v('f-victimas_adicionales').split('\n').map(function (x) { return x.trim(); }).filter(Boolean),
             distancia_restriccion: v('f-distancia_restriccion'),
             cantidad_dias: v('f-cantidad_dias'),
