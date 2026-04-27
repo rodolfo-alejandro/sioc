@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import re
 from datetime import datetime
 
@@ -26,10 +27,11 @@ except Exception:
 
 try:
     import pytesseract
-    from PIL import Image
+    from PIL import Image, ImageOps
 except Exception:
     pytesseract = None
     Image = None
+    ImageOps = None
 
 try:
     from pyzbar.pyzbar import decode as qr_decode
@@ -135,14 +137,23 @@ def _extract_qr_text_from_image(raw: bytes) -> tuple[str, str]:
 
 
 def _extract_ocr_text_from_image(raw: bytes) -> str:
+    txt, _ = _extract_ocr_text_from_image_with_error(raw)
+    return txt
+
+
+def _extract_ocr_text_from_image_with_error(raw: bytes) -> tuple[str, str]:
     if not pytesseract or not Image:
-        return ""
+        return "", "OCR no disponible (pytesseract/PIL)."
+    try:
+        if os.path.exists("/usr/bin/tesseract"):
+            pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
+    except Exception:
+        pass
     try:
         img = Image.open(io.BytesIO(raw))
-        txt = pytesseract.image_to_string(img, lang="spa")
-        return _normalize_spaces(txt)
-    except Exception:
-        return ""
+    except Exception as exc:
+        return "", f"No se pudo abrir imagen para OCR: {exc}"
+    return _ocr_from_pil_with_error(img)
 
 
 def _extract_qr_text_from_pil_image(img) -> tuple[str, str]:
@@ -160,13 +171,39 @@ def _extract_qr_text_from_pil_image(img) -> tuple[str, str]:
 
 
 def _extract_ocr_text_from_pil_image(img) -> str:
+    txt, _ = _ocr_from_pil_with_error(img)
+    return txt
+
+
+def _ocr_from_pil_with_error(img) -> tuple[str, str]:
     if not pytesseract:
-        return ""
+        return "", "OCR no disponible (pytesseract)."
+    attempts = []
     try:
-        txt = pytesseract.image_to_string(img, lang="spa")
-        return _normalize_spaces(txt)
+        attempts.append(img)
+        if ImageOps is not None:
+            gray = ImageOps.grayscale(img)
+            attempts.append(gray)
+            attempts.append(ImageOps.autocontrast(gray))
     except Exception:
-        return ""
+        pass
+
+    last_err = ""
+    best = ""
+    for im in attempts:
+        for lang in ("spa+eng", "spa", "eng"):
+            try:
+                txt = _normalize_spaces(pytesseract.image_to_string(im, lang=lang))
+                if len(txt) > len(best):
+                    best = txt
+                if len(txt) >= 60:
+                    return txt, ""
+            except Exception as exc:
+                last_err = str(exc)
+                continue
+    if best:
+        return best, ""
+    return "", (last_err or "Tesseract no devolvió texto.")
 
 
 def _extract_text_from_pdf(raw: bytes) -> str:
@@ -487,7 +524,9 @@ def cargar():
                 if payload:
                     resolved, resolved_url = _resolve_qr_payload(payload)
                     txt_qr = resolved or payload
-                txt_ocr = _extract_ocr_text_from_image(raw)
+                txt_ocr, ocr_err = _extract_ocr_text_from_image_with_error(raw)
+                if ocr_err:
+                    warnings.append(f"{name}: OCR imagen con incidencia: {ocr_err}")
                 source_used = "QR" if _clean(txt_qr) else "OCR imagen"
                 if not _clean(txt_qr) and not _clean(txt_ocr):
                     if pytesseract is None and qr_decode is None:
