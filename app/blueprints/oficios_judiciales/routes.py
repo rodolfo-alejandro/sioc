@@ -1224,6 +1224,57 @@ def _q_base():
     return ConsignaJudicial.query.filter(ConsignaJudicial.unidad_id == current_user.unidad_id)
 
 
+def _orden_cronologia_tipo_consigna(cat: CatalogoTipoConsigna) -> tuple:
+    """
+    Orden de lectura de plazos en cadena: personalizada → fija → ambulatoria → indeterminada; otros al final.
+    """
+    n = _ascii_lower_no_accent(cat.nombre)
+    if "personal" in n:
+        return (0, n)
+    if re.search(r"\bfija\b", n):
+        return (1, n)
+    if "ambulator" in n:
+        return (2, n)
+    if "indeterm" in n:
+        return (3, n)
+    return (4, n)
+
+
+def _cronologia_plazos_dias(
+    row: ConsignaJudicial, pares: list[tuple[ConsignaDiasPorTipo, CatalogoTipoConsigna]]
+) -> list[dict]:
+    """
+    Tramos consecutivos: personalizada, luego fija, luego ambulatoria (días de carga); indeterminada aparte.
+    """
+    inicio = row.fecha_notificacion
+    if not inicio or not pares:
+        return []
+    out: list[dict] = []
+    cur: date = inicio
+    for dp, cat in pares:
+        n = _ascii_lower_no_accent(cat.nombre)
+        if "indeterm" in n:
+            if dp.dias:
+                out.append({"modo": "indeterm", "nombre": cat.nombre, "dias": 0})
+            continue
+        d = int(dp.dias or 0)
+        if d <= 0:
+            continue
+        fin_excl = cur + timedelta(days=d)
+        ultimo_dia = fin_excl - timedelta(days=1)
+        out.append(
+            {
+                "modo": "tramo",
+                "nombre": cat.nombre,
+                "dias": d,
+                "desde": cur,
+                "hasta": ultimo_dia,
+            }
+        )
+        cur = fin_excl
+    return out
+
+
 def _vencimiento_info(row: ConsignaJudicial, today: date | None = None) -> dict:
     tdy = today or datetime.utcnow().date()
     inicio = row.fecha_notificacion
@@ -2371,14 +2422,43 @@ def detalle(consigna_id: int):
         db.session.query(ConsignaDiasPorTipo, CatalogoTipoConsigna)
         .join(CatalogoTipoConsigna, ConsignaDiasPorTipo.tipo_catalogo_id == CatalogoTipoConsigna.id)
         .filter(ConsignaDiasPorTipo.consigna_id == consigna_id)
-        .order_by(CatalogoTipoConsigna.nombre.asc())
         .all()
+    )
+    dias_por_tipo_detalle.sort(key=lambda p: _orden_cronologia_tipo_consigna(p[1]))
+    cronologia_plazos = _cronologia_plazos_dias(row, dias_por_tipo_detalle)
+    if not cronologia_plazos and row.fecha_notificacion and (row.dias_personalizada or row.dias_fija or row.dias_ambulatoria):
+        cur = row.fecha_notificacion
+        for label, d in (
+            ("Personalizada", row.dias_personalizada or 0),
+            ("Fija", row.dias_fija or 0),
+            ("Ambulatoria", row.dias_ambulatoria or 0),
+        ):
+            if d <= 0:
+                continue
+            fin_excl = cur + timedelta(days=d)
+            ultimo = fin_excl - timedelta(days=1)
+            cronologia_plazos.append(
+                {
+                    "modo": "tramo",
+                    "nombre": label,
+                    "dias": d,
+                    "desde": cur,
+                    "hasta": ultimo,
+                }
+            )
+            cur = fin_excl
+    volver_url = (
+        url_for("oficios_judiciales.manual_listado")
+        if (row.fuente_principal or "") == "manual"
+        else url_for("oficios_judiciales.listado")
     )
     return render_template(
         "oficios_judiciales/detalle.html",
         row=row,
         venc=venc,
         dias_por_tipo_detalle=dias_por_tipo_detalle,
+        cronologia_plazos=cronologia_plazos,
+        volver_url=volver_url,
     )
 
 
