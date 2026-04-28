@@ -2708,6 +2708,96 @@ def detalle(consigna_id: int):
     )
     dias_por_tipo_detalle.sort(key=lambda p: _orden_cronologia_tipo_consigna(p[1]))
     cronologia_plazos = _cronologia_plazos_dias(row, dias_por_tipo_detalle)
+    rango_por_tipo = {}
+    for t in cronologia_plazos:
+        if t.get("modo") == "tramo":
+            rango_por_tipo[_clean(t.get("nombre"))] = {
+                "desde": t.get("desde"),
+                "hasta": t.get("hasta"),
+            }
+    today = datetime.utcnow().date()
+    total = int(row.cantidad_dias or 0)
+    if row.fecha_notificacion and total > 0:
+        trans = max(0, (today - row.fecha_notificacion).days)
+        if trans > total:
+            trans = total
+    else:
+        trans = 0
+    progreso_detalle = {"transcurridos": trans, "total": total}
+
+    estado_operativo = "activa"
+    if _clean(row.estado).lower() == "finalizada":
+        estado_operativo = "finalizada"
+    elif row.fecha_notificacion and total > 0:
+        vto = row.fecha_notificacion + timedelta(days=total)
+        if vto <= today:
+            estado_operativo = "finalizada"
+
+    has_indet = False
+    tramos = []
+    for dp, cat in dias_por_tipo_detalle:
+        n = _ascii_lower_no_accent(cat.nombre)
+        if "indeterm" in n:
+            has_indet = bool(dp.dias)
+            continue
+        d = int(dp.dias or 0)
+        if d > 0:
+            tramos.append((cat.nombre, d, n))
+    etapa_actual = {"slug": "indeterminada", "nombre": "Indeterminada", "icono": "bi-infinity", "pos": 0, "total": 0, "cumplidas": []}
+    if tramos:
+        acc = 0
+        chosen = tramos[-1]
+        chosen_idx = len(tramos) - 1
+        for idx, t in enumerate(tramos):
+            acc += t[1]
+            if trans < acc:
+                chosen = t
+                chosen_idx = idx
+                break
+        cumplidas = []
+        acc2 = 0
+        for t in tramos:
+            acc2 += t[1]
+            if trans >= acc2:
+                cumplidas.append(t[0])
+        n = chosen[2]
+        if "fija" in n:
+            etapa_actual = {"slug": "fija", "nombre": "Fija", "icono": "bi-anchor-fill", "pos": chosen_idx + 1, "total": len(tramos), "cumplidas": cumplidas}
+        elif "ambulator" in n:
+            etapa_actual = {"slug": "ambulatoria", "nombre": "Ambulatoria", "icono": "bi-car-front-fill", "pos": chosen_idx + 1, "total": len(tramos), "cumplidas": cumplidas}
+        elif "personal" in n:
+            etapa_actual = {"slug": "personalizada", "nombre": "Personalizada", "icono": "bi-person-circle", "pos": chosen_idx + 1, "total": len(tramos), "cumplidas": cumplidas}
+        else:
+            etapa_actual = {"slug": _slug_tipo_consigna_desde_nombre(chosen[0]), "nombre": chosen[0], "icono": "bi-dot", "pos": chosen_idx + 1, "total": len(tramos), "cumplidas": cumplidas}
+    elif has_indet:
+        etapa_actual = {"slug": "indeterminada", "nombre": "Indeterminada", "icono": "bi-infinity", "pos": 0, "total": 0, "cumplidas": []}
+    if estado_operativo == "finalizada" and tramos:
+        etapa_actual["cumplidas"] = [t[0] for t in tramos]
+
+    personas = row.personas.order_by(ConsignaPersona.id.asc()).all()
+    domicilios = row.domicilios.order_by(ConsignaDomicilio.id.asc()).all()
+    doms_by_tipo = {}
+    for d in domicilios:
+        key = _clean(d.tipo).lower()
+        doms_by_tipo.setdefault(key, []).append(d)
+    used_dom_ids = set()
+    persona_domicilio = []
+    for p in personas:
+        pt = _clean(p.tipo).lower()
+        cand = doms_by_tipo.get(pt, []) or doms_by_tipo.get("victima", [])
+        chosen = None
+        for d in cand:
+            if d.id not in used_dom_ids:
+                chosen = d
+                break
+        if not chosen:
+            for d in domicilios:
+                if d.id not in used_dom_ids:
+                    chosen = d
+                    break
+        if chosen:
+            used_dom_ids.add(chosen.id)
+        persona_domicilio.append({"persona": p, "domicilio": chosen})
     if not cronologia_plazos and row.fecha_notificacion and (row.dias_personalizada or row.dias_fija or row.dias_ambulatoria):
         cur = row.fecha_notificacion
         for label, d in (
@@ -2740,7 +2830,12 @@ def detalle(consigna_id: int):
         venc=venc,
         dias_por_tipo_detalle=dias_por_tipo_detalle,
         cronologia_plazos=cronologia_plazos,
+        rango_por_tipo=rango_por_tipo,
         volver_url=volver_url,
+        etapa_actual=etapa_actual,
+        progreso_detalle=progreso_detalle,
+        estado_operativo=estado_operativo,
+        persona_domicilio=persona_domicilio,
     )
 
 

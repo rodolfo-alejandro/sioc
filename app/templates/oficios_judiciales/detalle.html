@@ -1,69 +1,133 @@
 {% extends "layouts/base.html" %}
 {% block title %}Detalle consigna #{{ row.id }}{% endblock %}
+{% block extra_head %}
+<style>
+  .tipo-pill { border-radius: 999px; padding: .15rem .55rem; font-weight: 600; font-size: .75rem; display: inline-block; }
+  .tipo-mixta { color: #6f42c1; background: rgba(111, 66, 193, 0.10); }
+  .tipo-fija { color: #0d6efd; background: rgba(13, 110, 253, 0.12); }
+  .tipo-ambulatoria { color: #198754; background: rgba(25, 135, 84, 0.12); }
+  .tipo-personalizada { color: #fd7e14; background: rgba(253, 126, 20, 0.12); }
+  .tipo-indeterminada { color: #6c757d; background: rgba(108, 117, 125, 0.12); }
+</style>
+{% endblock %}
 {% block content %}
+{% set tipo_cls = 'tipo-indeterminada' %}
+{% if etapa_actual.slug == 'mixta' %}{% set tipo_cls = 'tipo-mixta' %}{% endif %}
+{% if etapa_actual.slug == 'fija' %}{% set tipo_cls = 'tipo-fija' %}{% endif %}
+{% if etapa_actual.slug == 'ambulatoria' %}{% set tipo_cls = 'tipo-ambulatoria' %}{% endif %}
+{% if etapa_actual.slug == 'personalizada' %}{% set tipo_cls = 'tipo-personalizada' %}{% endif %}
+
 <div class="page-header d-flex flex-wrap justify-content-between align-items-center gap-2">
-    <h1 class="h3 mb-0"><i class="bi bi-file-earmark-text text-primary"></i> Consigna judicial <span class="text-muted">#{{ row.id }}</span></h1>
+    <h1 class="h3 mb-0"><i class="bi bi-file-earmark-text text-primary"></i> Detalle consigna <span class="text-muted">#{{ row.id }}</span></h1>
     <a class="btn btn-outline-secondary btn-sm" href="{{ volver_url }}"><i class="bi bi-arrow-left"></i> Volver</a>
 </div>
 
 <div class="row g-3 mt-1">
-    <div class="col-lg-6">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-header bg-light py-2 fw-semibold">Datos principales</div>
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-light py-2 fw-semibold">Resumen operativo</div>
             <div class="card-body">
-                <dl class="row small mb-0 detalle-dl">
-                    <dt class="col-sm-5 text-muted">Expediente</dt>
-                    <dd class="col-sm-7 mb-2">{{ row.expediente or '—' }}</dd>
-                    <dt class="col-sm-5 text-muted">SEPS ingreso / salida</dt>
-                    <dd class="col-sm-7 mb-2">{{ row.seps_ingreso or '—' }} <span class="text-muted">/</span> {{ row.seps_salida or '—' }}</dd>
-                    <dt class="col-sm-5 text-muted">Juzgado</dt>
-                    <dd class="col-sm-7 mb-2">{{ row.juzgado or '—' }}</dd>
-                    <dt class="col-sm-5 text-muted">Carátula</dt>
-                    <dd class="col-sm-7 mb-2">{{ row.caratula or '—' }}</dd>
-                    <dt class="col-sm-5 text-muted">Tipo medida</dt>
-                    <dd class="col-sm-7 mb-2">{{ row.tipo_medida or '—' }}</dd>
-                    <dt class="col-sm-5 text-muted">Tipo consigna</dt>
-                    <dd class="col-sm-7 mb-2"><span class="badge text-bg-light border">{{ row.tipo_consigna or '—' }}</span></dd>
-                    <dt class="col-sm-5 text-muted">¿Acusado a notificar?</dt>
-                    <dd class="col-sm-7 mb-2">{{ row.acusado_notificar or 'indeterminada' }}</dd>
-                    <dt class="col-sm-5 text-muted">Fecha notificación <small class="fw-normal">(inicio plazos)</small></dt>
-                    <dd class="col-sm-7 mb-2">{{ row.fecha_notificacion|localtime('%d/%m/%Y') if row.fecha_notificacion else '—' }}</dd>
-                    <dt class="col-sm-5 text-muted">Fecha oficio</dt>
-                    <dd class="col-sm-7 mb-2">{{ row.fecha_oficio|localtime('%d/%m/%Y') if row.fecha_oficio else '—' }}</dd>
-                    <dt class="col-sm-5 text-muted">Días (total)</dt>
-                    <dd class="col-sm-7 mb-2">{% if row.cantidad_dias is not none and row.cantidad_dias > 0 %}<strong>{{ row.cantidad_dias }}</strong> días{% else %}<span class="text-muted">—</span>{% endif %}</dd>
-                </dl>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <div class="small text-muted">Expediente / SEPS</div>
+                        <div><strong>{{ row.expediente or '—' }}</strong></div>
+                        <div class="small text-muted">{{ row.seps_ingreso or '—' }} / {{ row.seps_salida or '—' }}</div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="small text-muted">Etapa en curso</div>
+                        <div><span class="tipo-pill {{ tipo_cls }}"><i class="bi {{ etapa_actual.icono }}"></i> {{ etapa_actual.nombre }}</span></div>
+                        <div class="small text-muted">{% if etapa_actual.total and etapa_actual.pos %}{{ etapa_actual.pos }}/{{ etapa_actual.total }}{% else %}—{% endif %}</div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="small text-muted">Progreso general</div>
+                        {% if progreso_detalle.total > 0 %}
+                        <div><strong>{{ progreso_detalle.transcurridos }}</strong> / {{ progreso_detalle.total }} días</div>
+                        <div class="progress mt-1" style="height: 6px;">
+                            <div class="progress-bar" role="progressbar" style="width: {{ ((progreso_detalle.transcurridos * 100 / progreso_detalle.total) if progreso_detalle.total > 0 else 0)|round(0, 'floor') }}%"></div>
+                        </div>
+                        {% else %}
+                        <div class="text-muted">Sin plazo en días</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-3">
+                        <div class="small text-muted">Estado</div>
+                        {% if estado_operativo == 'activa' %}
+                        <div><span class="badge text-bg-success"><i class="bi bi-check2-circle"></i> Activa · {{ etapa_actual.nombre }}</span></div>
+                        {% else %}
+                        <div><span class="badge text-bg-secondary"><i class="bi bi-stop-circle"></i> Inactiva / Finalizada</span></div>
+                        {% endif %}
+                        {% if etapa_actual.get('cumplidas') %}
+                        <div class="small text-muted mt-1">
+                            {% for n in etapa_actual.get('cumplidas') %}
+                            <span style="text-decoration: line-through;">{{ n }}</span>{% if not loop.last %} · {% endif %}
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
             </div>
         </div>
     </div>
-    <div class="col-lg-6">
+    <div class="col-lg-4">
         <div class="card border-0 shadow-sm h-100">
-            <div class="card-header bg-light py-2 fw-semibold">Vencimiento y logística</div>
+            <div class="card-header bg-light py-2 fw-semibold">Datos de carga</div>
             <div class="card-body small">
-                <p class="mb-2">
-                    <span class="text-muted">Estado del plazo total</span><br>
-                    {% if venc.fecha_vencimiento %}
-                    <span class="fs-5 fw-semibold">{{ venc.fecha_vencimiento.strftime('%d/%m/%Y') }}</span>
-                    <span class="text-muted">·</span>
-                    {% endif %}
-                    <span class="{% if venc.estado == 'vencida' %}text-danger{% elif venc.estado == 'por_vencer' %}text-warning{% elif venc.estado == 'vigente' %}text-success{% else %}text-secondary{% endif %}">{{ venc.label }}</span>
-                </p>
-                <p class="text-muted mb-0 small">El vencimiento se calcula desde la fecha de notificación + los días cargados (mismo criterio que en la carga manual).</p>
+                <div><strong>Juzgado:</strong> {{ row.juzgado or '—' }}</div>
+                <div><strong>Fiscalía:</strong> {{ row.fiscalia or '—' }}</div>
+                <div><strong>Tipo medida:</strong> {{ row.tipo_medida or '—' }}</div>
+                <div><strong>Carátula:</strong> {{ row.caratula or '—' }}</div>
+                <div><strong>Fecha notificación:</strong> {{ row.fecha_notificacion|localtime('%d/%m/%Y') if row.fecha_notificacion else '—' }}</div>
+                <div><strong>Total días:</strong> {{ row.cantidad_dias or '—' }}</div>
             </div>
         </div>
     </div>
 
     <div class="col-12">
         <div class="card border-0 shadow-sm">
-            <div class="card-header bg-light py-2 fw-semibold">Días por tipo <span class="text-muted fw-normal small">(mismo orden que en carga: personalizada → fija → ambulatoria → indeterminada)</span></div>
+            <div class="card-header bg-light py-2 fw-semibold">Persona y domicilio</div>
             <div class="card-body p-0">
-                {% if dias_por_tipo_detalle %}
                 <div class="table-responsive">
-                    <table class="table table-sm table-hover align-middle mb-0">
+                    <table class="table table-sm align-middle mb-0">
                         <thead class="table-light">
                             <tr>
-                                <th class="ps-3">Tipo (catálogo)</th>
-                                <th>Detalle</th>
+                                <th class="ps-3">Persona</th>
+                                <th>Domicilio</th>
+                                <th>Notificar</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for x in persona_domicilio %}
+                            <tr>
+                                <td class="ps-3">
+                                    <strong>{{ x.persona.nombre if x.persona else '—' }}</strong>
+                                    <span class="text-muted small">({{ x.persona.tipo if x.persona else '—' }})</span>
+                                    {% if x.persona and x.persona.dni %}<div class="small text-muted">DNI: {{ x.persona.dni }}</div>{% endif %}
+                                </td>
+                                <td>{{ x.domicilio.direccion if x.domicilio else '—' }}</td>
+                                <td>{{ x.persona.notificar if x.persona and x.persona.notificar else '—' }}</td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="3" class="text-muted text-center">Sin datos cargados.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-7">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-light py-2 fw-semibold">Días por tipo</div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="ps-3">Tipo</th>
+                                <th>Días</th>
+                                <th>Posición</th>
+                                <th>Desde / Hasta</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -72,53 +136,31 @@
                                 <td class="ps-3">{{ cat.nombre }}</td>
                                 <td>
                                     {% if 'indeterm' in cat.nombre|lower %}
-                                    {% if dp.dias %}<span class="badge text-bg-info">Sí</span><span class="text-muted ms-1 small">sin plazo en días calendario</span>{% else %}<span class="badge text-bg-secondary">No</span>{% endif %}
+                                    {% if dp.dias %}Sí{% else %}No{% endif %}
                                     {% else %}
-                                    <strong>{{ dp.dias }}</strong> día{% if dp.dias != 1 %}s{% endif %}
+                                    {{ dp.dias }}
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if etapa_actual.total and etapa_actual.pos and (cat.nombre|lower == etapa_actual.nombre|lower) %}
+                                    <span class="badge text-bg-light border">{{ etapa_actual.pos }}/{{ etapa_actual.total }}</span>
+                                    {% elif etapa_actual.get('cumplidas') and (cat.nombre in etapa_actual.get('cumplidas')) %}
+                                    <span class="text-muted" style="text-decoration: line-through;">cumplida</span>
+                                    {% else %}
+                                    <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% set rg = rango_por_tipo.get(cat.nombre) %}
+                                    {% if rg and rg.desde and rg.hasta %}
+                                    <span class="small">{{ rg.desde.strftime('%d/%m/%Y') }} - {{ rg.hasta.strftime('%d/%m/%Y') }}</span>
+                                    {% else %}
+                                    <span class="text-muted small">—</span>
                                     {% endif %}
                                 </td>
                             </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                {% else %}
-                <p class="text-muted small p-3 mb-0">Sin detalle por catálogo. <span class="d-block mt-1">Valores históricos fija / ambulatoria / personalizada: {{ row.dias_fija or '—' }} / {{ row.dias_ambulatoria or '—' }} / {{ row.dias_personalizada or '—' }}</span></p>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-
-    {% if cronologia_plazos and row.fecha_notificacion %}
-    <div class="col-12">
-        <div class="card border-0 shadow-sm">
-            <div class="card-header bg-light py-2 fw-semibold">Cronología de plazos <span class="text-muted fw-normal small">(tramos consecutivos: termina un tramo, inicia el siguiente)</span></div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-sm mb-0 align-middle">
-                        <thead class="table-light">
-                            <tr>
-                                <th class="ps-3">Tramo</th>
-                                <th>Desde</th>
-                                <th>Hasta (incl.)</th>
-                                <th>Días</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for t in cronologia_plazos %}
-                            {% if t.modo == 'tramo' %}
-                            <tr>
-                                <td class="ps-3">{{ t.nombre }}</td>
-                                <td>{{ t.desde.strftime('%d/%m/%Y') }}</td>
-                                <td>{{ t.hasta.strftime('%d/%m/%Y') }}</td>
-                                <td><span class="badge text-bg-light border">{{ t.dias }}</span></td>
-                            </tr>
                             {% else %}
-                            <tr>
-                                <td class="ps-3">{{ t.nombre }}</td>
-                                <td colspan="3" class="text-muted">Indefinido (sin cese por días en este registro)</td>
-                            </tr>
-                            {% endif %}
+                            <tr><td colspan="4" class="text-muted text-center">Sin detalle.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -126,63 +168,27 @@
             </div>
         </div>
     </div>
-    {% endif %}
-
-    <div class="col-md-6">
+    <div class="col-md-5">
         <div class="card border-0 shadow-sm h-100">
-            <div class="card-header bg-light py-2 fw-semibold">Personas y domicilios</div>
+            <div class="card-header bg-light py-2 fw-semibold">Cronología</div>
             <div class="card-body small">
-                <p class="text-uppercase text-muted small mb-1">Personas</p>
-                <ul class="list-unstyled mb-3">
-                    {% for p in row.personas %}
-                    <li class="mb-1"><i class="bi bi-person text-secondary me-1"></i> <span class="text-capitalize">{{ p.tipo }}</span>: <strong>{{ p.nombre }}</strong>{% if p.dni %} <span class="text-muted">({{ p.dni }})</span>{% endif %}{% if p.notificar %} <span class="badge text-bg-light border">notificar: {{ p.notificar }}</span>{% endif %}</li>
-                    {% else %}
-                    <li class="text-muted">Sin personas.</li>
-                    {% endfor %}
-                </ul>
-                <p class="text-uppercase text-muted small mb-1">Domicilios</p>
-                <ul class="list-unstyled mb-0">
-                    {% for d in row.domicilios %}
-                    <li class="mb-1"><i class="bi bi-house text-secondary me-1"></i> <span class="text-capitalize">{{ d.tipo }}</span>: {{ d.direccion }}</li>
-                    {% else %}
-                    <li class="text-muted">Sin domicilios.</li>
-                    {% endfor %}
-                </ul>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-6">
-        <div class="card border-0 shadow-sm">
-            <div class="card-header bg-light py-2 fw-semibold">Otros datos</div>
-            <div class="card-body small">
-                <dl class="row detalle-dl mb-0">
-                    <dt class="col-5 text-muted">Distancia</dt>
-                    <dd class="col-7 mb-2">{{ row.distancia or '—' }}</dd>
-                    <dt class="col-5 text-muted">Turnos</dt>
-                    <dd class="col-7 mb-2">{{ row.turnos or '—' }}</dd>
-                </dl>
-            </div>
-        </div>
-    </div>
-    <div class="col-12">
-        <div class="card border-0 shadow-sm">
-            <div class="card-header bg-light py-2 fw-semibold">Medidas detalle</div>
-            <div class="card-body small">
-                {% for m in row.medidas_detalle %}
-                <div class="border-start border-3 border-primary ps-2 mb-2">{{ m.descripcion }}</div>
+                {% for t in cronologia_plazos %}
+                {% if t.modo == 'tramo' %}
+                <div class="d-flex justify-content-between border-bottom py-1">
+                    <span>{{ t.nombre }}</span>
+                    <span class="text-muted">{{ t.desde.strftime('%d/%m/%Y') }} - {{ t.hasta.strftime('%d/%m/%Y') }}</span>
+                </div>
                 {% else %}
-                <span class="text-muted">Sin detalle.</span>
+                <div class="d-flex justify-content-between border-bottom py-1">
+                    <span>{{ t.nombre }}</span>
+                    <span class="text-muted">Indefinido</span>
+                </div>
+                {% endif %}
+                {% else %}
+                <span class="text-muted">Sin cronología.</span>
                 {% endfor %}
             </div>
         </div>
     </div>
-    {% if row.texto_fuente %}
-    <div class="col-12">
-        <div class="card border-0 shadow-sm">
-            <div class="card-header bg-light py-2 fw-semibold">Texto fuente consolidado</div>
-            <div class="card-body"><pre class="mb-0 small bg-light p-3 rounded border" style="max-height: 40vh; overflow: auto;">{{ row.texto_fuente }}</pre></div>
-        </div>
-    </div>
-    {% endif %}
 </div>
 {% endblock %}
