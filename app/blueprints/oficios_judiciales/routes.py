@@ -1751,6 +1751,8 @@ def manual_listado():
         abort(403)
     estados = [e for e in request.args.getlist("estado") if e in ("activa", "finalizada")]
     qtxt = _clean(request.args.get("q"))
+    fecha_desde = _parse_date(_clean(request.args.get("fecha_desde")))
+    fecha_hasta = _parse_date(_clean(request.args.get("fecha_hasta")))
     tipos_sel = [_clean(x) for x in request.args.getlist("tipo_consigna") if _clean(x)]
     juzgados_sel = [_clean(x) for x in request.args.getlist("juzgado") if _clean(x)]
     medidas_sel = [_clean(x) for x in request.args.getlist("tipo_medida") if _clean(x)]
@@ -1803,6 +1805,10 @@ def manual_listado():
             .subquery()
         )
         q = q.filter(ConsignaJudicial.id.in_(sq_bar))
+    if fecha_desde:
+        q = q.filter(ConsignaJudicial.fecha_notificacion >= fecha_desde)
+    if fecha_hasta:
+        q = q.filter(ConsignaJudicial.fecha_notificacion <= fecha_hasta)
     if qtxt:
         pat = f"%{qtxt}%"
         eq = _expediente_key(qtxt)
@@ -1839,16 +1845,31 @@ def manual_listado():
 
     page = max(1, _to_int_or_none(request.args.get("page")) or 1)
     per_page = max(10, min(100, _to_int_or_none(request.args.get("per_page")) or 25))
-    total_rows = q.count()
+    today = datetime.utcnow().date()
+
+    def _estado_operativo(r: ConsignaJudicial) -> str:
+        if _clean(r.estado).lower() == "finalizada":
+            return "finalizada"
+        inicio = r.fecha_notificacion
+        dias = int(r.cantidad_dias or 0)
+        if inicio and dias > 0:
+            vto = inicio + timedelta(days=dias)
+            if vto <= today:
+                return "finalizada"
+        return "activa"
+
+    rows_all = q.order_by(ConsignaJudicial.created_at.desc()).all()
+    if estados:
+        estados_set = set(estados)
+        rows_all = [r for r in rows_all if _estado_operativo(r) in estados_set]
+
+    total_rows = len(rows_all)
     total_pages = max(1, (total_rows + per_page - 1) // per_page)
     if page > total_pages:
         page = total_pages
-    rows = (
-        q.order_by(ConsignaJudicial.created_at.desc())
-        .offset((page - 1) * per_page)
-        .limit(per_page)
-        .all()
-    )
+    start = (page - 1) * per_page
+    end = start + per_page
+    rows = rows_all[start:end]
     row_ids = [r.id for r in rows]
     personas_map = {}
     domicilios_map = {}
@@ -1856,7 +1877,7 @@ def manual_listado():
     coords_map = {}
     progreso_map = {}
     etapa_actual_map = {}
-    today = datetime.utcnow().date()
+    estado_operativo_map = {}
     if row_ids:
         pers = (
             ConsignaPersona.query.filter(ConsignaPersona.consigna_id.in_(row_ids))
@@ -1907,6 +1928,7 @@ def manual_listado():
             persona_domicilio_map[r.id] = items
         for r in rows:
             total = int(r.cantidad_dias or 0)
+            estado_operativo_map[r.id] = _estado_operativo(r)
             if r.fecha_notificacion and total > 0:
                 trans = max(0, (today - r.fecha_notificacion).days)
                 if trans > total:
@@ -2022,6 +2044,7 @@ def manual_listado():
         coords_map=coords_map,
         progreso_map=progreso_map,
         etapa_actual_map=etapa_actual_map,
+        estado_operativo_map=estado_operativo_map,
         pagination=pagination,
     )
 
