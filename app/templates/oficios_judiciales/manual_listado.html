@@ -7,6 +7,11 @@
   .row-soft-vencida { background: rgba(220, 53, 69, 0.06); }
   .row-soft-por-vencer { background: rgba(255, 193, 7, 0.08); }
   .row-soft-vigente { background: rgba(25, 135, 84, 0.06); }
+  .row-tipo-fija { background: rgba(13, 110, 253, 0.07); }
+  .row-tipo-ambulatoria { background: rgba(25, 135, 84, 0.07); }
+  .row-tipo-personalizada { background: rgba(253, 126, 20, 0.08); }
+  .row-tipo-indeterminada { background: rgba(108, 117, 125, 0.08); }
+  .row-tipo-mixta { background: rgba(111, 66, 193, 0.08); }
   .tipo-pill { border-radius: 999px; padding: .15rem .55rem; font-weight: 600; font-size: .75rem; display: inline-block; }
   .tipo-mixta { color: #6f42c1; background: rgba(111, 66, 193, 0.10); }
   .tipo-fija { color: #0d6efd; background: rgba(13, 110, 253, 0.12); }
@@ -109,20 +114,24 @@
             {% set v = personas_map.get(r.id, {}) %}
             {% set d = domicilios_map.get(r.id) %}
             {% set pr = progreso_map.get(r.id, {'transcurridos': 0, 'total': 0}) %}
+            {% set etapa = etapa_actual_map.get(r.id, {'slug':'indeterminada','nombre':'Indeterminada','icono':'bi-infinity'}) %}
             {% set tipo_cls = 'tipo-indeterminada' %}
-            {% if (r.tipo_consigna or '') == 'mixta' %}{% set tipo_cls = 'tipo-mixta' %}{% endif %}
-            {% if 'fija' in (r.tipo_consigna or '') %}{% set tipo_cls = 'tipo-fija' %}{% endif %}
-            {% if 'ambulator' in (r.tipo_consigna or '') %}{% set tipo_cls = 'tipo-ambulatoria' %}{% endif %}
-            {% if 'personal' in (r.tipo_consigna or '') %}{% set tipo_cls = 'tipo-personalizada' %}{% endif %}
+            {% if etapa.slug == 'mixta' %}{% set tipo_cls = 'tipo-mixta' %}{% endif %}
+            {% if etapa.slug == 'fija' %}{% set tipo_cls = 'tipo-fija' %}{% endif %}
+            {% if etapa.slug == 'ambulatoria' %}{% set tipo_cls = 'tipo-ambulatoria' %}{% endif %}
+            {% if etapa.slug == 'personalizada' %}{% set tipo_cls = 'tipo-personalizada' %}{% endif %}
             {% set row_cls = '' %}
-            {% if r.estado == 'finalizada' %}
-              {% set row_cls = 'row-soft-vencida' %}
-            {% elif pr.total > 0 and pr.transcurridos >= pr.total %}
-              {% set row_cls = 'row-soft-vencida' %}
+            {% if etapa.slug == 'fija' %}{% set row_cls = 'row-tipo-fija' %}{% endif %}
+            {% if etapa.slug == 'ambulatoria' %}{% set row_cls = 'row-tipo-ambulatoria' %}{% endif %}
+            {% if etapa.slug == 'personalizada' %}{% set row_cls = 'row-tipo-personalizada' %}{% endif %}
+            {% if etapa.slug == 'indeterminada' %}{% set row_cls = 'row-tipo-indeterminada' %}{% endif %}
+            {% if etapa.slug == 'mixta' %}{% set row_cls = 'row-tipo-mixta' %}{% endif %}
+            {% if r.estado == 'finalizada' or (pr.total > 0 and pr.transcurridos >= pr.total) %}
+              {% set row_cls = row_cls + ' row-soft-vencida' %}
             {% elif pr.total > 0 and (pr.total - pr.transcurridos) <= 3 %}
-              {% set row_cls = 'row-soft-por-vencer' %}
+              {% set row_cls = row_cls + ' row-soft-por-vencer' %}
             {% elif r.estado == 'activa' %}
-              {% set row_cls = 'row-soft-vigente' %}
+              {% set row_cls = row_cls + ' row-soft-vigente' %}
             {% endif %}
             <tr class="{{ row_cls }}">
                 <td>{{ r.id }}</td>
@@ -136,7 +145,7 @@
                     <div class="small text-muted"><i class="bi bi-house"></i> {{ d.direccion if d else '—' }}</div>
                 </td>
                 <td>
-                    <div><span class="tipo-pill {{ tipo_cls }}">{{ (r.tipo_consigna or 'indeterminada')|title }}</span></div>
+                    <div><span class="tipo-pill {{ tipo_cls }}"><i class="bi {{ etapa.icono }}"></i> {{ etapa.nombre }}</span></div>
                     <div class="small text-muted">{{ r.tipo_medida or '—' }}</div>
                 </td>
                 <td>

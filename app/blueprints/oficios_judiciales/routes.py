@@ -1818,6 +1818,7 @@ def manual_listado():
     domicilios_map = {}
     coords_map = {}
     progreso_map = {}
+    etapa_actual_map = {}
     today = datetime.utcnow().date()
     if row_ids:
         pers = (
@@ -1851,6 +1852,59 @@ def manual_listado():
             else:
                 progreso_map[r.id] = {"transcurridos": 0, "total": total}
 
+        dias_pairs = (
+            db.session.query(ConsignaDiasPorTipo, CatalogoTipoConsigna)
+            .join(CatalogoTipoConsigna, ConsignaDiasPorTipo.tipo_catalogo_id == CatalogoTipoConsigna.id)
+            .filter(ConsignaDiasPorTipo.consigna_id.in_(row_ids))
+            .all()
+        )
+        dias_por_consigna = {}
+        for dp, cat in dias_pairs:
+            dias_por_consigna.setdefault(dp.consigna_id, []).append((dp, cat))
+
+        for r in rows:
+            pares = dias_por_consigna.get(r.id, [])
+            pares.sort(key=lambda p: _orden_cronologia_tipo_consigna(p[1]))
+            trans = progreso_map.get(r.id, {}).get("transcurridos", 0)
+            has_indet = False
+            tramos = []
+            for dp, cat in pares:
+                n = _ascii_lower_no_accent(cat.nombre)
+                if "indeterm" in n:
+                    has_indet = bool(dp.dias)
+                    continue
+                d = int(dp.dias or 0)
+                if d > 0:
+                    tramos.append((cat.nombre, d, n))
+
+            etapa = {"slug": "indeterminada", "nombre": "Indeterminada", "icono": "bi-infinity"}
+            if tramos:
+                acc = 0
+                chosen = tramos[-1]
+                for t in tramos:
+                    acc += t[1]
+                    if trans < acc:
+                        chosen = t
+                        break
+                n = chosen[2]
+                if "fija" in n:
+                    etapa = {"slug": "fija", "nombre": "Fija", "icono": "bi-anchor-fill"}
+                elif "ambulator" in n:
+                    etapa = {"slug": "ambulatoria", "nombre": "Ambulatoria", "icono": "bi-car-front-fill"}
+                elif "personal" in n:
+                    etapa = {"slug": "personalizada", "nombre": "Personalizada", "icono": "bi-person-circle"}
+                else:
+                    etapa = {"slug": _slug_tipo_consigna_desde_nombre(chosen[0]), "nombre": chosen[0], "icono": "bi-dot"}
+            elif has_indet:
+                etapa = {"slug": "indeterminada", "nombre": "Indeterminada", "icono": "bi-infinity"}
+            elif (r.tipo_consigna or "") == "fija":
+                etapa = {"slug": "fija", "nombre": "Fija", "icono": "bi-anchor-fill"}
+            elif (r.tipo_consigna or "") == "ambulatoria":
+                etapa = {"slug": "ambulatoria", "nombre": "Ambulatoria", "icono": "bi-car-front-fill"}
+            elif (r.tipo_consigna or "") == "personalizada":
+                etapa = {"slug": "personalizada", "nombre": "Personalizada", "icono": "bi-person-circle"}
+            etapa_actual_map[r.id] = etapa
+
     tipos_consigna = [
         r[0]
         for r in _q_base()
@@ -1878,6 +1932,7 @@ def manual_listado():
         domicilios_map=domicilios_map,
         coords_map=coords_map,
         progreso_map=progreso_map,
+        etapa_actual_map=etapa_actual_map,
     )
 
 
