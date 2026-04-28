@@ -2342,59 +2342,99 @@ def manual_reincidencias():
     if not _can_view():
         abort(403)
     base, estados, opts = _manual_apply_filters_query()
+    estados_efectivos = estados or ["activa"]
     base_rows = base.all()
-    if estados:
-        est_set = set(estados)
-        base_rows = [r for r in base_rows if _manual_estado_operativo(r) in est_set]
+    est_set = set(estados_efectivos)
+    base_rows = [r for r in base_rows if _manual_estado_operativo(r) in est_set]
     allowed_ids = [r.id for r in base_rows] or [-1]
     qtxt = _clean(request.args.get("q"))
-    rows = []
-    detalle = []
+    persona_sel = _clean(request.args.get("persona_key"))
+    pers_rows = (
+        db.session.query(ConsignaPersona, ConsignaJudicial)
+        .join(ConsignaJudicial, ConsignaJudicial.id == ConsignaPersona.consigna_id)
+        .filter(
+            ConsignaJudicial.unidad_id == current_user.unidad_id,
+            ConsignaJudicial.fuente_principal == "manual",
+            ConsignaJudicial.id.in_(allowed_ids),
+        )
+        .order_by(ConsignaJudicial.fecha_notificacion.desc().nullslast(), ConsignaJudicial.id.desc())
+        .all()
+    )
+    grupos = {}
+    for p, cj in pers_rows:
+        nombre = _clean(p.nombre)
+        dni = _clean(p.dni)
+        if not nombre and not dni:
+            continue
+        key = f"dni:{dni}" if dni else f"nom:{_ascii_lower_no_accent(nombre)}"
+        g = grupos.setdefault(
+            key,
+            {
+                "persona_key": key,
+                "nombre": nombre,
+                "dni": dni,
+                "n": 0,
+                "activa": 0,
+                "finalizada": 0,
+                "last_fecha": None,
+                "items": [],
+            },
+        )
+        g["n"] += 1
+        est = _manual_estado_operativo(cj)
+        if est == "activa":
+            g["activa"] += 1
+        else:
+            g["finalizada"] += 1
+        fnot = cj.fecha_notificacion
+        if fnot and (g["last_fecha"] is None or fnot > g["last_fecha"]):
+            g["last_fecha"] = fnot
+        g["items"].append(
+            {
+                "nombre": nombre,
+                "dni": dni,
+                "id": cj.id,
+                "expediente": cj.expediente,
+                "tipo_consigna": cj.tipo_consigna,
+                "estado": est,
+                "fecha_notificacion": cj.fecha_notificacion,
+            }
+        )
+        if not g["nombre"] and nombre:
+            g["nombre"] = nombre
+        if not g["dni"] and dni:
+            g["dni"] = dni
+
+    coincidencias = [g for g in grupos.values() if g["n"] > 1]
     if qtxt:
-        rows = (
-            db.session.query(
-                ConsignaPersona.nombre,
-                ConsignaPersona.dni,
-                func.count(ConsignaPersona.id).label("n"),
-            )
-            .join(ConsignaJudicial, ConsignaJudicial.id == ConsignaPersona.consigna_id)
-            .filter(
-                ConsignaJudicial.unidad_id == current_user.unidad_id,
-                ConsignaJudicial.fuente_principal == "manual",
-                ConsignaJudicial.id.in_(allowed_ids),
-                or_(ConsignaPersona.nombre.ilike(f"%{qtxt}%"), ConsignaPersona.dni.ilike(f"%{qtxt}%")),
-            )
-            .group_by(ConsignaPersona.nombre, ConsignaPersona.dni)
-            .having(func.count(ConsignaPersona.id) > 1)
-            .order_by(func.count(ConsignaPersona.id).desc())
-            .limit(100)
-            .all()
-        )
-        detalle = (
-            db.session.query(
-                ConsignaPersona.nombre,
-                ConsignaPersona.dni,
-                ConsignaJudicial.id,
-                ConsignaJudicial.expediente,
-                ConsignaJudicial.tipo_consigna,
-                ConsignaJudicial.estado,
-                ConsignaJudicial.fecha_notificacion,
-            )
-            .join(ConsignaJudicial, ConsignaJudicial.id == ConsignaPersona.consigna_id)
-            .filter(
-                ConsignaJudicial.unidad_id == current_user.unidad_id,
-                ConsignaJudicial.fuente_principal == "manual",
-                ConsignaJudicial.id.in_(allowed_ids),
-                or_(ConsignaPersona.nombre.ilike(f"%{qtxt}%"), ConsignaPersona.dni.ilike(f"%{qtxt}%")),
-            )
-            .order_by(ConsignaJudicial.fecha_notificacion.desc().nullslast(), ConsignaJudicial.id.desc())
-            .limit(300)
-            .all()
-        )
+        qn = _ascii_lower_no_accent(qtxt)
+        coincidencias = [
+            g
+            for g in coincidencias
+            if qn in _ascii_lower_no_accent(g.get("nombre", ""))
+            or qn in _ascii_lower_no_accent(g.get("dni", ""))
+        ]
+    coincidencias.sort(
+        key=lambda g: (
+            int(g.get("n", 0)),
+            int(g.get("activa", 0)),
+            g.get("last_fecha") or date.min,
+        ),
+        reverse=True,
+    )
+    coincidencias = coincidencias[:200]
+    if not persona_sel and coincidencias:
+        persona_sel = coincidencias[0]["persona_key"]
+    detalle = []
+    for g in coincidencias:
+        if g.get("persona_key") == persona_sel:
+            detalle = list(g.get("items", []))
+            break
     return render_template(
         "oficios_judiciales/manual_reincidencias.html",
-        rows=rows,
+        rows=coincidencias,
         detalle=detalle,
+        persona_sel=persona_sel,
         selected=request.args,
         tipos_consigna=opts["tipos_consigna"],
         juzgados_opts=opts["juzgados_opts"],

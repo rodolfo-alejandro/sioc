@@ -80,25 +80,17 @@
     </div>
     <div class="col-12">
         <div class="card">
-            <div class="card-header"><strong>Cantidad por mes</strong></div>
-            <div class="card-body">
-                <div id="chart-mes" style="height:320px;"></div>
-            </div>
-        </div>
-    </div>
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header"><strong>Cantidad por fecha (rango aplicado)</strong></div>
-            <div class="card-body">
-                <div id="chart-fecha" style="height:320px;"></div>
-            </div>
-        </div>
-    </div>
-    <div class="col-12">
-        <div class="card">
             <div class="card-header"><strong>Activas vs inactivas</strong></div>
             <div class="card-body">
                 <div id="chart-estado" style="height:280px;"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header"><strong>Cantidad por mes</strong></div>
+            <div class="card-body">
+                <div id="chart-mes" style="height:320px;"></div>
             </div>
         </div>
     </div>
@@ -137,7 +129,6 @@
     var tipo = pairsToXY({{ por_tipo|tojson }});
     var tipoSlugMap = {{ por_tipo_slug_map|tojson }};
     var mes = pairsToXY({{ por_mes|tojson }});
-    var fecha = pairsToXY({{ por_fecha|tojson }});
     var estado = pairsToXY({{ por_estado|tojson }});
     var juz = pairsToXY({{ por_juzgado|tojson }});
     var fis = pairsToXY({{ por_fiscalia|tojson }});
@@ -195,23 +186,20 @@
     }
 
     Plotly.newPlot('chart-tipo', [{type:'bar', x: tipo.x, y: tipo.y, marker:{color:'#6f42c1'}}], {margin:{l:40,r:10,t:10,b:90}, xaxis:{type:'category'}}, {displayModeBar:false, responsive:true});
-    Plotly.newPlot('chart-mes', [{type:'bar', x: mes.x, y: mes.y, marker:{color:'#0d6efd'}}], {margin:{l:40,r:10,t:10,b:70}, xaxis:{type:'category'}}, {displayModeBar:false, responsive:true});
-    Plotly.newPlot('chart-fecha', [{type:'bar', x: fecha.x, y: fecha.y, marker:{color:'#6610f2'}}], {margin:{l:40,r:10,t:10,b:90}, xaxis:{type:'category'}}, {displayModeBar:false, responsive:true});
     Plotly.newPlot('chart-estado', [{type:'bar', x: estado.x, y: estado.y, marker:{color:['#198754','#6c757d']}}], {margin:{l:40,r:10,t:10,b:60}, xaxis:{type:'category'}}, {displayModeBar:false, responsive:true});
+    Plotly.newPlot('chart-mes', [{type:'bar', x: mes.x, y: mes.y, marker:{color:'#0d6efd'}}], {margin:{l:40,r:10,t:10,b:70}, xaxis:{type:'category'}}, {displayModeBar:false, responsive:true});
     Plotly.newPlot('chart-juzgado', [{type:'bar', x: juz.x, y: juz.y, marker:{color:'#0dcaf0'}}], {margin:{l:40,r:10,t:10,b:130}, xaxis:{type:'category'}}, {displayModeBar:false, responsive:true});
     Plotly.newPlot('chart-fiscalia', [{type:'bar', x: fis.x, y: fis.y, marker:{color:'#fd7e14'}}], {margin:{l:40,r:10,t:10,b:130}, xaxis:{type:'category'}}, {displayModeBar:false, responsive:true});
     Plotly.newPlot('chart-barrio', [{type:'bar', x: bar.x, y: bar.y, marker:{color:'#20c997'}}], {margin:{l:40,r:10,t:10,b:160}, xaxis:{type:'category'}}, {displayModeBar:false, responsive:true});
 
     var cTipo = document.getElementById('chart-tipo');
     var cMes = document.getElementById('chart-mes');
-    var cFecha = document.getElementById('chart-fecha');
     var cEstado = document.getElementById('chart-estado');
     var cJuz = document.getElementById('chart-juzgado');
     var cFis = document.getElementById('chart-fiscalia');
     var cBar = document.getElementById('chart-barrio');
     if (cTipo) cTipo.on('plotly_click', function(d){ if (d.points && d.points[0]) { var label = String(d.points[0].x || ''); var slug = tipoSlugMap[label] || label.toLowerCase(); applyFilter('tipo_consigna', slug); }});
     if (cMes) cMes.on('plotly_click', function(d){ if (d.points && d.points[0]) applyFilter('fecha_mes', d.points[0].x); });
-    if (cFecha) cFecha.on('plotly_click', function(d){ if (d.points && d.points[0]) { var day = String(d.points[0].x || ''); if (day) { var url = new URL(window.location.href); url.searchParams.delete('page'); var curFd = url.searchParams.get('fecha_desde') || ''; var curFh = url.searchParams.get('fecha_hasta') || ''; if (curFd === day && curFh === day) { url.searchParams.delete('fecha_desde'); url.searchParams.delete('fecha_hasta'); } else { url.searchParams.set('fecha_desde', day); url.searchParams.set('fecha_hasta', day); } window.location.href = url.toString(); } } });
     if (cEstado) cEstado.on('plotly_click', function(d){ if (d.points && d.points[0]) { var label = String(d.points[0].x || '').toLowerCase(); applyFilter('estado', label.indexOf('final') >= 0 ? 'finalizada' : 'activa'); }});
     if (cJuz) cJuz.on('plotly_click', function(d){ if (d.points && d.points[0]) applyFilter('juzgado', d.points[0].x); });
     if (cFis) cFis.on('plotly_click', function(d){ if (d.points && d.points[0]) applyFilter('fiscalia', d.points[0].x); });

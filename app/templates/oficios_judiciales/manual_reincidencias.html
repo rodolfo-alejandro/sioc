@@ -18,7 +18,7 @@
 
 <div class="card mb-3">
     <div class="card-body">
-        {% set est_sel = selected.getlist('estado') %}
+        {% set est_sel = selected.getlist('estado') or ['activa'] %}
         <form method="GET" class="row g-2">
             <div class="col-md-4"><label class="form-label form-label-sm mb-1"><i class="bi bi-search"></i> Búsqueda global</label><input class="form-control form-control-sm" name="q" value="{{ selected.get('q','') }}"></div>
             <div class="col-md-3"><label class="form-label form-label-sm mb-1"><i class="bi bi-tags"></i> Tipo consigna</label><select id="f-tipo" class="form-select form-select-sm" name="tipo_consigna" multiple>{% for tc in tipos_consigna %}<option value="{{ tc.value }}" {{ 'selected' if tc.value in selected.getlist('tipo_consigna') else '' }}>{{ tc.label }}</option>{% endfor %}</select></div>
@@ -37,16 +37,26 @@
 <div class="row g-3">
     <div class="col-lg-5">
         <div class="card h-100">
-            <div class="card-header"><strong>Coincidencias</strong></div>
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <strong>Coincidencias reales (manual)</strong>
+                <small class="text-muted">{{ rows|length }} resultados</small>
+            </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
                     <table class="table table-sm mb-0">
-                        <thead><tr><th>Nombre</th><th>DNI</th><th class="text-end">Veces</th></tr></thead>
+                        <thead><tr><th>Nombre</th><th>DNI</th><th class="text-end">Veces</th><th class="text-end">Activas</th></tr></thead>
                         <tbody>
                             {% for r in rows %}
-                            <tr><td>{{ r[0] or '—' }}</td><td>{{ r[1] or '—' }}</td><td class="text-end">{{ r[2] }}</td></tr>
+                            <tr class="{{ 'table-primary' if persona_sel == r.persona_key else '' }}">
+                                <td>
+                                    <a class="text-decoration-none" href="{{ url_for('oficios_judiciales.manual_reincidencias', q=selected.get('q',''), tipo_consigna=selected.getlist('tipo_consigna'), tipo_medida=selected.getlist('tipo_medida'), juzgado=selected.getlist('juzgado'), fiscalia=selected.getlist('fiscalia'), barrio=selected.getlist('barrio'), estado=selected.getlist('estado') or ['activa'], fecha_desde=selected.get('fecha_desde',''), fecha_hasta=selected.get('fecha_hasta',''), persona_key=r.persona_key) }}">{{ r.nombre or '—' }}</a>
+                                </td>
+                                <td>{{ r.dni or '—' }}</td>
+                                <td class="text-end">{{ r.n }}</td>
+                                <td class="text-end text-success">{{ r.activa }}</td>
+                            </tr>
                             {% else %}
-                            <tr><td colspan="3" class="text-center text-muted">Sin coincidencias.</td></tr>
+                            <tr><td colspan="4" class="text-center text-muted">Sin coincidencias con los filtros actuales.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -56,7 +66,7 @@
     </div>
     <div class="col-lg-7">
         <div class="card h-100">
-            <div class="card-header"><strong>Detalle de consignas</strong></div>
+            <div class="card-header"><strong>Detalle de consignas de la persona seleccionada</strong></div>
             <div class="card-body p-0">
                 <div class="table-responsive">
                     <table class="table table-sm mb-0">
@@ -64,15 +74,21 @@
                         <tbody>
                             {% for d in detalle %}
                             <tr>
-                                <td>{{ d[0] or '—' }}{% if d[1] %}<div class="text-muted">{{ d[1] }}</div>{% endif %}</td>
-                                <td>{{ d[3] or '—' }}</td>
-                                <td>{{ d[4] or '—' }}</td>
-                                <td>{{ d[5] or '—' }}</td>
-                                <td>{{ d[6].strftime('%d/%m/%Y') if d[6] else '—' }}</td>
-                                <td><a class="btn btn-sm btn-outline-primary" href="{{ url_for('oficios_judiciales.detalle', consigna_id=d[2]) }}">Detalle</a></td>
+                                <td>{{ d.nombre or '—' }}{% if d.dni %}<div class="text-muted">{{ d.dni }}</div>{% endif %}</td>
+                                <td>{{ d.expediente or '—' }}</td>
+                                <td>{{ d.tipo_consigna or '—' }}</td>
+                                <td>
+                                    {% if d.estado == 'activa' %}
+                                    <span class="badge text-bg-success">Activa</span>
+                                    {% else %}
+                                    <span class="badge text-bg-secondary">Finalizada</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ d.fecha_notificacion.strftime('%d/%m/%Y') if d.fecha_notificacion else '—' }}</td>
+                                <td><a class="btn btn-sm btn-outline-primary" href="{{ url_for('oficios_judiciales.detalle', consigna_id=d.id) }}">Detalle</a></td>
                             </tr>
                             {% else %}
-                            <tr><td colspan="6" class="text-center text-muted">Sin datos.</td></tr>
+                            <tr><td colspan="6" class="text-center text-muted">Seleccioná una coincidencia para ver su historial.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
