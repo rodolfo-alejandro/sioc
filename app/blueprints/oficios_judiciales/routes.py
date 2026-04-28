@@ -2024,6 +2024,9 @@ def manual_listado():
     args_multi = request.args.to_dict(flat=False)
     args_multi.pop("page", None)
     args_multi.pop("per_page", None)
+    export_url = url_for("oficios_judiciales.manual_export_xlsx")
+    if args_multi:
+        export_url = f"{export_url}?{urlencode(args_multi, doseq=True)}"
 
     def _page_url(n: int) -> str:
         data = {k: list(v) for k, v in args_multi.items()}
@@ -2059,6 +2062,171 @@ def manual_listado():
         etapa_actual_map=etapa_actual_map,
         estado_operativo_map=estado_operativo_map,
         pagination=pagination,
+        export_url=export_url,
+    )
+
+
+@bp.route("/manual/export.xlsx")
+def manual_export_xlsx():
+    if not (_can_export() or _can_view()):
+        abort(403)
+    q, estados, _opts = _manual_apply_filters_query()
+    rows = q.order_by(ConsignaJudicial.created_at.desc()).all()
+    estados_efectivos = estados or ["activa"]
+    est_set = set(estados_efectivos)
+    rows = [r for r in rows if _manual_estado_operativo(r) in est_set]
+    if not rows:
+        bio = io.BytesIO()
+        pd.DataFrame(
+            [
+                {
+                    "id": None,
+                    "expediente": "",
+                    "seps_ingreso": "",
+                    "seps_salida": "",
+                    "caratula": "",
+                    "juzgado": "",
+                    "fiscalia": "",
+                    "tipo_medida": "",
+                    "fecha_notificacion": "",
+                    "fecha_oficio": "",
+                    "dias_total": 0,
+                    "estado_operativo": "",
+                    "etapa_actual": "",
+                    "progreso": "",
+                    "personas": "",
+                    "domicilios": "",
+                    "barrios": "",
+                    "coords": "",
+                }
+            ]
+        ).iloc[0:0].to_excel(bio, index=False)
+        bio.seek(0)
+        return Response(
+            bio.read(),
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename=consignas_filtradas_{datetime.utcnow().strftime('%Y%m%d_%H%M')}.xlsx"},
+        )
+
+    row_ids = [r.id for r in rows]
+    pers = (
+        ConsignaPersona.query.filter(ConsignaPersona.consigna_id.in_(row_ids))
+        .order_by(ConsignaPersona.consigna_id.asc(), ConsignaPersona.id.asc())
+        .all()
+    )
+    doms = (
+        ConsignaDomicilio.query.filter(ConsignaDomicilio.consigna_id.in_(row_ids))
+        .order_by(ConsignaDomicilio.consigna_id.asc(), ConsignaDomicilio.id.asc())
+        .all()
+    )
+    dias_pairs = (
+        db.session.query(ConsignaDiasPorTipo, CatalogoTipoConsigna)
+        .join(CatalogoTipoConsigna, ConsignaDiasPorTipo.tipo_catalogo_id == CatalogoTipoConsigna.id)
+        .filter(ConsignaDiasPorTipo.consigna_id.in_(row_ids))
+        .all()
+    )
+    personas_map: dict[int, list[ConsignaPersona]] = {}
+    for p in pers:
+        personas_map.setdefault(p.consigna_id, []).append(p)
+    domicilios_map: dict[int, list[ConsignaDomicilio]] = {}
+    for d in doms:
+        domicilios_map.setdefault(d.consigna_id, []).append(d)
+    dias_map: dict[int, list[tuple[ConsignaDiasPorTipo, CatalogoTipoConsigna]]] = {}
+    for dp, cat in dias_pairs:
+        dias_map.setdefault(dp.consigna_id, []).append((dp, cat))
+
+    out_rows = []
+    today = datetime.utcnow().date()
+    for r in rows:
+        total = int(r.cantidad_dias or 0)
+        trans = 0
+        if r.fecha_notificacion and total > 0:
+            trans = max(0, (today - r.fecha_notificacion).days)
+            if trans > total:
+                trans = total
+        etapa_nombre = "Indeterminada"
+        pares = list(dias_map.get(r.id, []))
+        pares.sort(key=lambda p: _orden_cronologia_tipo_consigna(p[1]))
+        has_indet = False
+        tramos = []
+        for dp, cat in pares:
+            n = _ascii_lower_no_accent(cat.nombre)
+            if "indeterm" in n:
+                has_indet = bool(dp.dias)
+                continue
+            d = int(dp.dias or 0)
+            if d > 0:
+                tramos.append((cat.nombre, d, n))
+        if tramos:
+            acc = 0
+            chosen = tramos[-1]
+            for t in tramos:
+                acc += t[1]
+                if trans < acc:
+                    chosen = t
+                    break
+            n = chosen[2]
+            if "fija" in n:
+                etapa_nombre = "Fija"
+            elif "ambulator" in n:
+                etapa_nombre = "Ambulatoria"
+            elif "personal" in n:
+                etapa_nombre = "Personalizada"
+            else:
+                etapa_nombre = _clean(chosen[0]) or "Indeterminada"
+        elif has_indet:
+            etapa_nombre = "Indeterminada"
+        else:
+            tc = _clean(r.tipo_consigna).lower()
+            if tc == "fija":
+                etapa_nombre = "Fija"
+            elif tc == "ambulatoria":
+                etapa_nombre = "Ambulatoria"
+            elif tc == "personalizada":
+                etapa_nombre = "Personalizada"
+            elif tc == "indeterminada":
+                etapa_nombre = "Indeterminada"
+        personas_txt = " | ".join(
+            [
+                f"{(_clean(p.tipo) or 'persona').title()}: {_clean(p.nombre) or '—'} ({_clean(p.dni) or 'SIN DNI'})"
+                for p in personas_map.get(r.id, [])
+            ]
+        )
+        doms_row = domicilios_map.get(r.id, [])
+        domicilios_txt = " | ".join([_clean(d.direccion) for d in doms_row if _clean(d.direccion)])
+        barrios_txt = " | ".join([_clean(d.barrio_nombre) for d in doms_row if _clean(d.barrio_nombre)])
+        coords_txt = " | ".join(
+            [f"{d.latitud}, {d.longitud}" for d in doms_row if d.latitud is not None and d.longitud is not None]
+        )
+        out_rows.append(
+            {
+                "id": r.id,
+                "expediente": r.expediente or "",
+                "seps_ingreso": r.seps_ingreso or "",
+                "seps_salida": r.seps_salida or "",
+                "caratula": r.caratula or "",
+                "juzgado": r.juzgado or "",
+                "fiscalia": r.fiscalia or "",
+                "tipo_medida": r.tipo_medida or "",
+                "fecha_notificacion": r.fecha_notificacion,
+                "fecha_oficio": r.fecha_oficio,
+                "dias_total": total,
+                "estado_operativo": _manual_estado_operativo(r),
+                "etapa_actual": etapa_nombre,
+                "progreso": f"{trans}/{total}" if total > 0 else "0/0",
+                "personas": personas_txt,
+                "domicilios": domicilios_txt,
+                "barrios": barrios_txt,
+                "coords": coords_txt,
+            }
+        )
+    bio = io.BytesIO()
+    pd.DataFrame(out_rows).to_excel(bio, index=False)
+    bio.seek(0)
+    return Response(
+        bio.read(),
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename=consignas_filtradas_{datetime.utcnow().strftime('%Y%m%d_%H%M')}.xlsx"},
     )
 
 
