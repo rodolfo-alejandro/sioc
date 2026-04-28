@@ -1,41 +1,35 @@
 {% extends "layouts/base.html" %}
 {% block title %}Mapa Manual VIF{% endblock %}
+{% block extra_head %}
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+{% endblock %}
 {% block content %}
-<div class="page-header d-flex justify-content-between align-items-center">
+<div class="page-header">
     <h1><i class="bi bi-geo-alt"></i> Mapa Manual VIF</h1>
-    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('oficios_judiciales.manual_listado') }}">Volver</a>
 </div>
+
+<ul class="nav nav-tabs mb-3">
+    <li class="nav-item"><a class="nav-link" href="{{ url_for('oficios_judiciales.manual_listado') }}">Listado</a></li>
+    <li class="nav-item"><a class="nav-link" href="{{ url_for('oficios_judiciales.manual_dashboard') }}">Dashboard</a></li>
+    <li class="nav-item"><a class="nav-link active" href="#">Mapa</a></li>
+    <li class="nav-item"><a class="nav-link" href="{{ url_for('oficios_judiciales.manual_reincidencias') }}">Reincidencias</a></li>
+    <li class="nav-item"><a class="nav-link" href="{{ url_for('oficios_judiciales.catalogos') }}">Catálogos</a></li>
+</ul>
 
 <div class="card mb-3">
     <div class="card-body">
+        {% set est_sel = selected.getlist('estado') %}
         <form method="GET" class="row g-2">
-            <div class="col-md-3">
-                <select class="form-select form-select-sm" name="estado">
-                    <option value="activa" {{ 'selected' if selected.get('estado','activa') == 'activa' else '' }}>Solo activas</option>
-                    <option value="finalizada" {{ 'selected' if selected.get('estado') == 'finalizada' else '' }}>Solo finalizadas</option>
-                    <option value="todas" {{ 'selected' if selected.get('estado') == 'todas' else '' }}>Todas</option>
-                </select>
-            </div>
-            <div class="col-md-3">
-                <select class="form-select form-select-sm" name="tipo_consigna">
-                    <option value="">Tipo de consigna (todas)</option>
-                    {% for tc in tipos_consigna %}
-                    <option value="{{ tc }}" {{ 'selected' if selected.get('tipo_consigna') == tc else '' }}>{{ tc|title }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-4">
-                <select class="form-select form-select-sm" name="barrio">
-                    <option value="">Barrio (todos)</option>
-                    {% for b in barrios %}
-                    <option value="{{ b }}" {{ 'selected' if selected.get('barrio') == b else '' }}>{{ b }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-2 d-flex gap-2">
-                <button class="btn btn-outline-primary btn-sm" type="submit">Aplicar</button>
-                <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('oficios_judiciales.manual_mapa') }}">Limpiar</a>
-            </div>
+            <div class="col-md-4"><label class="form-label form-label-sm mb-1"><i class="bi bi-search"></i> Búsqueda global</label><input class="form-control form-control-sm" name="q" value="{{ selected.get('q','') }}"></div>
+            <div class="col-md-3"><label class="form-label form-label-sm mb-1"><i class="bi bi-tags"></i> Tipo consigna</label><select id="f-tipo" class="form-select form-select-sm" name="tipo_consigna" multiple>{% for tc in tipos_consigna %}<option value="{{ tc.value }}" {{ 'selected' if tc.value in selected.getlist('tipo_consigna') else '' }}>{{ tc.label }}</option>{% endfor %}</select></div>
+            <div class="col-md-2"><label class="form-label form-label-sm mb-1"><i class="bi bi-list-check"></i> Tipo medida</label><select id="f-medida" class="form-select form-select-sm" name="tipo_medida" multiple>{% for x in medidas_opts %}<option value="{{ x }}" {{ 'selected' if x in selected.getlist('tipo_medida') else '' }}>{{ x }}</option>{% endfor %}</select></div>
+            <div class="col-md-2"><label class="form-label form-label-sm mb-1"><i class="bi bi-building"></i> Juzgado</label><select id="f-juzgado" class="form-select form-select-sm" name="juzgado" multiple>{% for x in juzgados_opts %}<option value="{{ x }}" {{ 'selected' if x in selected.getlist('juzgado') else '' }}>{{ x }}</option>{% endfor %}</select></div>
+            <div class="col-md-2"><label class="form-label form-label-sm mb-1"><i class="bi bi-bank2"></i> Fiscalía</label><select id="f-fiscalia" class="form-select form-select-sm" name="fiscalia" multiple>{% for x in fiscalias_opts %}<option value="{{ x }}" {{ 'selected' if x in selected.getlist('fiscalia') else '' }}>{{ x }}</option>{% endfor %}</select></div>
+            <div class="col-md-2"><label class="form-label form-label-sm mb-1"><i class="bi bi-geo-alt"></i> Barrio</label><select id="f-barrio" class="form-select form-select-sm" name="barrio" multiple>{% for x in barrios_opts %}<option value="{{ x }}" {{ 'selected' if x in selected.getlist('barrio') else '' }}>{{ x }}</option>{% endfor %}</select></div>
+            <div class="col-md-2"><label class="form-label form-label-sm mb-1"><i class="bi bi-check2-circle"></i> Estado</label><select id="f-estado" class="form-select form-select-sm" name="estado" multiple><option value="activa" {{ 'selected' if 'activa' in est_sel else '' }}>Activa</option><option value="finalizada" {{ 'selected' if 'finalizada' in est_sel else '' }}>Finalizada</option></select></div>
+            <div class="col-md-2"><label class="form-label form-label-sm mb-1"><i class="bi bi-calendar3"></i> Fecha desde</label><input class="form-control form-control-sm" type="date" name="fecha_desde" value="{{ selected.get('fecha_desde','') }}"></div>
+            <div class="col-md-2"><label class="form-label form-label-sm mb-1"><i class="bi bi-calendar3"></i> Fecha hasta</label><input class="form-control form-control-sm" type="date" name="fecha_hasta" value="{{ selected.get('fecha_hasta','') }}"></div>
+            <div class="col-md-2 d-flex gap-2 align-items-end"><button class="btn btn-outline-primary btn-sm" type="submit">Aplicar</button><a class="btn btn-outline-secondary btn-sm" href="{{ url_for('oficios_judiciales.manual_mapa') }}">Limpiar</a></div>
         </form>
     </div>
 </div>
@@ -47,9 +41,11 @@
 </div>
 {% endblock %}
 {% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 (function () {
+    ['#f-estado','#f-tipo','#f-juzgado','#f-medida','#f-fiscalia','#f-barrio'].forEach(function(id){ var el=document.querySelector(id); if(!el) return; new TomSelect(el,{plugins:['remove_button'],maxOptions:null,hideSelected:true,placeholder:'Buscar...'}); });
     var points = {{ points_json|safe }};
     var map = L.map('mapa-manual').setView([-24.79, -65.41], 11);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
