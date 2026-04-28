@@ -45,37 +45,47 @@
         <div class="card">
             <div class="card-header"><strong>Por tipo de consigna</strong></div>
             <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-sm mb-0">
-                        <thead><tr><th>Tipo</th><th class="text-end">Cantidad</th></tr></thead>
-                        <tbody>
-                            {% for t, c in por_tipo %}
-                            <tr><td>{{ t or '—' }}</td><td class="text-end">{{ c }}</td></tr>
-                            {% else %}
-                            <tr><td colspan="2" class="text-muted text-center">Sin datos.</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
+                <div id="chart-tipo" style="height:260px;"></div>
             </div>
         </div>
     </div>
     <div class="col-lg-6">
         <div class="card">
+            <div class="card-header"><strong>Cantidad por mes</strong></div>
+            <div class="card-body">
+                <div id="chart-mes" style="height:260px;"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header"><strong>Activas vs inactivas</strong></div>
+            <div class="card-body">
+                <div id="chart-estado" style="height:250px;"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header"><strong>Top juzgados</strong></div>
+            <div class="card-body">
+                <div id="chart-juzgado" style="height:250px;"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header"><strong>Top fiscalías</strong></div>
+            <div class="card-body">
+                <div id="chart-fiscalia" style="height:250px;"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12">
+        <div class="card">
             <div class="card-header"><strong>Top barrios</strong></div>
             <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-sm mb-0">
-                        <thead><tr><th>Barrio</th><th class="text-end">Cantidad</th></tr></thead>
-                        <tbody>
-                            {% for b, c in por_barrio %}
-                            <tr><td>{{ b }}</td><td class="text-end">{{ c }}</td></tr>
-                            {% else %}
-                            <tr><td colspan="2" class="text-muted text-center">Sin datos.</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
+                <div id="chart-barrio" style="height:300px;"></div>
             </div>
         </div>
     </div>
@@ -85,5 +95,21 @@
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
 <script>
   (function(){ ['#f-estado','#f-tipo','#f-juzgado','#f-medida','#f-fiscalia','#f-barrio'].forEach(function(id){ var el=document.querySelector(id); if(!el) return; new TomSelect(el,{plugins:['remove_button'],maxOptions:null,hideSelected:true,placeholder:'Buscar...'}); }); })();
+  (function(){
+    function pairsToXY(pairs){ return {x: pairs.map(function(p){return p[0];}), y: pairs.map(function(p){return p[1];})}; }
+    var tipo = pairsToXY({{ por_tipo|tojson }});
+    var mes = pairsToXY({{ por_mes|tojson }});
+    var estado = pairsToXY({{ por_estado|tojson }});
+    var juz = pairsToXY({{ por_juzgado|tojson }});
+    var fis = pairsToXY({{ por_fiscalia|tojson }});
+    var bar = pairsToXY({{ por_barrio|tojson }});
+
+    Plotly.newPlot('chart-tipo', [{type:'bar', x: tipo.x, y: tipo.y, marker:{color:'#6f42c1'}}], {margin:{l:40,r:10,t:10,b:70}}, {displayModeBar:false, responsive:true});
+    Plotly.newPlot('chart-mes', [{type:'scatter', mode:'lines+markers', x: mes.x, y: mes.y, line:{color:'#0d6efd'}}], {margin:{l:40,r:10,t:10,b:50}}, {displayModeBar:false, responsive:true});
+    Plotly.newPlot('chart-estado', [{type:'pie', labels: estado.x, values: estado.y, hole:.45, marker:{colors:['#198754','#6c757d']}}], {margin:{l:10,r:10,t:10,b:10}}, {displayModeBar:false, responsive:true});
+    Plotly.newPlot('chart-juzgado', [{type:'bar', orientation:'h', x: juz.y.slice().reverse(), y: juz.x.slice().reverse(), marker:{color:'#0dcaf0'}}], {margin:{l:120,r:10,t:10,b:30}}, {displayModeBar:false, responsive:true});
+    Plotly.newPlot('chart-fiscalia', [{type:'bar', orientation:'h', x: fis.y.slice().reverse(), y: fis.x.slice().reverse(), marker:{color:'#fd7e14'}}], {margin:{l:120,r:10,t:10,b:30}}, {displayModeBar:false, responsive:true});
+    Plotly.newPlot('chart-barrio', [{type:'bar', orientation:'h', x: bar.y.slice().reverse(), y: bar.x.slice().reverse(), marker:{color:'#20c997'}}], {margin:{l:160,r:10,t:10,b:30}}, {displayModeBar:false, responsive:true});
+  })();
 </script>
 {% endblock %}

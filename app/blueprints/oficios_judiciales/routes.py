@@ -2075,10 +2075,28 @@ def manual_dashboard():
     activas = len([r for r in rows if _manual_estado_operativo(r) == "activa"])
     finalizadas = len([r for r in rows if _manual_estado_operativo(r) == "finalizada"])
     by_tipo = {}
+    by_mes = {}
+    by_juzgado = {}
+    by_fiscalia = {}
+    by_estado = {"Activa": 0, "Finalizada": 0}
     for r in rows:
         t = _clean(r.tipo_consigna) or "—"
         by_tipo[t] = by_tipo.get(t, 0) + 1
+        j = _clean(r.juzgado) or "—"
+        by_juzgado[j] = by_juzgado.get(j, 0) + 1
+        f = _clean(r.fiscalia) or "—"
+        by_fiscalia[f] = by_fiscalia.get(f, 0) + 1
+        e = "Activa" if _manual_estado_operativo(r) == "activa" else "Finalizada"
+        by_estado[e] = by_estado.get(e, 0) + 1
+        dt = r.fecha_notificacion or (r.created_at.date() if r.created_at else None)
+        if dt:
+            mk = f"{dt.year:04d}-{dt.month:02d}"
+            by_mes[mk] = by_mes.get(mk, 0) + 1
     por_tipo = sorted(by_tipo.items(), key=lambda x: x[1], reverse=True)
+    por_mes = sorted(by_mes.items(), key=lambda x: x[0])
+    por_juzgado = sorted(by_juzgado.items(), key=lambda x: x[1], reverse=True)[:10]
+    por_fiscalia = sorted(by_fiscalia.items(), key=lambda x: x[1], reverse=True)[:10]
+    por_estado = [(k, v) for k, v in by_estado.items()]
     ids = [r.id for r in rows] or [-1]
     por_barrio = (
         db.session.query(ConsignaDomicilio.barrio_nombre, func.count(ConsignaDomicilio.id))
@@ -2101,6 +2119,10 @@ def manual_dashboard():
         activas=activas,
         finalizadas=finalizadas,
         por_tipo=por_tipo,
+        por_mes=por_mes,
+        por_estado=por_estado,
+        por_juzgado=por_juzgado,
+        por_fiscalia=por_fiscalia,
         por_barrio=por_barrio,
         selected=request.args,
         tipos_consigna=opts["tipos_consigna"],
