@@ -116,9 +116,9 @@
         </div>
     </div>
 
-    <div class="col-md-7">
+    <div class="col-12">
         <div class="card border-0 shadow-sm">
-            <div class="card-header bg-light py-2 fw-semibold">Días por tipo</div>
+            <div class="card-header bg-light py-2 fw-semibold">Días por tipo y cronología</div>
             <div class="card-body p-0">
                 <div class="table-responsive">
                     <table class="table table-sm align-middle mb-0">
@@ -142,10 +142,14 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    {% if etapa_actual.total and etapa_actual.pos and (cat.nombre|lower == etapa_actual.nombre|lower) %}
-                                    <span class="badge text-bg-light border">{{ etapa_actual.pos }}/{{ etapa_actual.total }}</span>
-                                    {% elif etapa_actual.get('cumplidas') and (cat.nombre in etapa_actual.get('cumplidas')) %}
+                                    {% if etapa_actual.get('cumplidas') and (cat.nombre in etapa_actual.get('cumplidas')) %}
                                     <span class="text-muted" style="text-decoration: line-through;">cumplida</span>
+                                    {% elif etapa_actual.total and etapa_actual.pos and (cat.nombre|lower == etapa_actual.nombre|lower) %}
+                                    {% if etapa_actual.pos >= etapa_actual.total %}
+                                    <span class="text-muted" style="text-decoration: line-through;">cumplida</span>
+                                    {% else %}
+                                    <span class="badge text-bg-light border">{{ etapa_actual.pos }}/{{ etapa_actual.total }}</span>
+                                    {% endif %}
                                     {% else %}
                                     <span class="text-muted">—</span>
                                     {% endif %}
@@ -165,28 +169,6 @@
                         </tbody>
                     </table>
                 </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-5">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-header bg-light py-2 fw-semibold">Cronología</div>
-            <div class="card-body small">
-                {% for t in cronologia_plazos %}
-                {% if t.modo == 'tramo' %}
-                <div class="d-flex justify-content-between border-bottom py-1">
-                    <span>{{ t.nombre }}</span>
-                    <span class="text-muted">{{ t.desde.strftime('%d/%m/%Y') }} - {{ t.hasta.strftime('%d/%m/%Y') }}</span>
-                </div>
-                {% else %}
-                <div class="d-flex justify-content-between border-bottom py-1">
-                    <span>{{ t.nombre }}</span>
-                    <span class="text-muted">Indefinido</span>
-                </div>
-                {% endif %}
-                {% else %}
-                <span class="text-muted">Sin cronología.</span>
-                {% endfor %}
             </div>
         </div>
     </div>
