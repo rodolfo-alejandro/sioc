@@ -88,6 +88,24 @@ App en http://localhost:5001. El `.env` debe apuntar a `localhost:3308` (puerto 
 
 Para no mezclar con otros proyectos, usá un **nombre de proyecto** distinto y, si hace falta, **otros puertos**.
 
+### Actualización en producción (lo que usan hoy: `systemd`)
+
+En el VPS de SIOC (ej. `https://sioc.sistemas-msa.com`) la app **no** se actualiza con Docker Compose: el servicio corre bajo **systemd** y el repo vive en `/opt/sioc`.
+
+**Cada vez que subís cambios a `main` en GitHub y querés que el sitio los tome:**
+
+```bash
+ssh tu_usuario@TU_IP_DEL_SERVIDOR
+
+cd /opt/sioc
+git pull origin main
+sudo systemctl restart sioc.service
+```
+
+Eso es el flujo que usaron, por ejemplo, tras el commit de vista móvil (`e63064d`) y el de carga manual de oficios (u otro push posterior a `main`). Si `git pull` falla por permisos, ejecutalo con el usuario que sea dueño del repo o con `sudo` según cómo lo tengan montado.
+
+---
+
 ### Entrar al servidor y clonar/actualizar (desde GitHub)
 
 ```bash
@@ -200,6 +218,7 @@ server {
 | Dónde        | Comando principal |
 |-------------|--------------------|
 | **Local**   | `cd C:\Dev\MSA_SIOC\sioc` → `docker compose up -d --build` → `docker compose exec flask python create_admin.py` |
-| **Servidor**| `cd /ruta/sioc` → `docker compose -p sioc up -d --build` → `docker compose -p sioc exec flask python create_admin.py` |
+| **Servidor (producción systemd)** | `cd /opt/sioc` → `git pull origin main` → `sudo systemctl restart sioc.service` |
+| **Servidor (alternativa Docker)** | `cd /ruta/sioc` → `docker compose -p sioc up -d --build` → `docker compose -p sioc exec flask python create_admin.py` |
 
 Siempre que agregues nuevos modelos o permisos, volvé a ejecutar `create_admin.py` (local o servidor) para crear tablas y datos iniciales.
