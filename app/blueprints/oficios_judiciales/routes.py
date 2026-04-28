@@ -1879,10 +1879,10 @@ def manual_listado():
                 return "finalizada"
         return "activa"
 
+    estados_efectivos = estados or ["activa"]
     rows_all = q.order_by(ConsignaJudicial.created_at.desc()).all()
-    if estados:
-        estados_set = set(estados)
-        rows_all = [r for r in rows_all if _estado_operativo(r) in estados_set]
+    estados_set = set(estados_efectivos)
+    rows_all = [r for r in rows_all if _estado_operativo(r) in estados_set]
 
     total_rows = len(rows_all)
     total_pages = max(1, (total_rows + per_page - 1) // per_page)
@@ -2230,10 +2230,10 @@ def manual_mapa():
     if not _can_view():
         abort(403)
     base, estados, opts = _manual_apply_filters_query()
+    estados_efectivos = estados or ["activa"]
     base_rows = base.all()
-    if estados:
-        est_set = set(estados)
-        base_rows = [r for r in base_rows if _manual_estado_operativo(r) in est_set]
+    est_set = set(estados_efectivos)
+    base_rows = [r for r in base_rows if _manual_estado_operativo(r) in est_set]
     allowed_ids = [r.id for r in base_rows] or [-1]
     q = (
         db.session.query(ConsignaJudicial, ConsignaDomicilio)
@@ -2247,13 +2247,76 @@ def manual_mapa():
         )
     )
     rows = q.order_by(ConsignaJudicial.id.desc()).limit(1000).all()
+    consigna_ids = [r.id for r, _ in rows]
+    dias_por_consigna = {}
+    if consigna_ids:
+        dias_pairs = (
+            db.session.query(ConsignaDiasPorTipo, CatalogoTipoConsigna)
+            .join(CatalogoTipoConsigna, ConsignaDiasPorTipo.tipo_catalogo_id == CatalogoTipoConsigna.id)
+            .filter(ConsignaDiasPorTipo.consigna_id.in_(consigna_ids))
+            .all()
+        )
+        for dp, cat in dias_pairs:
+            dias_por_consigna.setdefault(dp.consigna_id, []).append((dp, cat))
+
+    def _etapa_slug_mapa(r: ConsignaJudicial) -> str:
+        pares = list(dias_por_consigna.get(r.id, []))
+        pares.sort(key=lambda p: _orden_cronologia_tipo_consigna(p[1]))
+        today = datetime.utcnow().date()
+        total = int(r.cantidad_dias or 0)
+        trans = 0
+        if r.fecha_notificacion and total > 0:
+            trans = max(0, (today - r.fecha_notificacion).days)
+            if trans > total:
+                trans = total
+        has_indet = False
+        tramos = []
+        for dp, cat in pares:
+            n = _ascii_lower_no_accent(cat.nombre)
+            if "indeterm" in n:
+                has_indet = bool(dp.dias)
+                continue
+            d = int(dp.dias or 0)
+            if d > 0:
+                tramos.append((cat.nombre, d, n))
+        if tramos:
+            acc = 0
+            chosen = tramos[-1]
+            for t in tramos:
+                acc += t[1]
+                if trans < acc:
+                    chosen = t
+                    break
+            n = chosen[2]
+            if "fija" in n:
+                return "fija"
+            if "ambulator" in n:
+                return "ambulatoria"
+            if "personal" in n:
+                return "personalizada"
+            return _slug_tipo_consigna_desde_nombre(chosen[0]) or "indeterminada"
+        if has_indet:
+            return "indeterminada"
+        tc = _clean(r.tipo_consigna).lower()
+        if tc in {"fija", "ambulatoria", "personalizada", "indeterminada"}:
+            return tc
+        return "indeterminada"
+
     points = []
     for r, d in rows:
+        etapa_slug = _etapa_slug_mapa(r)
+        tipo_label = {
+            "fija": "Fija",
+            "ambulatoria": "Ambulatoria",
+            "personalizada": "Personalizada",
+            "indeterminada": "Indeterminada",
+        }.get(etapa_slug, etapa_slug.title())
         points.append(
             {
                 "id": r.id,
                 "expediente": r.expediente,
-                "tipo_consigna": r.tipo_consigna,
+                "tipo_consigna": tipo_label,
+                "tipo_slug": etapa_slug,
                 "estado": _manual_estado_operativo(r),
                 "barrio": d.barrio_nombre or "",
                 "direccion": d.direccion or "",

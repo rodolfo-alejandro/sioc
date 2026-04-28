@@ -50,7 +50,7 @@
 <div class="card mb-3">
     <div class="card-body">
         <form method="GET" class="row g-2">
-            {% set est_sel = selected.getlist('estado') %}
+            {% set est_sel = selected.getlist('estado') or ['activa'] %}
             <div class="col-md-4">
                 <label class="form-label form-label-sm mb-1"><i class="bi bi-search filtro-icon"></i> Búsqueda global</label>
                 <input class="form-control form-control-sm" name="q" placeholder="Expediente, SEPS, persona, domicilio, barrio, carátula..." value="{{ selected.get('q','') }}">

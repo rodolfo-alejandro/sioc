@@ -19,7 +19,7 @@
 
 <div class="card mb-3">
     <div class="card-body">
-        {% set est_sel = selected.getlist('estado') %}
+        {% set est_sel = selected.getlist('estado') or ['activa'] %}
         <form method="GET" class="row g-2">
             <div class="col-md-4"><label class="form-label form-label-sm mb-1"><i class="bi bi-search"></i> Búsqueda global</label><input class="form-control form-control-sm" name="q" value="{{ selected.get('q','') }}"></div>
             <div class="col-md-3"><label class="form-label form-label-sm mb-1"><i class="bi bi-tags"></i> Tipo consigna</label><select id="f-tipo" class="form-select form-select-sm" name="tipo_consigna" multiple>{% for tc in tipos_consigna %}<option value="{{ tc.value }}" {{ 'selected' if tc.value in selected.getlist('tipo_consigna') else '' }}>{{ tc.label }}</option>{% endfor %}</select></div>
@@ -48,6 +48,16 @@
 (function () {
     ['#f-estado','#f-tipo','#f-juzgado','#f-medida','#f-fiscalia','#f-barrio'].forEach(function(id){ var el=document.querySelector(id); if(!el) return; new TomSelect(el,{plugins:['remove_button'],maxOptions:null,hideSelected:true,placeholder:'Buscar...'}); });
     var points = {{ points_json|safe }};
+    function markerColor(p) {
+        var estado = String(p.estado || '').toLowerCase();
+        if (estado === 'finalizada') return '#6c757d'; // gris para no opacar activas
+        var t = String(p.tipo_slug || p.tipo_consigna || '').toLowerCase();
+        if (t.indexOf('ambulator') >= 0) return '#fd7e14';
+        if (t.indexOf('fija') >= 0) return '#0d6efd';
+        if (t.indexOf('personal') >= 0) return '#6f42c1';
+        if (t.indexOf('indeterm') >= 0) return '#20c997';
+        return '#198754';
+    }
     var map = L.map('mapa-manual').setView([-24.79, -65.41], 11);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
@@ -62,7 +72,14 @@
             '<strong>Barrio:</strong> ' + (p.barrio || '-') + '<br>' +
             '<strong>Dirección:</strong> ' + (p.direccion || '-') + '<br>' +
             '<a href="' + p.detalle_url + '">Ver detalle</a>';
-        L.marker([p.lat, p.lng]).addTo(map).bindPopup(txt);
+        var c = markerColor(p);
+        L.circleMarker([p.lat, p.lng], {
+            radius: 7,
+            color: c,
+            weight: 2,
+            fillColor: c,
+            fillOpacity: 0.8
+        }).addTo(map).bindPopup(txt);
         bounds.push([p.lat, p.lng]);
     });
     if (bounds.length) map.fitBounds(bounds, { padding: [30, 30] });
