@@ -5,6 +5,7 @@ import json
 import os
 import re
 import unicodedata
+from urllib.parse import urlencode
 from datetime import datetime, timedelta, date
 
 import pandas as pd
@@ -1836,10 +1837,22 @@ def manual_listado():
             )
         )
 
-    rows = q.order_by(ConsignaJudicial.created_at.desc()).limit(300).all()
+    page = max(1, _to_int_or_none(request.args.get("page")) or 1)
+    per_page = max(10, min(100, _to_int_or_none(request.args.get("per_page")) or 25))
+    total_rows = q.count()
+    total_pages = max(1, (total_rows + per_page - 1) // per_page)
+    if page > total_pages:
+        page = total_pages
+    rows = (
+        q.order_by(ConsignaJudicial.created_at.desc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
     row_ids = [r.id for r in rows]
     personas_map = {}
     domicilios_map = {}
+    persona_domicilio_map = {}
     coords_map = {}
     progreso_map = {}
     etapa_actual_map = {}
@@ -1866,6 +1879,32 @@ def manual_listado():
                 domicilios_map[d.consigna_id] = d
             if d.latitud is not None and d.longitud is not None and d.consigna_id not in coords_map:
                 coords_map[d.consigna_id] = (d.latitud, d.longitud)
+
+        doms_by_cons_tipo = {}
+        for d in doms:
+            key = (d.consigna_id, _clean(d.tipo).lower())
+            doms_by_cons_tipo.setdefault(key, []).append(d)
+        used_dom_ids = set()
+        for r in rows:
+            items = []
+            plist = [p for p in pers if p.consigna_id == r.id]
+            for p in plist:
+                pt = _clean(p.tipo).lower()
+                cand = doms_by_cons_tipo.get((r.id, pt), []) or doms_by_cons_tipo.get((r.id, "victima"), []) or []
+                chosen = None
+                for d in cand:
+                    if d.id not in used_dom_ids:
+                        chosen = d
+                        break
+                if not chosen:
+                    for d in doms:
+                        if d.consigna_id == r.id and d.id not in used_dom_ids:
+                            chosen = d
+                            break
+                if chosen:
+                    used_dom_ids.add(chosen.id)
+                items.append({"persona": p, "domicilio": chosen})
+            persona_domicilio_map[r.id] = items
         for r in rows:
             total = int(r.cantidad_dias or 0)
             if r.fecha_notificacion and total > 0:
@@ -1947,6 +1986,27 @@ def manual_listado():
     fiscalias_opts = [x.nombre for x in CatalogoFiscalia.query.filter_by(activo=True).order_by(CatalogoFiscalia.nombre.asc()).all()]
     barrios_opts = [x.nombre for x in CatalogoBarrio.query.filter_by(activo=True).order_by(CatalogoBarrio.nombre.asc()).all()]
 
+    args_multi = request.args.to_dict(flat=False)
+    args_multi.pop("page", None)
+    args_multi.pop("per_page", None)
+
+    def _page_url(n: int) -> str:
+        data = {k: list(v) for k, v in args_multi.items()}
+        data["page"] = [str(n)]
+        data["per_page"] = [str(per_page)]
+        return f"{url_for('oficios_judiciales.manual_listado')}?{urlencode(data, doseq=True)}"
+
+    pagination = {
+        "page": page,
+        "per_page": per_page,
+        "total_rows": total_rows,
+        "total_pages": total_pages,
+        "has_prev": page > 1,
+        "has_next": page < total_pages,
+        "prev_url": _page_url(page - 1) if page > 1 else None,
+        "next_url": _page_url(page + 1) if page < total_pages else None,
+    }
+
     return render_template(
         "oficios_judiciales/manual_listado.html",
         rows=rows,
@@ -1958,9 +2018,11 @@ def manual_listado():
         barrios_opts=barrios_opts,
         personas_map=personas_map,
         domicilios_map=domicilios_map,
+        persona_domicilio_map=persona_domicilio_map,
         coords_map=coords_map,
         progreso_map=progreso_map,
         etapa_actual_map=etapa_actual_map,
+        pagination=pagination,
     )
 
 

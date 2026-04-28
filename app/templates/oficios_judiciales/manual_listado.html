@@ -88,7 +88,7 @@
                     <option value="finalizada" {{ 'selected' if 'finalizada' in est_sel else '' }}>Finalizada</option>
                 </select>
             </div>
-            <div class="col-12 d-flex gap-2">
+            <div class="col-md-2 d-flex gap-2 align-items-end">
                 <button class="btn btn-outline-primary btn-sm" type="submit">Aplicar</button>
                 <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('oficios_judiciales.manual_listado') }}">Limpiar</a>
             </div>
@@ -113,6 +113,7 @@
             {% for r in rows %}
             {% set v = personas_map.get(r.id, {}) %}
             {% set d = domicilios_map.get(r.id) %}
+            {% set pares_pd = persona_domicilio_map.get(r.id, []) %}
             {% set pr = progreso_map.get(r.id, {'transcurridos': 0, 'total': 0}) %}
             {% set etapa = etapa_actual_map.get(r.id, {'slug':'indeterminada','nombre':'Indeterminada','icono':'bi-infinity'}) %}
             {% set tipo_cls = 'tipo-indeterminada' %}
@@ -134,22 +135,33 @@
               {% set row_cls = row_cls + ' row-soft-vigente' %}
             {% endif %}
             <tr class="{{ row_cls }}">
-                <td>{{ r.id }}</td>
+                <td><i class="bi {{ etapa.icono }} text-muted me-1"></i>{{ r.id }}</td>
                 <td>
                     <div><strong>{{ r.expediente or '—' }}</strong></div>
                     <div class="small text-muted">SEPS: {{ r.seps_ingreso or '—' }} / {{ r.seps_salida or '—' }}</div>
                 </td>
                 <td>
+                    {% if pares_pd %}
+                        {% for it in pares_pd %}
+                        <div class="small{% if not loop.first %} mt-1{% endif %}">
+                            <i class="bi bi-person-badge"></i>
+                            {{ (it.persona.tipo|title) if it.persona and it.persona.tipo else 'Persona' }}:
+                            {{ it.persona.nombre if it.persona else '—' }}
+                            <div class="text-muted"><i class="bi bi-house"></i> {{ it.domicilio.direccion if it.domicilio else '—' }}</div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
                     <div class="small"><i class="bi bi-person-heart"></i> Víctima: {{ v.get('victima').nombre if v.get('victima') else '—' }}</div>
                     <div class="small"><i class="bi bi-person-badge"></i> Acusado: {{ v.get('denunciado').nombre if v.get('denunciado') else '—' }}</div>
                     <div class="small text-muted"><i class="bi bi-house"></i> {{ d.direccion if d else '—' }}</div>
+                    {% endif %}
                 </td>
                 <td>
                     <div><span class="tipo-pill {{ tipo_cls }}"><i class="bi {{ etapa.icono }}"></i> {{ etapa.nombre }}</span></div>
                     {% if etapa.total and etapa.pos %}
-                    <div class="small text-muted">{{ etapa.pos }}/{{ etapa.total }} {{ etapa.nombre }}</div>
+                    <div class="small text-muted">{{ etapa.pos }}/{{ etapa.total }}</div>
                     {% else %}
-                    <div class="small text-muted">Etapa {{ etapa.nombre|lower }}</div>
+                    <div class="small text-muted">Etapa actual</div>
                     {% endif %}
                 </td>
                 <td>
@@ -183,6 +195,25 @@
         </tbody>
     </table>
 </div>
+{% if pagination.total_pages > 1 %}
+<div class="d-flex justify-content-between align-items-center mt-2">
+    <div class="small text-muted">
+        Página {{ pagination.page }} de {{ pagination.total_pages }} · {{ pagination.total_rows }} registros
+    </div>
+    <div class="btn-group btn-group-sm">
+        {% if pagination.has_prev %}
+        <a class="btn btn-outline-secondary" href="{{ pagination.prev_url }}"><i class="bi bi-chevron-left"></i> Anterior</a>
+        {% else %}
+        <button class="btn btn-outline-secondary" disabled><i class="bi bi-chevron-left"></i> Anterior</button>
+        {% endif %}
+        {% if pagination.has_next %}
+        <a class="btn btn-outline-secondary" href="{{ pagination.next_url }}">Siguiente <i class="bi bi-chevron-right"></i></a>
+        {% else %}
+        <button class="btn btn-outline-secondary" disabled>Siguiente <i class="bi bi-chevron-right"></i></button>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
 {% endblock %}
 {% block extra_scripts %}
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
