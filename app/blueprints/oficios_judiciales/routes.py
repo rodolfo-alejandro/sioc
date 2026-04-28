@@ -1225,6 +1225,19 @@ def _q_base():
     return ConsignaJudicial.query.filter(ConsignaJudicial.unidad_id == current_user.unidad_id)
 
 
+def _manual_estado_operativo(row: ConsignaJudicial, today: date | None = None) -> str:
+    tdy = today or datetime.utcnow().date()
+    if _clean(row.estado).lower() == "finalizada":
+        return "finalizada"
+    inicio = row.fecha_notificacion
+    dias = int(row.cantidad_dias or 0)
+    if inicio and dias > 0:
+        vto = inicio + timedelta(days=dias)
+        if vto <= tdy:
+            return "finalizada"
+    return "activa"
+
+
 def _orden_cronologia_tipo_consigna(cat: CatalogoTipoConsigna) -> tuple:
     """
     Orden de lectura de plazos en cadena: personalizada → fija → ambulatoria → indeterminada; otros al final.
