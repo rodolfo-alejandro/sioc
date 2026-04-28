@@ -25,6 +25,8 @@ class ConsignaJudicial(db.Model):
     fiscalia = db.Column(db.String(255), nullable=True, index=True)
     fiscalia_key = db.Column(db.String(255), nullable=True, index=True)
     telefono_contacto = db.Column(db.String(80), nullable=True, index=True)
+    seps_ingreso = db.Column(db.String(64), nullable=True, index=True)
+    seps_salida = db.Column(db.String(64), nullable=True, index=True)
     fecha_oficio = db.Column(db.Date, nullable=True, index=True)
     fecha_notificacion = db.Column(db.Date, nullable=True, index=True)  # inicio real
     cantidad_dias = db.Column(db.Integer, nullable=True)

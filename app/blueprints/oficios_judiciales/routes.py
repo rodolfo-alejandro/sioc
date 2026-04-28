@@ -164,6 +164,12 @@ def _ensure_schema():
     if "telefono_contacto" not in cols:
         db.session.execute(text("ALTER TABLE oficios_consignas ADD COLUMN telefono_contacto VARCHAR(80) NULL"))
         db.session.commit()
+    if "seps_ingreso" not in cols:
+        db.session.execute(text("ALTER TABLE oficios_consignas ADD COLUMN seps_ingreso VARCHAR(64) NULL"))
+        db.session.commit()
+    if "seps_salida" not in cols:
+        db.session.execute(text("ALTER TABLE oficios_consignas ADD COLUMN seps_salida VARCHAR(64) NULL"))
+        db.session.commit()
     pcols = {c.get("name") for c in insp.get_columns(ConsignaPersona.__tablename__)}
     if "notificar" not in pcols:
         db.session.execute(text("ALTER TABLE oficios_consigna_personas ADD COLUMN notificar VARCHAR(20) NULL"))
@@ -283,6 +289,22 @@ def _derive_tipo_consigna_desde_catalogo(
 def _es_tipo_indeterminada_catalogo(nombre: str) -> bool:
     """Tipos cuyo nombre alude a medida indeterminada: Sí/No, no cantidad de días."""
     return "indeterm" in _ascii_lower_no_accent(nombre)
+
+
+def _orden_tipo_consigna_catalogo(tc: CatalogoTipoConsigna) -> tuple:
+    """
+    Orden de formulario: ambulatoria → fija → personalizada → indeterminada; el resto al final.
+    """
+    n = _ascii_lower_no_accent(tc.nombre)
+    if "ambulator" in n:
+        return (0, n)
+    if re.search(r"\bfija\b", n):
+        return (1, n)
+    if "personal" in n:
+        return (2, n)
+    if "indeterm" in n:
+        return (3, n)
+    return (4, n)
 
 
 def _parse_lat_lng_text(s: str) -> tuple[float | None, float | None]:
@@ -1848,14 +1870,17 @@ def manual_nuevo():
     tipos_medida = CatalogoTipoMedida.query.filter_by(activo=True).order_by(CatalogoTipoMedida.nombre.asc()).all()
     fiscalias = CatalogoFiscalia.query.filter_by(activo=True).order_by(CatalogoFiscalia.nombre.asc()).all()
     barrios = CatalogoBarrio.query.filter_by(activo=True).order_by(CatalogoBarrio.nombre.asc()).all()
-    tipos_consigna_catalogo = (
-        CatalogoTipoConsigna.query.filter_by(activo=True).order_by(CatalogoTipoConsigna.nombre.asc()).all()
+    tipos_consigna_catalogo = sorted(
+        CatalogoTipoConsigna.query.filter_by(activo=True).all(),
+        key=_orden_tipo_consigna_catalogo,
     )
     if request.method == "POST":
         exp = _clean(request.form.get("expediente"))
         caratula = _clean(request.form.get("caratula"))
         estado = "activa"
         tel_contacto = _clean(request.form.get("telefono_contacto"))
+        seps_ingreso = _clean(request.form.get("seps_ingreso"))
+        seps_salida = _clean(request.form.get("seps_salida"))
         juz_n = _names_from_catalog_ids(request.form.getlist("juzgado_id"), CatalogoJuzgado)
         tm_n = _names_from_catalog_ids(request.form.getlist("tipo_medida_id"), CatalogoTipoMedida)
         fis_n = _names_from_catalog_ids(request.form.getlist("fiscalia_id"), CatalogoFiscalia)
@@ -1907,6 +1932,8 @@ def manual_nuevo():
                 fiscalia=fiscalia,
                 fiscalia_key=_fiscalia_key(fiscalia) if fiscalia else "",
                 telefono_contacto=tel_contacto,
+                seps_ingreso=seps_ingreso or None,
+                seps_salida=seps_salida or None,
                 fecha_oficio=None,
                 fecha_notificacion=_parse_date(_clean(request.form.get("fecha_notificacion"))),
                 cantidad_dias=cantidad_dias if cantidad_dias else None,
@@ -1928,6 +1955,8 @@ def manual_nuevo():
             row.fiscalia = fiscalia or row.fiscalia
             row.fiscalia_key = _fiscalia_key(fiscalia) if fiscalia else (row.fiscalia_key or "")
             row.telefono_contacto = tel_contacto or row.telefono_contacto
+            row.seps_ingreso = seps_ingreso or None
+            row.seps_salida = seps_salida or None
             row.cantidad_dias = cantidad_dias or None
             row.dias_fija = d_fija or None
             row.dias_ambulatoria = d_amb or None

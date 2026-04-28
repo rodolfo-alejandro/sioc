@@ -12,6 +12,7 @@
     <div class="col-md-6">
         <div class="card"><div class="card-header">Datos principales</div><div class="card-body">
             <div><strong>Expediente:</strong> {{ row.expediente or '—' }}</div>
+            <div><strong>SEPS ingreso / salida:</strong> {{ row.seps_ingreso or '—' }} / {{ row.seps_salida or '—' }}</div>
             <div><strong>Juzgado:</strong> {{ row.juzgado or '—' }}</div>
             <div><strong>Carátula:</strong> {{ row.caratula or '—' }}</div>
             <div><strong>Tipo medida:</strong> {{ row.tipo_medida or '—' }}</div>

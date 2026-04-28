@@ -6,6 +6,7 @@
 <style>
   .ts-manual .ts-control { min-height: 38px; }
   #mapaPickerMap { height: 360px; width: 100%; border-radius: 0.375rem; }
+  .persona-row .input-group > .js-mapa-btn { flex-shrink: 0; }
 </style>
 {% endblock %}
 {% block content %}
@@ -70,6 +71,8 @@
     {% endif %}
     <div class="col-md-2"><label class="form-label">Días total</label><input class="form-control bg-light" type="text" id="manual-dias-total" value="0" readonly autocomplete="off" title="Suma solo de días numéricos (no incluye indeterminada Sí/No)"></div>
     <div class="col-md-3"><label class="form-label">Teléfono contacto</label><input class="form-control" name="telefono_contacto"></div>
+    <div class="col-md-3"><label class="form-label">SEPS ingreso</label><input class="form-control" name="seps_ingreso" placeholder="Nº expediente interno SEPS" autocomplete="off" title="Seguimiento en sistema policial (ingreso)"></div>
+    <div class="col-md-3"><label class="form-label">SEPS salida</label><input class="form-control" name="seps_salida" placeholder="Nº expediente interno SEPS" autocomplete="off" title="Seguimiento en sistema policial (salida)"></div>
 
     <div class="col-12">
         <div class="card">
@@ -173,7 +176,29 @@
     var mapaModalEl = document.getElementById('modalMapa');
     var mapaModal = mapaModalEl ? new bootstrap.Modal(mapaModalEl) : null;
     var mapaPicker = null;
+    var mapaMarker = null;
     var currentPickerInput = null;
+
+    function syncMapMarkerFromInput() {
+        if (!mapaPicker) return;
+        if (mapaMarker) {
+            mapaPicker.removeLayer(mapaMarker);
+            mapaMarker = null;
+        }
+        if (!currentPickerInput) return;
+        var t = (currentPickerInput.value || '').trim();
+        var m = t.match(/-?\d+\.?\d*/g);
+        if (m && m.length >= 2) {
+            var la = parseFloat(m[0]);
+            var ln = parseFloat(m[1]);
+            if (!isNaN(la) && !isNaN(ln)) {
+                mapaMarker = L.marker([la, ln]).addTo(mapaPicker);
+                mapaPicker.setView([la, ln], 16);
+            }
+        } else {
+            mapaPicker.setView([-24.7859, -65.4114], 13);
+        }
+    }
 
     if (mapaModalEl) {
         mapaModalEl.addEventListener('shown.bs.modal', function () {
@@ -181,13 +206,21 @@
                 mapaPicker = L.map('mapaPickerMap').setView([-24.7859, -65.4114], 13);
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(mapaPicker);
                 mapaPicker.on('click', function (e) {
+                    if (mapaMarker) {
+                        mapaPicker.removeLayer(mapaMarker);
+                        mapaMarker = null;
+                    }
+                    mapaMarker = L.marker(e.latlng).addTo(mapaPicker);
                     if (currentPickerInput) {
                         currentPickerInput.value = e.latlng.lat.toFixed(6) + ', ' + e.latlng.lng.toFixed(6);
                     }
                 });
             }
             if (mapaPicker) {
-                setTimeout(function () { mapaPicker.invalidateSize(); }, 150);
+                setTimeout(function () {
+                    mapaPicker.invalidateSize();
+                    syncMapMarkerFromInput();
+                }, 200);
             }
         });
     }
@@ -211,11 +244,10 @@
             '<div class="col-md-7"><label class="form-label">Domicilio</label><input class="form-control" name="persona_domicilio[]"></div>' +
             '</div>' +
             '<div class="row g-2 align-items-end mt-1">' +
-            '<div class="col-md-4"><label class="form-label">Barrio</label><select class="form-select ts-barrio" name="persona_barrio_id[]">' + barrioOptionsHtml + '</select></div>' +
-            '<div class="col-md-4"><label class="form-label">Latitud, longitud</label><input class="form-control js-persona-coords" name="persona_latlng[]" type="text" placeholder="-24.xxxxxx, -65.xxxxxx" title="Pegá desde Google Maps o usá el mapa"></div>' +
-            '<div class="col-md-1"><label class="form-label d-block">&nbsp;</label><button class="btn btn-outline-secondary btn-sm w-100 js-mapa-btn" type="button" title="Elegir en mapa"><i class="bi bi-geo-alt"></i></button></div>' +
-            '<div class="col-md-2"><label class="form-label">Tipo</label><select class="form-select" name="persona_tipo[]"><option value="victima">Víctima</option><option value="denunciado">Acusado</option></select></div>' +
+            '<div class="col-md-3"><label class="form-label">Barrio</label><select class="form-select ts-barrio" name="persona_barrio_id[]">' + barrioOptionsHtml + '</select></div>' +
             '<div class="col-md-2"><label class="form-label">¿Notificar?</label><select class="form-select" name="persona_notificar[]"><option value="si">Sí</option><option value="no">No</option></select></div>' +
+            '<div class="col-md-4"><label class="form-label">Latitud, longitud</label><div class="input-group"><input class="form-control js-persona-coords" name="persona_latlng[]" type="text" placeholder="-24.xxxxxx, -65.xxxxxx" title="Pegá desde Google Maps o tocá el mapa" autocomplete="off"><button class="btn btn-outline-secondary js-mapa-btn" type="button" title="Elegir en mapa"><i class="bi bi-geo-alt"></i></button></div></div>' +
+            '<div class="col-md-2"><label class="form-label">Tipo</label><select class="form-select" name="persona_tipo[]"><option value="victima">Víctima</option><option value="denunciado">Acusado</option></select></div>' +
             '<div class="col-md-1"><label class="form-label d-block">&nbsp;</label><button class="btn btn-outline-danger w-100 btn-sm js-del" type="button">Quitar</button></div>' +
             '</div>';
         div.querySelector('.js-del').addEventListener('click', function () { div.remove(); });
