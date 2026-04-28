@@ -19,8 +19,25 @@
             <div><strong>Tipo consigna:</strong> {{ row.tipo_consigna or '—' }}</div>
             <div><strong>Fecha oficio:</strong> {{ row.fecha_oficio|localtime('%d/%m/%Y') if row.fecha_oficio else '—' }}</div>
             <div><strong>Fecha notificación (inicio):</strong> {{ row.fecha_notificacion|localtime('%d/%m/%Y') if row.fecha_notificacion else '—' }}</div>
-            <div><strong>Días:</strong> {{ row.cantidad_dias or '—' }}</div>
-            <div><strong>Días fija/ambulatoria/personalizada:</strong> {{ row.dias_fija or '—' }} / {{ row.dias_ambulatoria or '—' }} / {{ row.dias_personalizada or '—' }}</div>
+            <div><strong>Días (total):</strong> {{ row.cantidad_dias or '—' }}</div>
+            <div><strong>Días por tipo (catálogo):</strong>
+                {% if dias_por_tipo_detalle %}
+                <ul class="mb-0 ps-3 mt-1">
+                    {% for dp, cat in dias_por_tipo_detalle %}
+                    <li>{{ cat.nombre }}:
+                        {% if 'indeterm' in cat.nombre|lower %}
+                        <strong>{% if dp.dias %}Sí{% else %}No{% endif %}</strong> <span class="text-muted small">(sin plazo en días)</span>
+                        {% else %}
+                        <strong>{{ dp.dias }}</strong> días
+                        {% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <span class="text-muted">—</span>
+                <div class="small text-muted mt-1">Registros viejos sin detalle por ID: fija / ambulatoria / personalizada: {{ row.dias_fija or '—' }} / {{ row.dias_ambulatoria or '—' }} / {{ row.dias_personalizada or '—' }}</div>
+                {% endif %}
+            </div>
             <div><strong>Vencimiento:</strong>
                 {% if venc.fecha_vencimiento %}
                     {{ venc.fecha_vencimiento.strftime('%d/%m/%Y') }} ({{ venc.label }})

@@ -2,8 +2,10 @@
 {% block title %}Nueva Consigna Manual{% endblock %}
 {% block extra_head %}
 <link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <style>
   .ts-manual .ts-control { min-height: 38px; }
+  #mapaPickerMap { height: 360px; width: 100%; border-radius: 0.375rem; }
 </style>
 {% endblock %}
 {% block content %}
@@ -24,7 +26,6 @@
             <option value="{{ j.id }}">{{ j.nombre }}</option>
             {% endfor %}
         </select>
-        <div class="form-text">Varias opciones; buscá escribiendo.</div>
     </div>
     <div class="col-md-5">
         <label class="form-label">Carátula</label>
@@ -47,20 +48,27 @@
             {% endfor %}
         </select>
     </div>
-    <div class="col-md-2"><label class="form-label">Fecha oficio</label><input class="form-control" type="date" name="fecha_oficio"></div>
-    <div class="col-md-2"><label class="form-label">Fecha notificación</label><input class="form-control" type="date" name="fecha_notificacion"></div>
-    <div class="col-md-2">
-        <label class="form-label">Estado</label>
-        <select class="form-select" name="estado">
-            <option value="activa">Activa</option>
-            <option value="finalizada">Finalizada</option>
-        </select>
-    </div>
+    <div class="col-md-3"><label class="form-label">Fecha notificación</label><input class="form-control" type="date" name="fecha_notificacion"></div>
 
-    <div class="col-md-2"><label class="form-label">Días fija</label><input class="form-control js-dia-parte" type="number" min="0" step="1" name="dias_fija" id="manual-dias-fija" value=""></div>
-    <div class="col-md-2"><label class="form-label">Días ambulatoria</label><input class="form-control js-dia-parte" type="number" min="0" step="1" name="dias_ambulatoria" id="manual-dias-amb"></div>
-    <div class="col-md-2"><label class="form-label">Días personalizada</label><input class="form-control js-dia-parte" type="number" min="0" step="1" name="dias_personalizada" id="manual-dias-pers"></div>
-    <div class="col-md-2"><label class="form-label">Días total</label><input class="form-control bg-light" type="text" id="manual-dias-total" value="0" readonly autocomplete="off" title="Suma de días fija, ambulatoria y personalizada"></div>
+    <div class="col-12 mt-2"><small class="text-muted">Días por tipo (catálogo). “Indeterminada” u similares: Sí/No, no suma al total de días.</small></div>
+    {% if tipos_consigna_catalogo %}
+    {% for tc in tipos_consigna_catalogo %}
+    <div class="col-md-4 col-lg-3">
+        <label class="form-label">{{ tc.nombre }}</label>
+        {% if 'indeterm' in tc.nombre|lower %}
+        <select class="form-select js-indet-si-no" name="dias_por_tipo_{{ tc.id }}" id="dias-pt-{{ tc.id }}" title="Medida indeterminada (sin plazo en días)">
+            <option value="0" selected>No</option>
+            <option value="1">Sí</option>
+        </select>
+        {% else %}
+        <input type="number" min="0" step="1" class="form-control js-dia-parte" name="dias_por_tipo_{{ tc.id }}" id="dias-pt-{{ tc.id }}" value="" title="Cantidad de días — {{ tc.nombre }}">
+        {% endif %}
+    </div>
+    {% endfor %}
+    {% else %}
+    <div class="col-12"><p class="text-warning small mb-0">No hay tipos en el catálogo. Cargalos en <a href="{{ url_for('oficios_judiciales.catalogos') }}">Oficios → Catálogos</a> (pestaña Tipos de consigna).</p></div>
+    {% endif %}
+    <div class="col-md-2"><label class="form-label">Días total</label><input class="form-control bg-light" type="text" id="manual-dias-total" value="0" readonly autocomplete="off" title="Suma solo de días numéricos (no incluye indeterminada Sí/No)"></div>
     <div class="col-md-3"><label class="form-label">Teléfono contacto</label><input class="form-control" name="telefono_contacto"></div>
 
     <div class="col-12">
@@ -80,9 +88,28 @@
         <button class="btn btn-primary" type="submit">Guardar</button>
     </div>
 </form>
+
+<div class="modal fade" id="modalMapa" tabindex="-1" aria-labelledby="modalMapaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalMapaLabel">Ubicación en el mapa</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body p-0">
+                <p class="small text-muted px-3 pt-2 mb-0">Hacé clic en el mapa para rellenar latitud y longitud.</p>
+                <div id="mapaPickerMap" class="border-top border-bottom"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 {% block extra_scripts %}
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script>
 (function () {
     var tsOpts = {
@@ -107,40 +134,93 @@
         return isNaN(n) || n < 0 ? 0 : n;
     }
     function refreshTotal() {
-        var a = parseDia(document.getElementById('manual-dias-fija') && document.getElementById('manual-dias-fija').value);
-        var b = parseDia(document.getElementById('manual-dias-amb') && document.getElementById('manual-dias-amb').value);
-        var c = parseDia(document.getElementById('manual-dias-pers') && document.getElementById('manual-dias-pers').value);
+        var sum = 0;
+        document.querySelectorAll('.js-dia-parte').forEach(function (inp) {
+            sum += parseDia(inp.value);
+        });
         var el = document.getElementById('manual-dias-total');
-        if (el) el.value = String(a + b + c);
+        if (el) el.value = String(sum);
     }
     document.querySelectorAll('.js-dia-parte').forEach(function (inp) {
         inp.addEventListener('input', refreshTotal);
         inp.addEventListener('change', refreshTotal);
     });
+    document.querySelectorAll('.js-indet-si-no').forEach(function (sel) {
+        sel.addEventListener('change', refreshTotal);
+    });
     refreshTotal();
 })();
+
 (function () {
     var wrap = document.getElementById('personas-wrap');
     var btn = document.getElementById('btn-add-persona');
     if (!wrap || !btn) return;
+
+    var barrioOptionsHtml = '<option value="">Seleccionar…</option>';
+    {% for b in barrios %}
+    barrioOptionsHtml += '<option value="{{ b.id }}">{{ b.nombre|e }}{% if b.codigo %} ({{ b.codigo|e }}){% endif %}</option>';
+    {% endfor %}
+
+    var tsBarrioOpts = {
+        maxOptions: null,
+        placeholder: 'Buscar barrio…',
+    };
+    function initBarrioSelect(sel) {
+        if (!sel || sel.tomselect) return;
+        new TomSelect(sel, tsBarrioOpts);
+    }
+
+    var mapaModalEl = document.getElementById('modalMapa');
+    var mapaModal = mapaModalEl ? new bootstrap.Modal(mapaModalEl) : null;
+    var mapaPicker = null;
+    var currentPickerInput = null;
+
+    if (mapaModalEl) {
+        mapaModalEl.addEventListener('shown.bs.modal', function () {
+            if (!mapaPicker && typeof L !== 'undefined') {
+                mapaPicker = L.map('mapaPickerMap').setView([-24.7859, -65.4114], 13);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(mapaPicker);
+                mapaPicker.on('click', function (e) {
+                    if (currentPickerInput) {
+                        currentPickerInput.value = e.latlng.lat.toFixed(6) + ', ' + e.latlng.lng.toFixed(6);
+                    }
+                });
+            }
+            if (mapaPicker) {
+                setTimeout(function () { mapaPicker.invalidateSize(); }, 150);
+            }
+        });
+    }
+
+    wrap.addEventListener('click', function (ev) {
+        var t = ev.target.closest('.js-mapa-btn');
+        if (!t || !mapaModal) return;
+        var row = t.closest('.persona-row');
+        if (!row) return;
+        currentPickerInput = row.querySelector('.js-persona-coords');
+        mapaModal.show();
+    });
+
     function addRow() {
-        var idx = wrap.querySelectorAll('.persona-row').length + 1;
         var div = document.createElement('div');
         div.className = 'col-12 persona-row border rounded p-2';
         div.innerHTML = '' +
-            '<div class="row g-2">' +
+            '<div class="row g-2 align-items-end">' +
             '<div class="col-md-3"><label class="form-label">Nombre</label><input class="form-control" name="persona_nombre[]"></div>' +
             '<div class="col-md-2"><label class="form-label">DNI</label><input class="form-control" name="persona_dni[]"></div>' +
+            '<div class="col-md-7"><label class="form-label">Domicilio</label><input class="form-control" name="persona_domicilio[]"></div>' +
+            '</div>' +
+            '<div class="row g-2 align-items-end mt-1">' +
+            '<div class="col-md-4"><label class="form-label">Barrio</label><select class="form-select ts-barrio" name="persona_barrio_id[]">' + barrioOptionsHtml + '</select></div>' +
+            '<div class="col-md-4"><label class="form-label">Latitud, longitud</label><input class="form-control js-persona-coords" name="persona_latlng[]" type="text" placeholder="-24.xxxxxx, -65.xxxxxx" title="Pegá desde Google Maps o usá el mapa"></div>' +
+            '<div class="col-md-1"><label class="form-label d-block">&nbsp;</label><button class="btn btn-outline-secondary btn-sm w-100 js-mapa-btn" type="button" title="Elegir en mapa"><i class="bi bi-geo-alt"></i></button></div>' +
             '<div class="col-md-2"><label class="form-label">Tipo</label><select class="form-select" name="persona_tipo[]"><option value="victima">Víctima</option><option value="denunciado">Acusado</option></select></div>' +
             '<div class="col-md-2"><label class="form-label">¿Notificar?</label><select class="form-select" name="persona_notificar[]"><option value="si">Sí</option><option value="no">No</option></select></div>' +
-            '<div class="col-md-3"><label class="form-label">Domicilio</label><input class="form-control" name="persona_domicilio[]"></div>' +
-            '<div class="col-md-3"><label class="form-label">Barrio</label><select class="form-select" name="persona_barrio_id[]"><option value="">Seleccionar...</option>{% for b in barrios %}<option value="{{ b.id }}">{{ b.nombre }}{% if b.codigo %} ({{ b.codigo }}){% endif %}</option>{% endfor %}</select></div>' +
-            '<div class="col-md-2"><label class="form-label">Latitud</label><input class="form-control" name="persona_lat[]" placeholder="-24.78"></div>' +
-            '<div class="col-md-2"><label class="form-label">Longitud</label><input class="form-control" name="persona_lng[]" placeholder="-65.41"></div>' +
-            '<div class="col-md-2 d-flex align-items-end"><button class="btn btn-outline-danger w-100 btn-sm js-del" type="button">Quitar</button></div>' +
+            '<div class="col-md-1"><label class="form-label d-block">&nbsp;</label><button class="btn btn-outline-danger w-100 btn-sm js-del" type="button">Quitar</button></div>' +
             '</div>';
         div.querySelector('.js-del').addEventListener('click', function () { div.remove(); });
         wrap.appendChild(div);
+        initBarrioSelect(div.querySelector('select.ts-barrio'));
     }
     btn.addEventListener('click', addRow);
     addRow();

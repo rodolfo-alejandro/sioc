@@ -3,6 +3,8 @@ Modelos para carga inteligente de oficios judiciales.
 """
 from datetime import datetime
 
+from sqlalchemy import UniqueConstraint
+
 from app.extensions import db
 
 
@@ -64,6 +66,40 @@ class ConsignaJudicial(db.Model):
         lazy="dynamic",
         cascade="all, delete-orphan",
     )
+    dias_por_tipo = db.relationship(
+        "ConsignaDiasPorTipo",
+        back_populates="consigna",
+        lazy="dynamic",
+        cascade="all, delete-orphan",
+    )
+
+
+class ConsignaDiasPorTipo(db.Model):
+    """
+    Días cargados por ítem del catálogo «Tipos de consigna» (normalizado por ID).
+    Permite filtros / agregaciones: JOIN con oficios_catalogo_tipos_consigna.
+    """
+
+    __tablename__ = "oficios_consigna_dias_tipo"
+    __table_args__ = (UniqueConstraint("consigna_id", "tipo_catalogo_id", name="uq_oficios_consigna_dias_tipo"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    consigna_id = db.Column(
+        db.Integer,
+        db.ForeignKey("oficios_consignas.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    tipo_catalogo_id = db.Column(
+        db.Integer,
+        db.ForeignKey("oficios_catalogo_tipos_consigna.id"),
+        nullable=False,
+        index=True,
+    )
+    dias = db.Column(db.Integer, nullable=False, default=0)
+
+    consigna = db.relationship("ConsignaJudicial", back_populates="dias_por_tipo")
+    tipo_catalogo = db.relationship("CatalogoTipoConsigna", backref=db.backref("dias_en_consignas", lazy="dynamic"))
 
 
 class ConsignaPersona(db.Model):

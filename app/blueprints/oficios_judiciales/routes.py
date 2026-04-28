@@ -4,6 +4,7 @@ import io
 import json
 import os
 import re
+import unicodedata
 from datetime import datetime, timedelta, date
 
 import pandas as pd
@@ -19,6 +20,7 @@ from app.models.oficios_judiciales import (
     CatalogoJuzgado,
     CatalogoTipoConsigna,
     CatalogoTipoMedida,
+    ConsignaDiasPorTipo,
     ConsignaDomicilio,
     ConsignaJudicial,
     ConsignaMedidaDetalle,
@@ -127,6 +129,7 @@ def _ensure_schema():
         CatalogoTipoConsigna,
         CatalogoFiscalia,
         CatalogoBarrio,
+        ConsignaDiasPorTipo,
     ):
         if model.__tablename__ not in existing:
             model.__table__.create(bind=db.engine)
@@ -249,6 +252,81 @@ def _derive_tipo_consigna_from_dias(d_fija: int, d_amb: int, d_pers: int) -> str
             return "ambulatoria"
         return "personalizada"
     return "mixta"
+
+
+def _ascii_lower_no_accent(s: str) -> str:
+    s = _clean(s).lower()
+    return "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn")
+
+
+def _slug_tipo_consigna_desde_nombre(nombre: str) -> str:
+    s = _ascii_lower_no_accent(nombre)
+    s = re.sub(r"[^a-z0-9]+", "_", s).strip("_")
+    return (s or "tipo")[:30]
+
+
+def _derive_tipo_consigna_desde_catalogo(
+    id_to_dias: dict[int, int], cat_by_id: dict[int, CatalogoTipoConsigna]
+) -> str:
+    active = [(cid, d) for cid, d in id_to_dias.items() if d and d > 0]
+    if not active:
+        return "indeterminada"
+    if len(active) > 1:
+        return "mixta"
+    cid = active[0][0]
+    cat = cat_by_id.get(cid)
+    if not cat:
+        return "indeterminada"
+    return _slug_tipo_consigna_desde_nombre(cat.nombre)
+
+
+def _es_tipo_indeterminada_catalogo(nombre: str) -> bool:
+    """Tipos cuyo nombre alude a medida indeterminada: Sí/No, no cantidad de días."""
+    return "indeterm" in _ascii_lower_no_accent(nombre)
+
+
+def _parse_lat_lng_text(s: str) -> tuple[float | None, float | None]:
+    t = _clean(s)
+    if not t:
+        return None, None
+    for sep in [",", ";", "\t"]:
+        if sep in t:
+            break
+    nums = re.findall(r"-?\d+\.?\d*", t)
+    if len(nums) >= 2:
+        try:
+            return float(nums[0]), float(nums[1])
+        except Exception:
+            return None, None
+    return None, None
+
+
+def _legacy_tres_columnas_desde_catalogo(
+    id_to_dias: dict[int, int], cat_by_id: dict[int, CatalogoTipoConsigna]
+) -> tuple[int, int, int]:
+    """Compatibilidad con columnas dias_fija / dias_ambulatoria / dias_personalizada."""
+    lf = la = lp = 0
+    for cid, d in id_to_dias.items():
+        if d <= 0:
+            continue
+        cat = cat_by_id.get(cid)
+        if not cat or _es_tipo_indeterminada_catalogo(cat.nombre):
+            continue
+        n = _ascii_lower_no_accent(cat.nombre)
+        if "ambulator" in n:
+            la += d
+        elif "personal" in n:
+            lp += d
+        elif n == "fija" or n.startswith("fija "):
+            lf += d
+    return lf, la, lp
+
+
+def _reemplazar_dias_por_tipo(consigna_id: int, id_to_dias: dict[int, int]) -> None:
+    ConsignaDiasPorTipo.query.filter_by(consigna_id=consigna_id).delete(synchronize_session=False)
+    for cid, d in id_to_dias.items():
+        if d and d > 0:
+            db.session.add(ConsignaDiasPorTipo(consigna_id=consigna_id, tipo_catalogo_id=cid, dias=d))
 
 
 def _file_order_key(filename: str):
@@ -1765,14 +1843,18 @@ def manual_reincidencias():
 def manual_nuevo():
     if not _can_upload():
         abort(403)
+    _ensure_schema()
     juzgados = CatalogoJuzgado.query.filter_by(activo=True).order_by(CatalogoJuzgado.nombre.asc()).all()
     tipos_medida = CatalogoTipoMedida.query.filter_by(activo=True).order_by(CatalogoTipoMedida.nombre.asc()).all()
     fiscalias = CatalogoFiscalia.query.filter_by(activo=True).order_by(CatalogoFiscalia.nombre.asc()).all()
     barrios = CatalogoBarrio.query.filter_by(activo=True).order_by(CatalogoBarrio.nombre.asc()).all()
+    tipos_consigna_catalogo = (
+        CatalogoTipoConsigna.query.filter_by(activo=True).order_by(CatalogoTipoConsigna.nombre.asc()).all()
+    )
     if request.method == "POST":
         exp = _clean(request.form.get("expediente"))
         caratula = _clean(request.form.get("caratula"))
-        estado = _clean(request.form.get("estado")) or "activa"
+        estado = "activa"
         tel_contacto = _clean(request.form.get("telefono_contacto"))
         juz_n = _names_from_catalog_ids(request.form.getlist("juzgado_id"), CatalogoJuzgado)
         tm_n = _names_from_catalog_ids(request.form.getlist("tipo_medida_id"), CatalogoTipoMedida)
@@ -1780,14 +1862,22 @@ def manual_nuevo():
         juz = " · ".join(juz_n) if juz_n else ""
         tipo_medida = " · ".join(tm_n) if tm_n else ""
         fiscalia = " · ".join(fis_n) if fis_n else ""
-        d_fija = _to_int_or_none(request.form.get("dias_fija"))
-        d_amb = _to_int_or_none(request.form.get("dias_ambulatoria"))
-        d_pers = _to_int_or_none(request.form.get("dias_personalizada"))
-        d_fija = 0 if d_fija is None else d_fija
-        d_amb = 0 if d_amb is None else d_amb
-        d_pers = 0 if d_pers is None else d_pers
-        cantidad_dias = d_fija + d_amb + d_pers
-        tipo_consigna = _derive_tipo_consigna_from_dias(d_fija, d_amb, d_pers)
+        cat_by_id = {c.id: c for c in tipos_consigna_catalogo}
+        id_to_dias: dict[int, int] = {}
+        for tc in tipos_consigna_catalogo:
+            v = _to_int_or_none(request.form.get(f"dias_por_tipo_{tc.id}"))
+            d = 0 if v is None else max(0, v)
+            if _es_tipo_indeterminada_catalogo(tc.nombre):
+                d = 1 if d else 0
+            id_to_dias[tc.id] = d
+        cantidad_dias = 0
+        for tc in tipos_consigna_catalogo:
+            d = id_to_dias.get(tc.id, 0)
+            if _es_tipo_indeterminada_catalogo(tc.nombre):
+                continue
+            cantidad_dias += d
+        tipo_consigna = _derive_tipo_consigna_desde_catalogo(id_to_dias, cat_by_id)
+        d_fija, d_amb, d_pers = _legacy_tres_columnas_desde_catalogo(id_to_dias, cat_by_id)
         exp_key = _expediente_key(exp)
         juz_key = _juzgado_key(juz) if juz else ""
 
@@ -1817,7 +1907,7 @@ def manual_nuevo():
                 fiscalia=fiscalia,
                 fiscalia_key=_fiscalia_key(fiscalia) if fiscalia else "",
                 telefono_contacto=tel_contacto,
-                fecha_oficio=_parse_date(_clean(request.form.get("fecha_oficio"))),
+                fecha_oficio=None,
                 fecha_notificacion=_parse_date(_clean(request.form.get("fecha_notificacion"))),
                 cantidad_dias=cantidad_dias if cantidad_dias else None,
                 dias_fija=d_fija if d_fija else None,
@@ -1842,9 +1932,8 @@ def manual_nuevo():
             row.dias_fija = d_fija or None
             row.dias_ambulatoria = d_amb or None
             row.dias_personalizada = d_pers or None
-            row.fecha_oficio = _parse_date(_clean(request.form.get("fecha_oficio"))) or row.fecha_oficio
             row.fecha_notificacion = _parse_date(_clean(request.form.get("fecha_notificacion"))) or row.fecha_notificacion
-            row.estado = estado or row.estado
+            row.estado = "activa"
 
         def _add_person_manual(nombre, dni, tipo, notificar):
             nom = _clean(nombre)
@@ -1908,22 +1997,35 @@ def manual_nuevo():
         p_tipos = request.form.getlist("persona_tipo[]")
         p_noti = request.form.getlist("persona_notificar[]")
         p_dom = request.form.getlist("persona_domicilio[]")
-        p_lat = request.form.getlist("persona_lat[]")
-        p_lng = request.form.getlist("persona_lng[]")
+        p_latlng = request.form.getlist("persona_latlng[]")
         p_barrio = request.form.getlist("persona_barrio_id[]")
-        total = max(len(p_nombres), len(p_dnis), len(p_tipos), len(p_noti), len(p_dom), len(p_lat), len(p_lng), len(p_barrio))
+        total = max(
+            len(p_nombres),
+            len(p_dnis),
+            len(p_tipos),
+            len(p_noti),
+            len(p_dom),
+            len(p_latlng),
+            len(p_barrio),
+        )
         for i in range(total):
             nombre = p_nombres[i] if i < len(p_nombres) else ""
             dni = p_dnis[i] if i < len(p_dnis) else ""
             tipo = _clean(p_tipos[i] if i < len(p_tipos) else "victima") or "victima"
             noti = p_noti[i] if i < len(p_noti) else "no"
             dom = p_dom[i] if i < len(p_dom) else ""
-            lat = p_lat[i] if i < len(p_lat) else ""
-            lng = p_lng[i] if i < len(p_lng) else ""
+            lat = lng = ""
+            if i < len(p_latlng):
+                la, ln = _parse_lat_lng_text(p_latlng[i])
+                if la is not None:
+                    lat = str(la)
+                if ln is not None:
+                    lng = str(ln)
             barr = p_barrio[i] if i < len(p_barrio) else ""
             _add_person_manual(nombre, dni, tipo, noti)
             _add_domicilio_manual(dom, tipo, lat, lng, barr)
 
+        _reemplazar_dias_por_tipo(row.id, id_to_dias)
         db.session.commit()
         flash("Consigna manual guardada.", "success")
         return redirect(url_for("oficios_judiciales.detalle", consigna_id=row.id))
@@ -1933,6 +2035,7 @@ def manual_nuevo():
         tipos_medida=tipos_medida,
         fiscalias=fiscalias,
         barrios=barrios,
+        tipos_consigna_catalogo=tipos_consigna_catalogo,
     )
 
 
@@ -2232,9 +2335,22 @@ def alertas():
 def detalle(consigna_id: int):
     if not _can_view():
         abort(403)
+    _ensure_schema()
     row = _q_base().filter(ConsignaJudicial.id == consigna_id).first_or_404()
     venc = _vencimiento_info(row)
-    return render_template("oficios_judiciales/detalle.html", row=row, venc=venc)
+    dias_por_tipo_detalle = (
+        db.session.query(ConsignaDiasPorTipo, CatalogoTipoConsigna)
+        .join(CatalogoTipoConsigna, ConsignaDiasPorTipo.tipo_catalogo_id == CatalogoTipoConsigna.id)
+        .filter(ConsignaDiasPorTipo.consigna_id == consigna_id)
+        .order_by(CatalogoTipoConsigna.nombre.asc())
+        .all()
+    )
+    return render_template(
+        "oficios_judiciales/detalle.html",
+        row=row,
+        venc=venc,
+        dias_por_tipo_detalle=dias_por_tipo_detalle,
+    )
 
 
 @bp.route("/export.csv")
