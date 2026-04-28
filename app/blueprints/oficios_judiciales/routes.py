@@ -223,6 +223,34 @@ def _fiscalia_key(v: str) -> str:
     return s
 
 
+def _names_from_catalog_ids(id_list, model_cls):
+    names = []
+    for raw in id_list or []:
+        rid = _to_int_or_none(raw)
+        if not rid:
+            continue
+        row = model_cls.query.get(rid)
+        if row and getattr(row, "nombre", None):
+            names.append(_clean(row.nombre))
+    return names
+
+
+def _derive_tipo_consigna_from_dias(d_fija: int, d_amb: int, d_pers: int) -> str:
+    has_f = d_fija > 0
+    has_a = d_amb > 0
+    has_p = d_pers > 0
+    n = sum(1 for x in (has_f, has_a, has_p) if x)
+    if n == 0:
+        return "indeterminada"
+    if n == 1:
+        if has_f:
+            return "fija"
+        if has_a:
+            return "ambulatoria"
+        return "personalizada"
+    return "mixta"
+
+
 def _file_order_key(filename: str):
     """
     Orden natural para archivos tipo "...Parte_1_de_2..." o similares.
@@ -1739,26 +1767,29 @@ def manual_nuevo():
         abort(403)
     juzgados = CatalogoJuzgado.query.filter_by(activo=True).order_by(CatalogoJuzgado.nombre.asc()).all()
     tipos_medida = CatalogoTipoMedida.query.filter_by(activo=True).order_by(CatalogoTipoMedida.nombre.asc()).all()
-    tipos_consigna = CatalogoTipoConsigna.query.filter_by(activo=True).order_by(CatalogoTipoConsigna.nombre.asc()).all()
     fiscalias = CatalogoFiscalia.query.filter_by(activo=True).order_by(CatalogoFiscalia.nombre.asc()).all()
     barrios = CatalogoBarrio.query.filter_by(activo=True).order_by(CatalogoBarrio.nombre.asc()).all()
     if request.method == "POST":
         exp = _clean(request.form.get("expediente"))
         caratula = _clean(request.form.get("caratula"))
-        tipo_consigna = _clean(request.form.get("tipo_consigna"))
         estado = _clean(request.form.get("estado")) or "activa"
-        fiscalia_id = _to_int_or_none(request.form.get("fiscalia_id"))
-        fiscalia_row = CatalogoFiscalia.query.get(fiscalia_id) if fiscalia_id else None
-        fiscalia = _clean(fiscalia_row.nombre if fiscalia_row else request.form.get("fiscalia_txt"))
         tel_contacto = _clean(request.form.get("telefono_contacto"))
-        juz_id = _to_int_or_none(request.form.get("juzgado_id"))
-        tipo_id = _to_int_or_none(request.form.get("tipo_medida_id"))
-        juz_row = CatalogoJuzgado.query.get(juz_id) if juz_id else None
-        tipo_row = CatalogoTipoMedida.query.get(tipo_id) if tipo_id else None
-        juz = _clean(juz_row.nombre if juz_row else request.form.get("juzgado_txt"))
-        tipo_medida = _clean(tipo_row.nombre if tipo_row else request.form.get("tipo_medida_txt"))
+        juz_n = _names_from_catalog_ids(request.form.getlist("juzgado_id"), CatalogoJuzgado)
+        tm_n = _names_from_catalog_ids(request.form.getlist("tipo_medida_id"), CatalogoTipoMedida)
+        fis_n = _names_from_catalog_ids(request.form.getlist("fiscalia_id"), CatalogoFiscalia)
+        juz = " · ".join(juz_n) if juz_n else ""
+        tipo_medida = " · ".join(tm_n) if tm_n else ""
+        fiscalia = " · ".join(fis_n) if fis_n else ""
+        d_fija = _to_int_or_none(request.form.get("dias_fija"))
+        d_amb = _to_int_or_none(request.form.get("dias_ambulatoria"))
+        d_pers = _to_int_or_none(request.form.get("dias_personalizada"))
+        d_fija = 0 if d_fija is None else d_fija
+        d_amb = 0 if d_amb is None else d_amb
+        d_pers = 0 if d_pers is None else d_pers
+        cantidad_dias = d_fija + d_amb + d_pers
+        tipo_consigna = _derive_tipo_consigna_from_dias(d_fija, d_amb, d_pers)
         exp_key = _expediente_key(exp)
-        juz_key = _juzgado_key(juz)
+        juz_key = _juzgado_key(juz) if juz else ""
 
         row = None
         if exp_key:
@@ -1784,14 +1815,14 @@ def manual_nuevo():
                 tipo_medida=tipo_medida,
                 tipo_consigna=tipo_consigna,
                 fiscalia=fiscalia,
-                fiscalia_key=_fiscalia_key(fiscalia),
+                fiscalia_key=_fiscalia_key(fiscalia) if fiscalia else "",
                 telefono_contacto=tel_contacto,
                 fecha_oficio=_parse_date(_clean(request.form.get("fecha_oficio"))),
                 fecha_notificacion=_parse_date(_clean(request.form.get("fecha_notificacion"))),
-                cantidad_dias=_to_int_or_none(request.form.get("cantidad_dias")),
-                dias_fija=_to_int_or_none(request.form.get("dias_fija")),
-                dias_ambulatoria=_to_int_or_none(request.form.get("dias_ambulatoria")),
-                dias_personalizada=_to_int_or_none(request.form.get("dias_personalizada")),
+                cantidad_dias=cantidad_dias if cantidad_dias else None,
+                dias_fija=d_fija if d_fija else None,
+                dias_ambulatoria=d_amb if d_amb else None,
+                dias_personalizada=d_pers if d_pers else None,
                 estado=estado,
                 fuente_principal="manual",
                 archivo_origen="carga_manual",
@@ -1799,14 +1830,21 @@ def manual_nuevo():
             db.session.add(row)
             db.session.flush()
         else:
-            row.juzgado = row.juzgado or juz
-            row.juzgado_key = row.juzgado_key or juz_key
-            row.caratula = row.caratula or caratula
-            row.tipo_medida = row.tipo_medida or tipo_medida
-            row.tipo_consigna = row.tipo_consigna or tipo_consigna
-            row.fiscalia = row.fiscalia or fiscalia
-            row.fiscalia_key = row.fiscalia_key or _fiscalia_key(fiscalia)
-            row.telefono_contacto = row.telefono_contacto or tel_contacto
+            row.juzgado = juz or row.juzgado
+            row.juzgado_key = juz_key or row.juzgado_key
+            row.caratula = caratula or row.caratula
+            row.tipo_medida = tipo_medida or row.tipo_medida
+            row.tipo_consigna = tipo_consigna
+            row.fiscalia = fiscalia or row.fiscalia
+            row.fiscalia_key = _fiscalia_key(fiscalia) if fiscalia else (row.fiscalia_key or "")
+            row.telefono_contacto = tel_contacto or row.telefono_contacto
+            row.cantidad_dias = cantidad_dias or None
+            row.dias_fija = d_fija or None
+            row.dias_ambulatoria = d_amb or None
+            row.dias_personalizada = d_pers or None
+            row.fecha_oficio = _parse_date(_clean(request.form.get("fecha_oficio"))) or row.fecha_oficio
+            row.fecha_notificacion = _parse_date(_clean(request.form.get("fecha_notificacion"))) or row.fecha_notificacion
+            row.estado = estado or row.estado
 
         def _add_person_manual(nombre, dni, tipo, notificar):
             nom = _clean(nombre)
@@ -1893,7 +1931,6 @@ def manual_nuevo():
         "oficios_judiciales/manual_form.html",
         juzgados=juzgados,
         tipos_medida=tipos_medida,
-        tipos_consigna=tipos_consigna,
         fiscalias=fiscalias,
         barrios=barrios,
     )

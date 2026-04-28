@@ -1,5 +1,11 @@
 {% extends "layouts/base.html" %}
 {% block title %}Nueva Consigna Manual{% endblock %}
+{% block extra_head %}
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+<style>
+  .ts-manual .ts-control { min-height: 38px; }
+</style>
+{% endblock %}
 {% block content %}
 <div class="page-header">
     <h1><i class="bi bi-pencil-square"></i> Nueva Consigna Manual VIF</h1>
@@ -13,12 +19,12 @@
     </div>
     <div class="col-md-4">
         <label class="form-label">Juzgado</label>
-        <select class="form-select" name="juzgado_id">
-            <option value="">Seleccionar...</option>
+        <select id="manual-juzgado" class="form-select ts-manual" name="juzgado_id" multiple autocomplete="off">
             {% for j in juzgados %}
             <option value="{{ j.id }}">{{ j.nombre }}</option>
             {% endfor %}
         </select>
+        <div class="form-text">Varias opciones; buscá escribiendo.</div>
     </div>
     <div class="col-md-5">
         <label class="form-label">Carátula</label>
@@ -27,40 +33,19 @@
 
     <div class="col-md-4">
         <label class="form-label">Tipo medida</label>
-        <select class="form-select" name="tipo_medida_id">
-            <option value="">Seleccionar...</option>
+        <select id="manual-tipo-medida" class="form-select ts-manual" name="tipo_medida_id" multiple autocomplete="off">
             {% for t in tipos_medida %}
             <option value="{{ t.id }}">{{ t.nombre }}</option>
             {% endfor %}
         </select>
     </div>
-    <div class="col-md-2">
-        <label class="form-label">Tipo consigna</label>
-        <select class="form-select" name="tipo_consigna">
-            {% for tc in tipos_consigna %}
-            <option value="{{ tc.nombre|lower }}">{{ tc.nombre }}</option>
-            {% endfor %}
-            {% if not tipos_consigna %}
-            <option value="fija">Fija</option>
-            <option value="ambulatoria">Ambulatoria</option>
-            <option value="personalizada">Personalizada</option>
-            <option value="indeterminada">Indeterminada</option>
-            <option value="mixta">Mixta</option>
-            {% endif %}
-        </select>
-    </div>
-    <div class="col-md-3">
+    <div class="col-md-5">
         <label class="form-label">Fiscalía</label>
-        <select class="form-select" name="fiscalia_id">
-            <option value="">Seleccionar...</option>
+        <select id="manual-fiscalia" class="form-select ts-manual" name="fiscalia_id" multiple autocomplete="off">
             {% for f in fiscalias %}
             <option value="{{ f.id }}">{{ f.nombre }}</option>
             {% endfor %}
         </select>
-    </div>
-    <div class="col-md-3">
-        <label class="form-label">Fiscalía (texto libre)</label>
-        <input class="form-control" name="fiscalia_txt" placeholder="Si no está en catálogo">
     </div>
     <div class="col-md-2"><label class="form-label">Fecha oficio</label><input class="form-control" type="date" name="fecha_oficio"></div>
     <div class="col-md-2"><label class="form-label">Fecha notificación</label><input class="form-control" type="date" name="fecha_notificacion"></div>
@@ -72,10 +57,10 @@
         </select>
     </div>
 
-    <div class="col-md-2"><label class="form-label">Días fija</label><input class="form-control" name="dias_fija"></div>
-    <div class="col-md-2"><label class="form-label">Días ambulatoria</label><input class="form-control" name="dias_ambulatoria"></div>
-    <div class="col-md-2"><label class="form-label">Días personalizada</label><input class="form-control" name="dias_personalizada"></div>
-    <div class="col-md-2"><label class="form-label">Días total</label><input class="form-control" name="cantidad_dias"></div>
+    <div class="col-md-2"><label class="form-label">Días fija</label><input class="form-control js-dia-parte" type="number" min="0" step="1" name="dias_fija" id="manual-dias-fija" value=""></div>
+    <div class="col-md-2"><label class="form-label">Días ambulatoria</label><input class="form-control js-dia-parte" type="number" min="0" step="1" name="dias_ambulatoria" id="manual-dias-amb"></div>
+    <div class="col-md-2"><label class="form-label">Días personalizada</label><input class="form-control js-dia-parte" type="number" min="0" step="1" name="dias_personalizada" id="manual-dias-pers"></div>
+    <div class="col-md-2"><label class="form-label">Días total</label><input class="form-control bg-light" type="text" id="manual-dias-total" value="0" readonly autocomplete="off" title="Suma de días fija, ambulatoria y personalizada"></div>
     <div class="col-md-3"><label class="form-label">Teléfono contacto</label><input class="form-control" name="telefono_contacto"></div>
 
     <div class="col-12">
@@ -97,7 +82,43 @@
 </form>
 {% endblock %}
 {% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
 <script>
+(function () {
+    var tsOpts = {
+        plugins: ['remove_button'],
+        maxOptions: null,
+        placeholder: 'Buscar…',
+        hideSelected: true,
+    };
+    if (document.getElementById('manual-juzgado')) {
+        new TomSelect('#manual-juzgado', tsOpts);
+    }
+    if (document.getElementById('manual-tipo-medida')) {
+        new TomSelect('#manual-tipo-medida', tsOpts);
+    }
+    if (document.getElementById('manual-fiscalia')) {
+        new TomSelect('#manual-fiscalia', tsOpts);
+    }
+
+    function parseDia(v) {
+        if (v === '' || v === null || v === undefined) return 0;
+        var n = parseInt(String(v).trim(), 10);
+        return isNaN(n) || n < 0 ? 0 : n;
+    }
+    function refreshTotal() {
+        var a = parseDia(document.getElementById('manual-dias-fija') && document.getElementById('manual-dias-fija').value);
+        var b = parseDia(document.getElementById('manual-dias-amb') && document.getElementById('manual-dias-amb').value);
+        var c = parseDia(document.getElementById('manual-dias-pers') && document.getElementById('manual-dias-pers').value);
+        var el = document.getElementById('manual-dias-total');
+        if (el) el.value = String(a + b + c);
+    }
+    document.querySelectorAll('.js-dia-parte').forEach(function (inp) {
+        inp.addEventListener('input', refreshTotal);
+        inp.addEventListener('change', refreshTotal);
+    });
+    refreshTotal();
+})();
 (function () {
     var wrap = document.getElementById('personas-wrap');
     var btn = document.getElementById('btn-add-persona');
