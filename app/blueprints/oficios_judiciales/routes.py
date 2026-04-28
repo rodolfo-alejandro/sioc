@@ -1763,8 +1763,36 @@ def manual_listado():
     q = _q_base().filter(ConsignaJudicial.fuente_principal == "manual")
     if estados:
         q = q.filter(ConsignaJudicial.estado.in_(estados))
+    catalogo_tipos = sorted(
+        CatalogoTipoConsigna.query.filter_by(activo=True).all(),
+        key=_orden_cronologia_tipo_consigna,
+    )
+    tipo_slug_to_ids = {}
+    for tc in catalogo_tipos:
+        slug = _slug_tipo_consigna_desde_nombre(tc.nombre)
+        tipo_slug_to_ids.setdefault(slug, []).append(tc.id)
+
     if tipos_sel:
-        q = q.filter(ConsignaJudicial.tipo_consigna.in_(tipos_sel))
+        conds = []
+        ids_cats = []
+        for ts in tipos_sel:
+            ids_cats.extend(tipo_slug_to_ids.get(ts, []))
+        if ids_cats:
+            sq_tipo = (
+                db.session.query(ConsignaDiasPorTipo.consigna_id)
+                .filter(
+                    ConsignaDiasPorTipo.tipo_catalogo_id.in_(ids_cats),
+                    ConsignaDiasPorTipo.dias > 0,
+                )
+                .subquery()
+            )
+            conds.append(ConsignaJudicial.id.in_(sq_tipo))
+        if "mixta" in tipos_sel:
+            conds.append(ConsignaJudicial.tipo_consigna == "mixta")
+        if "indeterminada" in tipos_sel:
+            conds.append(ConsignaJudicial.tipo_consigna == "indeterminada")
+        if conds:
+            q = q.filter(or_(*conds))
     if juzgados_sel:
         q = q.filter(or_(*[ConsignaJudicial.juzgado.ilike(f"%{v}%") for v in juzgados_sel]))
     if medidas_sel:
@@ -1905,15 +1933,17 @@ def manual_listado():
                 etapa = {"slug": "personalizada", "nombre": "Personalizada", "icono": "bi-person-circle"}
             etapa_actual_map[r.id] = etapa
 
-    tipos_consigna = [
-        r[0]
-        for r in _q_base()
-        .filter(ConsignaJudicial.fuente_principal == "manual")
-        .with_entities(ConsignaJudicial.tipo_consigna)
-        .distinct()
-        .all()
-        if r[0]
-    ]
+    tipos_consigna = []
+    seen_tipos = set()
+    for tc in catalogo_tipos:
+        slug = _slug_tipo_consigna_desde_nombre(tc.nombre)
+        if slug in seen_tipos:
+            continue
+        tipos_consigna.append({"value": slug, "label": tc.nombre})
+        seen_tipos.add(slug)
+    for extra in ("mixta",):
+        if extra not in seen_tipos:
+            tipos_consigna.append({"value": extra, "label": extra.title()})
     juzgados_opts = [x.nombre for x in CatalogoJuzgado.query.filter_by(activo=True).order_by(CatalogoJuzgado.nombre.asc()).all()]
     medidas_opts = [x.nombre for x in CatalogoTipoMedida.query.filter_by(activo=True).order_by(CatalogoTipoMedida.nombre.asc()).all()]
     fiscalias_opts = [x.nombre for x in CatalogoFiscalia.query.filter_by(activo=True).order_by(CatalogoFiscalia.nombre.asc()).all()]

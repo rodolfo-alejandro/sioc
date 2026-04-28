@@ -52,7 +52,7 @@
                 <label class="form-label form-label-sm mb-1"><i class="bi bi-tags filtro-icon"></i> Tipo consigna</label>
                 <select id="f-tipo" class="form-select form-select-sm" name="tipo_consigna" multiple>
                     {% for tc in tipos_consigna %}
-                    <option value="{{ tc }}" {{ 'selected' if tc in selected.getlist('tipo_consigna') else '' }}>{{ tc|title }}</option>
+                    <option value="{{ tc.value }}" {{ 'selected' if tc.value in selected.getlist('tipo_consigna') else '' }}>{{ tc.label }}</option>
                     {% endfor %}
                 </select>
             </div>
