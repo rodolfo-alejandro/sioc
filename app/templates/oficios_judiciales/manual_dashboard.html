@@ -40,6 +40,35 @@
     <div class="col-md-4"><div class="card"><div class="card-body"><small class="text-muted">Finalizadas</small><h3 class="mb-0 text-secondary">{{ finalizadas }}</h3></div></div></div>
 </div>
 
+<div class="row g-3 mb-3">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <small class="text-muted">Consignas mes actual ({{ cur_month_key }})</small>
+                <h3 class="mb-0">{{ total_mes_actual }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <small class="text-muted">Consignas mes anterior ({{ prev_month_key }})</small>
+                <h3 class="mb-0">{{ total_mes_anterior }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <small class="text-muted">Variación mensual (%)</small>
+                <h3 class="mb-0 {% if variacion_mensual_pct > 0 %}text-success{% elif variacion_mensual_pct < 0 %}text-danger{% else %}text-secondary{% endif %}">
+                    {% if variacion_mensual_pct > 0 %}+{% endif %}{{ variacion_mensual_pct }}%
+                </h3>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="row g-3">
     <div class="col-12">
         <div class="card">

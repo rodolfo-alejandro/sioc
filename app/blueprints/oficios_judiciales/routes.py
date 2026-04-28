@@ -2185,11 +2185,29 @@ def manual_dashboard():
         .all()
     )
     por_barrio = [(_clean(r[0]), int(r[1])) for r in por_barrio_q if _clean(r[0])]
+    today = datetime.utcnow().date()
+    cur_month_key = f"{today.year:04d}-{today.month:02d}"
+    prev_year = today.year if today.month > 1 else today.year - 1
+    prev_month = today.month - 1 if today.month > 1 else 12
+    prev_month_key = f"{prev_year:04d}-{prev_month:02d}"
+    total_mes_actual = int(by_mes.get(cur_month_key, 0))
+    total_mes_anterior = int(by_mes.get(prev_month_key, 0))
+    if total_mes_anterior > 0:
+        variacion_mensual_pct = round(((total_mes_actual - total_mes_anterior) / total_mes_anterior) * 100.0, 1)
+    elif total_mes_actual > 0:
+        variacion_mensual_pct = 100.0
+    else:
+        variacion_mensual_pct = 0.0
     return render_template(
         "oficios_judiciales/manual_dashboard.html",
         total=total,
         activas=activas,
         finalizadas=finalizadas,
+        total_mes_actual=total_mes_actual,
+        total_mes_anterior=total_mes_anterior,
+        variacion_mensual_pct=variacion_mensual_pct,
+        cur_month_key=cur_month_key,
+        prev_month_key=prev_month_key,
         por_tipo=por_tipo,
         por_tipo_slug_map=por_tipo_slug_map,
         por_mes=por_mes,
