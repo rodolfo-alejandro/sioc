@@ -207,6 +207,13 @@
                     {% else %}
                     <span class="badge text-bg-secondary"><i class="bi bi-stop-circle"></i> Inactiva / Finalizada</span>
                     {% endif %}
+                    {% if etapa.get('cumplidas') %}
+                    <div class="small text-muted mt-1">
+                        {% for n in etapa.get('cumplidas') %}
+                        <span style="text-decoration: line-through;">{{ n }}</span>{% if not loop.last %} · {% endif %}
+                        {% endfor %}
+                    </div>
+                    {% endif %}
                 </td>
                 <td class="text-end">
                     {% if coords_map.get(r.id) %}
