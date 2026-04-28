@@ -1748,29 +1748,137 @@ def cargar():
 def manual_listado():
     if not _can_view():
         abort(403)
-    estado = _clean(request.args.get("estado")) or "activa"
+    estados = [e for e in request.args.getlist("estado") if e in ("activa", "finalizada")]
+    if not estados and _clean(request.args.get("estado")) not in ("todas", ""):
+        estados = ["activa"]
+    if not estados and _clean(request.args.get("estado")) != "todas":
+        estados = ["activa"]
     qtxt = _clean(request.args.get("q"))
-    tipo_consigna = _clean(request.args.get("tipo_consigna"))
+    tipos_sel = [_clean(x) for x in request.args.getlist("tipo_consigna") if _clean(x)]
+    juzgados_sel = [_clean(x) for x in request.args.getlist("juzgado") if _clean(x)]
+    medidas_sel = [_clean(x) for x in request.args.getlist("tipo_medida") if _clean(x)]
+    fiscalias_sel = [_clean(x) for x in request.args.getlist("fiscalia") if _clean(x)]
+    barrios_sel = [_clean(x) for x in request.args.getlist("barrio") if _clean(x)]
+
     q = _q_base().filter(ConsignaJudicial.fuente_principal == "manual")
-    if estado == "activa":
-        q = q.filter(ConsignaJudicial.estado == "activa")
-    elif estado == "finalizada":
-        q = q.filter(ConsignaJudicial.estado == "finalizada")
+    if estados:
+        q = q.filter(ConsignaJudicial.estado.in_(estados))
+    if tipos_sel:
+        q = q.filter(ConsignaJudicial.tipo_consigna.in_(tipos_sel))
+    if juzgados_sel:
+        q = q.filter(or_(*[ConsignaJudicial.juzgado.ilike(f"%{v}%") for v in juzgados_sel]))
+    if medidas_sel:
+        q = q.filter(or_(*[ConsignaJudicial.tipo_medida.ilike(f"%{v}%") for v in medidas_sel]))
+    if fiscalias_sel:
+        q = q.filter(or_(*[ConsignaJudicial.fiscalia.ilike(f"%{v}%") for v in fiscalias_sel]))
+    if barrios_sel:
+        sq_bar = (
+            db.session.query(ConsignaDomicilio.consigna_id)
+            .filter(or_(*[ConsignaDomicilio.barrio_nombre.ilike(f"%{b}%") for b in barrios_sel]))
+            .subquery()
+        )
+        q = q.filter(ConsignaJudicial.id.in_(sq_bar))
     if qtxt:
         pat = f"%{qtxt}%"
         eq = _expediente_key(qtxt)
+        sq_per = (
+            db.session.query(ConsignaPersona.consigna_id)
+            .filter(or_(ConsignaPersona.nombre.ilike(pat), ConsignaPersona.dni.ilike(pat)))
+            .subquery()
+        )
+        sq_dom = (
+            db.session.query(ConsignaDomicilio.consigna_id)
+            .filter(
+                or_(
+                    ConsignaDomicilio.direccion.ilike(pat),
+                    ConsignaDomicilio.barrio_nombre.ilike(pat),
+                )
+            )
+            .subquery()
+        )
         q = q.filter(
             or_(
                 ConsignaJudicial.expediente_key == eq if eq else false(),
                 ConsignaJudicial.expediente.ilike(pat),
                 ConsignaJudicial.caratula.ilike(pat),
+                ConsignaJudicial.juzgado.ilike(pat),
+                ConsignaJudicial.tipo_medida.ilike(pat),
+                ConsignaJudicial.tipo_consigna.ilike(pat),
+                ConsignaJudicial.fiscalia.ilike(pat),
+                ConsignaJudicial.seps_ingreso.ilike(pat),
+                ConsignaJudicial.seps_salida.ilike(pat),
+                ConsignaJudicial.id.in_(sq_per),
+                ConsignaJudicial.id.in_(sq_dom),
             )
         )
-    if tipo_consigna:
-        q = q.filter(ConsignaJudicial.tipo_consigna == tipo_consigna)
+
     rows = q.order_by(ConsignaJudicial.created_at.desc()).limit(300).all()
-    tipos_consigna = [r[0] for r in q.with_entities(ConsignaJudicial.tipo_consigna).distinct().all() if r[0]]
-    return render_template("oficios_judiciales/manual_listado.html", rows=rows, selected=request.args, tipos_consigna=tipos_consigna)
+    row_ids = [r.id for r in rows]
+    personas_map = {}
+    domicilios_map = {}
+    coords_map = {}
+    progreso_map = {}
+    today = datetime.utcnow().date()
+    if row_ids:
+        pers = (
+            ConsignaPersona.query.filter(ConsignaPersona.consigna_id.in_(row_ids))
+            .order_by(ConsignaPersona.id.asc())
+            .all()
+        )
+        for p in pers:
+            bag = personas_map.setdefault(p.consigna_id, {"victima": None, "denunciado": None})
+            if p.tipo == "victima" and bag["victima"] is None:
+                bag["victima"] = p
+            elif p.tipo == "denunciado" and bag["denunciado"] is None:
+                bag["denunciado"] = p
+        doms = (
+            ConsignaDomicilio.query.filter(ConsignaDomicilio.consigna_id.in_(row_ids))
+            .order_by(ConsignaDomicilio.id.asc())
+            .all()
+        )
+        for d in doms:
+            if d.consigna_id not in domicilios_map:
+                domicilios_map[d.consigna_id] = d
+            if d.latitud is not None and d.longitud is not None and d.consigna_id not in coords_map:
+                coords_map[d.consigna_id] = (d.latitud, d.longitud)
+        for r in rows:
+            total = int(r.cantidad_dias or 0)
+            if r.fecha_notificacion and total > 0:
+                trans = max(0, (today - r.fecha_notificacion).days)
+                if trans > total:
+                    trans = total
+                progreso_map[r.id] = {"transcurridos": trans, "total": total}
+            else:
+                progreso_map[r.id] = {"transcurridos": 0, "total": total}
+
+    tipos_consigna = [
+        r[0]
+        for r in _q_base()
+        .filter(ConsignaJudicial.fuente_principal == "manual")
+        .with_entities(ConsignaJudicial.tipo_consigna)
+        .distinct()
+        .all()
+        if r[0]
+    ]
+    juzgados_opts = [x.nombre for x in CatalogoJuzgado.query.filter_by(activo=True).order_by(CatalogoJuzgado.nombre.asc()).all()]
+    medidas_opts = [x.nombre for x in CatalogoTipoMedida.query.filter_by(activo=True).order_by(CatalogoTipoMedida.nombre.asc()).all()]
+    fiscalias_opts = [x.nombre for x in CatalogoFiscalia.query.filter_by(activo=True).order_by(CatalogoFiscalia.nombre.asc()).all()]
+    barrios_opts = [x.nombre for x in CatalogoBarrio.query.filter_by(activo=True).order_by(CatalogoBarrio.nombre.asc()).all()]
+
+    return render_template(
+        "oficios_judiciales/manual_listado.html",
+        rows=rows,
+        selected=request.args,
+        tipos_consigna=tipos_consigna,
+        juzgados_opts=juzgados_opts,
+        medidas_opts=medidas_opts,
+        fiscalias_opts=fiscalias_opts,
+        barrios_opts=barrios_opts,
+        personas_map=personas_map,
+        domicilios_map=domicilios_map,
+        coords_map=coords_map,
+        progreso_map=progreso_map,
+    )
 
 
 @bp.route("/manual/dashboard")

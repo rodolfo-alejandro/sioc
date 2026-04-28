@@ -1,5 +1,20 @@
 {% extends "layouts/base.html" %}
 {% block title %}Consignas Manuales VIF{% endblock %}
+{% block extra_head %}
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+<style>
+  .filtro-icon { width: 1rem; text-align: center; }
+  .row-soft-vencida { background: rgba(220, 53, 69, 0.06); }
+  .row-soft-por-vencer { background: rgba(255, 193, 7, 0.08); }
+  .row-soft-vigente { background: rgba(25, 135, 84, 0.06); }
+  .tipo-pill { border-radius: 999px; padding: .15rem .55rem; font-weight: 600; font-size: .75rem; display: inline-block; }
+  .tipo-mixta { color: #6f42c1; background: rgba(111, 66, 193, 0.10); }
+  .tipo-fija { color: #0d6efd; background: rgba(13, 110, 253, 0.12); }
+  .tipo-ambulatoria { color: #198754; background: rgba(25, 135, 84, 0.12); }
+  .tipo-personalizada { color: #fd7e14; background: rgba(253, 126, 20, 0.12); }
+  .tipo-indeterminada { color: #6c757d; background: rgba(108, 117, 125, 0.12); }
+</style>
+{% endblock %}
 {% block content %}
 <div class="page-header">
     <h1><i class="bi bi-journal-check"></i> Consignas Manuales VIF</h1>
@@ -16,25 +31,59 @@
 <div class="card mb-3">
     <div class="card-body">
         <form method="GET" class="row g-2">
+            {% set est_sel = selected.getlist('estado') %}
             <div class="col-md-3">
-                <select class="form-select form-select-sm" name="estado">
-                    <option value="activa" {{ 'selected' if selected.get('estado','activa') == 'activa' else '' }}>Solo activas</option>
-                    <option value="finalizada" {{ 'selected' if selected.get('estado') == 'finalizada' else '' }}>Solo finalizadas</option>
-                    <option value="todas" {{ 'selected' if selected.get('estado') == 'todas' else '' }}>Todas</option>
+                <label class="form-label form-label-sm mb-1"><i class="bi bi-check2-circle filtro-icon"></i> Estado</label>
+                <select id="f-estado" class="form-select form-select-sm" name="estado" multiple>
+                    <option value="activa" {{ 'selected' if 'activa' in est_sel or (not est_sel and selected.get('estado','activa') != 'todas') else '' }}>Activa</option>
+                    <option value="finalizada" {{ 'selected' if 'finalizada' in est_sel else '' }}>Finalizada</option>
                 </select>
             </div>
             <div class="col-md-4">
-                <input class="form-control form-control-sm" name="q" placeholder="Expediente / carátula" value="{{ selected.get('q','') }}">
+                <label class="form-label form-label-sm mb-1"><i class="bi bi-search filtro-icon"></i> Búsqueda global</label>
+                <input class="form-control form-control-sm" name="q" placeholder="Expediente, SEPS, persona, domicilio, barrio, carátula..." value="{{ selected.get('q','') }}">
             </div>
             <div class="col-md-3">
-                <select class="form-select form-select-sm" name="tipo_consigna">
-                    <option value="">Tipo de consigna (todas)</option>
+                <label class="form-label form-label-sm mb-1"><i class="bi bi-tags filtro-icon"></i> Tipo consigna</label>
+                <select id="f-tipo" class="form-select form-select-sm" name="tipo_consigna" multiple>
                     {% for tc in tipos_consigna %}
-                    <option value="{{ tc }}" {{ 'selected' if selected.get('tipo_consigna') == tc else '' }}>{{ tc|title }}</option>
+                    <option value="{{ tc }}" {{ 'selected' if tc in selected.getlist('tipo_consigna') else '' }}>{{ tc|title }}</option>
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-3 d-flex gap-2">
+            <div class="col-md-2">
+                <label class="form-label form-label-sm mb-1"><i class="bi bi-building filtro-icon"></i> Juzgado</label>
+                <select id="f-juzgado" class="form-select form-select-sm" name="juzgado" multiple>
+                    {% for x in juzgados_opts %}
+                    <option value="{{ x }}" {{ 'selected' if x in selected.getlist('juzgado') else '' }}>{{ x }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label form-label-sm mb-1"><i class="bi bi-list-check filtro-icon"></i> Tipo medida</label>
+                <select id="f-medida" class="form-select form-select-sm" name="tipo_medida" multiple>
+                    {% for x in medidas_opts %}
+                    <option value="{{ x }}" {{ 'selected' if x in selected.getlist('tipo_medida') else '' }}>{{ x }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label form-label-sm mb-1"><i class="bi bi-bank2 filtro-icon"></i> Fiscalía</label>
+                <select id="f-fiscalia" class="form-select form-select-sm" name="fiscalia" multiple>
+                    {% for x in fiscalias_opts %}
+                    <option value="{{ x }}" {{ 'selected' if x in selected.getlist('fiscalia') else '' }}>{{ x }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label form-label-sm mb-1"><i class="bi bi-geo-alt filtro-icon"></i> Barrio</label>
+                <select id="f-barrio" class="form-select form-select-sm" name="barrio" multiple>
+                    {% for x in barrios_opts %}
+                    <option value="{{ x }}" {{ 'selected' if x in selected.getlist('barrio') else '' }}>{{ x }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-12 d-flex gap-2">
                 <button class="btn btn-outline-primary btn-sm" type="submit">Aplicar</button>
                 <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('oficios_judiciales.manual_listado') }}">Limpiar</a>
             </div>
@@ -46,19 +95,74 @@
     <table class="table table-sm align-middle">
         <thead>
             <tr>
-                <th>ID</th><th>Expediente</th><th>Juzgado</th><th>Tipo medida</th><th>Consigna</th><th>Estado</th><th></th>
+                <th>ID</th>
+                <th>Expediente / SEPS</th>
+                <th>Persona y domicilio</th>
+                <th>Medida en curso</th>
+                <th>Progreso</th>
+                <th>Estado</th>
+                <th></th>
             </tr>
         </thead>
         <tbody>
             {% for r in rows %}
-            <tr>
+            {% set v = personas_map.get(r.id, {}) %}
+            {% set d = domicilios_map.get(r.id) %}
+            {% set pr = progreso_map.get(r.id, {'transcurridos': 0, 'total': 0}) %}
+            {% set tipo_cls = 'tipo-indeterminada' %}
+            {% if (r.tipo_consigna or '') == 'mixta' %}{% set tipo_cls = 'tipo-mixta' %}{% endif %}
+            {% if 'fija' in (r.tipo_consigna or '') %}{% set tipo_cls = 'tipo-fija' %}{% endif %}
+            {% if 'ambulator' in (r.tipo_consigna or '') %}{% set tipo_cls = 'tipo-ambulatoria' %}{% endif %}
+            {% if 'personal' in (r.tipo_consigna or '') %}{% set tipo_cls = 'tipo-personalizada' %}{% endif %}
+            {% set row_cls = '' %}
+            {% if r.estado == 'finalizada' %}
+              {% set row_cls = 'row-soft-vencida' %}
+            {% elif pr.total > 0 and pr.transcurridos >= pr.total %}
+              {% set row_cls = 'row-soft-vencida' %}
+            {% elif pr.total > 0 and (pr.total - pr.transcurridos) <= 3 %}
+              {% set row_cls = 'row-soft-por-vencer' %}
+            {% elif r.estado == 'activa' %}
+              {% set row_cls = 'row-soft-vigente' %}
+            {% endif %}
+            <tr class="{{ row_cls }}">
                 <td>{{ r.id }}</td>
-                <td>{{ r.expediente or '—' }}</td>
-                <td>{{ r.juzgado or '—' }}</td>
-                <td>{{ r.tipo_medida or '—' }}</td>
-                <td>{{ r.tipo_consigna or '—' }}</td>
-                <td>{{ r.estado }}</td>
-                <td><a class="btn btn-sm btn-outline-primary" href="{{ url_for('oficios_judiciales.detalle', consigna_id=r.id) }}">Detalle</a></td>
+                <td>
+                    <div><strong>{{ r.expediente or '—' }}</strong></div>
+                    <div class="small text-muted">SEPS: {{ r.seps_ingreso or '—' }} / {{ r.seps_salida or '—' }}</div>
+                </td>
+                <td>
+                    <div class="small"><i class="bi bi-person-heart"></i> Víctima: {{ v.get('victima').nombre if v.get('victima') else '—' }}</div>
+                    <div class="small"><i class="bi bi-person-badge"></i> Acusado: {{ v.get('denunciado').nombre if v.get('denunciado') else '—' }}</div>
+                    <div class="small text-muted"><i class="bi bi-house"></i> {{ d.direccion if d else '—' }}</div>
+                </td>
+                <td>
+                    <div><span class="tipo-pill {{ tipo_cls }}">{{ (r.tipo_consigna or 'indeterminada')|title }}</span></div>
+                    <div class="small text-muted">{{ r.tipo_medida or '—' }}</div>
+                </td>
+                <td>
+                    {% if pr.total > 0 %}
+                    <div class="small"><strong>{{ pr.transcurridos }}</strong> / {{ pr.total }} días</div>
+                    <div class="progress" style="height: 6px;">
+                        <div class="progress-bar" role="progressbar" style="width: {{ ((pr.transcurridos * 100 / pr.total) if pr.total > 0 else 0)|round(0, 'floor') }}%"></div>
+                    </div>
+                    {% else %}
+                    <span class="text-muted small">Sin plazo en días</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if r.estado == 'activa' %}
+                    <span class="badge text-bg-success"><i class="bi bi-check2-circle"></i> Activa</span>
+                    {% else %}
+                    <span class="badge text-bg-secondary"><i class="bi bi-stop-circle"></i> Finalizada</span>
+                    {% endif %}
+                </td>
+                <td class="text-end">
+                    {% if coords_map.get(r.id) %}
+                    {% set c = coords_map.get(r.id) %}
+                    <a class="btn btn-sm btn-outline-success mb-1" href="https://www.google.com/maps?q={{ c[0] }},{{ c[1] }}" target="_blank" rel="noopener"><i class="bi bi-geo-alt"></i></a>
+                    {% endif %}
+                    <a class="btn btn-sm btn-outline-primary mb-1" href="{{ url_for('oficios_judiciales.detalle', consigna_id=r.id) }}"><i class="bi bi-eye"></i></a>
+                </td>
             </tr>
             {% else %}
             <tr><td colspan="7" class="text-center text-muted">Sin consignas manuales.</td></tr>
@@ -66,4 +170,22 @@
         </tbody>
     </table>
 </div>
+{% endblock %}
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+<script>
+  (function () {
+    var ids = ['#f-estado', '#f-tipo', '#f-juzgado', '#f-medida', '#f-fiscalia', '#f-barrio'];
+    ids.forEach(function (id) {
+      var el = document.querySelector(id);
+      if (!el) return;
+      new TomSelect(el, {
+        plugins: ['remove_button'],
+        maxOptions: null,
+        hideSelected: true,
+        placeholder: 'Buscar...'
+      });
+    });
+  })();
+</script>
 {% endblock %}
