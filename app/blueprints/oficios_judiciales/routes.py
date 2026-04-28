@@ -2076,11 +2076,70 @@ def manual_dashboard():
     finalizadas = len([r for r in rows if _manual_estado_operativo(r) == "finalizada"])
     by_tipo = {}
     by_mes = {}
+    by_fecha = {}
     by_juzgado = {}
     by_fiscalia = {}
     by_estado = {"Activa": 0, "Finalizada": 0}
+    row_ids = [r.id for r in rows]
+    dias_por_consigna = {}
+    if row_ids:
+        dias_pairs = (
+            db.session.query(ConsignaDiasPorTipo, CatalogoTipoConsigna)
+            .join(CatalogoTipoConsigna, ConsignaDiasPorTipo.tipo_catalogo_id == CatalogoTipoConsigna.id)
+            .filter(ConsignaDiasPorTipo.consigna_id.in_(row_ids))
+            .all()
+        )
+        for dp, cat in dias_pairs:
+            dias_por_consigna.setdefault(dp.consigna_id, []).append((dp, cat))
+
+    def _etapa_dashboard(r: ConsignaJudicial) -> str:
+        pares = list(dias_por_consigna.get(r.id, []))
+        pares.sort(key=lambda p: _orden_cronologia_tipo_consigna(p[1]))
+        today = datetime.utcnow().date()
+        total = int(r.cantidad_dias or 0)
+        trans = 0
+        if r.fecha_notificacion and total > 0:
+            trans = max(0, (today - r.fecha_notificacion).days)
+            if trans > total:
+                trans = total
+        has_indet = False
+        tramos = []
+        for dp, cat in pares:
+            n = _ascii_lower_no_accent(cat.nombre)
+            if "indeterm" in n:
+                has_indet = bool(dp.dias)
+                continue
+            d = int(dp.dias or 0)
+            if d > 0:
+                tramos.append((cat.nombre, d, n))
+        if tramos:
+            acc = 0
+            chosen = tramos[-1]
+            for t in tramos:
+                acc += t[1]
+                if trans < acc:
+                    chosen = t
+                    break
+            n = chosen[2]
+            if "fija" in n:
+                return "fija"
+            if "ambulator" in n:
+                return "ambulatoria"
+            if "personal" in n:
+                return "personalizada"
+            return _clean(chosen[0]).lower() or "indeterminada"
+        if has_indet:
+            return "indeterminada"
+        tc = _clean(r.tipo_consigna).lower()
+        if tc in {"fija", "ambulatoria", "personalizada", "indeterminada"}:
+            return tc
+        # Evita mostrar "mixta" como categoría en dashboard.
+        if tc == "mixta":
+            return "indeterminada"
+        return tc or "indeterminada"
+
     for r in rows:
-        t = _clean(r.tipo_consigna) or "—"
+        t = _etapa_dashboard(r)
         by_tipo[t] = by_tipo.get(t, 0) + 1
         j = _clean(r.juzgado) or "—"
         by_juzgado[j] = by_juzgado.get(j, 0) + 1
@@ -2092,10 +2151,23 @@ def manual_dashboard():
         if dt:
             mk = f"{dt.year:04d}-{dt.month:02d}"
             by_mes[mk] = by_mes.get(mk, 0) + 1
-    por_tipo = [(k, int(v)) for k, v in sorted(by_tipo.items(), key=lambda x: x[1], reverse=True)]
+            dk = dt.strftime("%Y-%m-%d")
+            by_fecha[dk] = by_fecha.get(dk, 0) + 1
+    tipo_labels = {
+        "ambulatoria": "Ambulatoria",
+        "fija": "Fija",
+        "personalizada": "Personalizada",
+        "indeterminada": "Indeterminada",
+    }
+    por_tipo = [
+        (tipo_labels.get(k, _clean(k).title() or "Indeterminada"), int(v))
+        for k, v in sorted(by_tipo.items(), key=lambda x: x[1], reverse=True)
+    ]
+    por_tipo_slug_map = {tipo_labels.get(k, _clean(k).title() or "Indeterminada"): k for k in by_tipo.keys()}
     por_mes = sorted(by_mes.items(), key=lambda x: x[0])
-    por_juzgado = [(k, int(v)) for k, v in sorted(by_juzgado.items(), key=lambda x: x[1], reverse=True)[:10]]
-    por_fiscalia = [(k, int(v)) for k, v in sorted(by_fiscalia.items(), key=lambda x: x[1], reverse=True)[:10]]
+    por_fecha = sorted(by_fecha.items(), key=lambda x: x[0])
+    por_juzgado = [(k, int(v)) for k, v in sorted(by_juzgado.items(), key=lambda x: x[1], reverse=True)]
+    por_fiscalia = [(k, int(v)) for k, v in sorted(by_fiscalia.items(), key=lambda x: x[1], reverse=True)]
     por_estado = [(k, int(v)) for k, v in by_estado.items()]
     ids = [r.id for r in rows] or [-1]
     por_barrio_q = (
@@ -2110,7 +2182,6 @@ def manual_dashboard():
         )
         .group_by(ConsignaDomicilio.barrio_nombre)
         .order_by(func.count(ConsignaDomicilio.id).desc())
-        .limit(15)
         .all()
     )
     por_barrio = [(_clean(r[0]), int(r[1])) for r in por_barrio_q if _clean(r[0])]
@@ -2120,7 +2191,9 @@ def manual_dashboard():
         activas=activas,
         finalizadas=finalizadas,
         por_tipo=por_tipo,
+        por_tipo_slug_map=por_tipo_slug_map,
         por_mes=por_mes,
+        por_fecha=por_fecha,
         por_estado=por_estado,
         por_juzgado=por_juzgado,
         por_fiscalia=por_fiscalia,
