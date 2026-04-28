@@ -18,6 +18,19 @@
   .tipo-ambulatoria { color: #198754; background: rgba(25, 135, 84, 0.12); }
   .tipo-personalizada { color: #fd7e14; background: rgba(253, 126, 20, 0.12); }
   .tipo-indeterminada { color: #6c757d; background: rgba(108, 117, 125, 0.12); }
+  .icono-etapa-fija { color: #0d6efd; }
+  .icono-etapa-ambulatoria { color: #198754; }
+  .icono-etapa-personalizada { color: #fd7e14; }
+  .icono-etapa-indeterminada { color: #6c757d; }
+  .icono-etapa-mixta { color: #6f42c1; }
+  .table tbody tr.row-tipo-fija > td { background: rgba(13, 110, 253, 0.09) !important; }
+  .table tbody tr.row-tipo-ambulatoria > td { background: rgba(25, 135, 84, 0.09) !important; }
+  .table tbody tr.row-tipo-personalizada > td { background: rgba(253, 126, 20, 0.10) !important; }
+  .table tbody tr.row-tipo-indeterminada > td { background: rgba(108, 117, 125, 0.10) !important; }
+  .table tbody tr.row-tipo-mixta > td { background: rgba(111, 66, 193, 0.10) !important; }
+  .table tbody tr.row-soft-vencida > td { box-shadow: inset 0 0 0 9999px rgba(220, 53, 69, 0.05); }
+  .table tbody tr.row-soft-por-vencer > td { box-shadow: inset 0 0 0 9999px rgba(255, 193, 7, 0.07); }
+  .table tbody tr.row-soft-vigente > td { box-shadow: inset 0 0 0 9999px rgba(25, 135, 84, 0.05); }
 </style>
 {% endblock %}
 {% block content %}
@@ -117,10 +130,15 @@
             {% set pr = progreso_map.get(r.id, {'transcurridos': 0, 'total': 0}) %}
             {% set etapa = etapa_actual_map.get(r.id, {'slug':'indeterminada','nombre':'Indeterminada','icono':'bi-infinity'}) %}
             {% set tipo_cls = 'tipo-indeterminada' %}
+            {% set icono_cls = 'icono-etapa-indeterminada' %}
             {% if etapa.slug == 'mixta' %}{% set tipo_cls = 'tipo-mixta' %}{% endif %}
             {% if etapa.slug == 'fija' %}{% set tipo_cls = 'tipo-fija' %}{% endif %}
             {% if etapa.slug == 'ambulatoria' %}{% set tipo_cls = 'tipo-ambulatoria' %}{% endif %}
             {% if etapa.slug == 'personalizada' %}{% set tipo_cls = 'tipo-personalizada' %}{% endif %}
+            {% if etapa.slug == 'mixta' %}{% set icono_cls = 'icono-etapa-mixta' %}{% endif %}
+            {% if etapa.slug == 'fija' %}{% set icono_cls = 'icono-etapa-fija' %}{% endif %}
+            {% if etapa.slug == 'ambulatoria' %}{% set icono_cls = 'icono-etapa-ambulatoria' %}{% endif %}
+            {% if etapa.slug == 'personalizada' %}{% set icono_cls = 'icono-etapa-personalizada' %}{% endif %}
             {% set row_cls = '' %}
             {% if etapa.slug == 'fija' %}{% set row_cls = 'row-tipo-fija' %}{% endif %}
             {% if etapa.slug == 'ambulatoria' %}{% set row_cls = 'row-tipo-ambulatoria' %}{% endif %}
@@ -135,7 +153,7 @@
               {% set row_cls = row_cls + ' row-soft-vigente' %}
             {% endif %}
             <tr class="{{ row_cls }}">
-                <td><i class="bi {{ etapa.icono }} text-muted me-1"></i>{{ r.id }}</td>
+                <td><i class="bi {{ etapa.icono }} {{ icono_cls }} me-1"></i>{{ r.id }}</td>
                 <td>
                     <div><strong>{{ r.expediente or '—' }}</strong></div>
                     <div class="small text-muted">SEPS: {{ r.seps_ingreso or '—' }} / {{ r.seps_salida or '—' }}</div>
@@ -176,7 +194,7 @@
                 </td>
                 <td>
                     {% if r.estado == 'activa' %}
-                    <span class="badge text-bg-success"><i class="bi bi-check2-circle"></i> Activa</span>
+                    <span class="badge text-bg-success"><i class="bi bi-check2-circle"></i> Activa · {{ etapa.nombre }}</span>
                     {% else %}
                     <span class="badge text-bg-secondary"><i class="bi bi-stop-circle"></i> Inactiva</span>
                     {% endif %}
