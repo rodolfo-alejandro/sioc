@@ -2092,13 +2092,13 @@ def manual_dashboard():
         if dt:
             mk = f"{dt.year:04d}-{dt.month:02d}"
             by_mes[mk] = by_mes.get(mk, 0) + 1
-    por_tipo = sorted(by_tipo.items(), key=lambda x: x[1], reverse=True)
+    por_tipo = [(k, int(v)) for k, v in sorted(by_tipo.items(), key=lambda x: x[1], reverse=True)]
     por_mes = sorted(by_mes.items(), key=lambda x: x[0])
-    por_juzgado = sorted(by_juzgado.items(), key=lambda x: x[1], reverse=True)[:10]
-    por_fiscalia = sorted(by_fiscalia.items(), key=lambda x: x[1], reverse=True)[:10]
-    por_estado = [(k, v) for k, v in by_estado.items()]
+    por_juzgado = [(k, int(v)) for k, v in sorted(by_juzgado.items(), key=lambda x: x[1], reverse=True)[:10]]
+    por_fiscalia = [(k, int(v)) for k, v in sorted(by_fiscalia.items(), key=lambda x: x[1], reverse=True)[:10]]
+    por_estado = [(k, int(v)) for k, v in by_estado.items()]
     ids = [r.id for r in rows] or [-1]
-    por_barrio = (
+    por_barrio_q = (
         db.session.query(ConsignaDomicilio.barrio_nombre, func.count(ConsignaDomicilio.id))
         .join(ConsignaJudicial, ConsignaJudicial.id == ConsignaDomicilio.consigna_id)
         .filter(
@@ -2113,6 +2113,7 @@ def manual_dashboard():
         .limit(15)
         .all()
     )
+    por_barrio = [(_clean(r[0]), int(r[1])) for r in por_barrio_q if _clean(r[0])]
     return render_template(
         "oficios_judiciales/manual_dashboard.html",
         total=total,

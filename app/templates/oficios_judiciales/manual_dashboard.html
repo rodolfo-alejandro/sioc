@@ -104,12 +104,76 @@
     var fis = pairsToXY({{ por_fiscalia|tojson }});
     var bar = pairsToXY({{ por_barrio|tojson }});
 
+    function applyFilter(key, value) {
+      var url = new URL(window.location.href);
+      url.searchParams.delete('page');
+      if (key === 'fecha_mes') {
+        var parts = String(value).split('-');
+        if (parts.length === 2) {
+          var y = parseInt(parts[0], 10), m = parseInt(parts[1], 10);
+          if (!isNaN(y) && !isNaN(m)) {
+            var from = new Date(y, m - 1, 1);
+            var to = new Date(y, m, 0);
+            var fd = from.toISOString().slice(0,10);
+            var fh = to.toISOString().slice(0,10);
+            var curFd = url.searchParams.get('fecha_desde') || '';
+            var curFh = url.searchParams.get('fecha_hasta') || '';
+            if (curFd === fd && curFh === fh) {
+              url.searchParams.delete('fecha_desde');
+              url.searchParams.delete('fecha_hasta');
+            } else {
+              url.searchParams.set('fecha_desde', fd);
+              url.searchParams.set('fecha_hasta', fh);
+            }
+          }
+        }
+      } else if (key === 'estado') {
+        var curEstado = url.searchParams.getAll('estado');
+        if (curEstado.length === 1 && curEstado[0] === String(value)) {
+          url.searchParams.delete('estado');
+        } else {
+          url.searchParams.delete('estado');
+          url.searchParams.append('estado', value);
+        }
+      } else if (key === 'tipo_consigna') {
+        var curTipo = url.searchParams.getAll('tipo_consigna');
+        if (curTipo.length === 1 && curTipo[0] === String(value)) {
+          url.searchParams.delete('tipo_consigna');
+        } else {
+          url.searchParams.delete('tipo_consigna');
+          url.searchParams.append('tipo_consigna', value);
+        }
+      } else if (key === 'juzgado' || key === 'fiscalia' || key === 'barrio') {
+        var cur = url.searchParams.getAll(key);
+        if (cur.length === 1 && cur[0] === String(value)) {
+          url.searchParams.delete(key);
+        } else {
+          url.searchParams.delete(key);
+          url.searchParams.append(key, value);
+        }
+      }
+      window.location.href = url.toString();
+    }
+
     Plotly.newPlot('chart-tipo', [{type:'bar', x: tipo.x, y: tipo.y, marker:{color:'#6f42c1'}}], {margin:{l:40,r:10,t:10,b:70}}, {displayModeBar:false, responsive:true});
     Plotly.newPlot('chart-mes', [{type:'scatter', mode:'lines+markers', x: mes.x, y: mes.y, line:{color:'#0d6efd'}}], {margin:{l:40,r:10,t:10,b:50}}, {displayModeBar:false, responsive:true});
     Plotly.newPlot('chart-estado', [{type:'pie', labels: estado.x, values: estado.y, hole:.45, marker:{colors:['#198754','#6c757d']}}], {margin:{l:10,r:10,t:10,b:10}}, {displayModeBar:false, responsive:true});
     Plotly.newPlot('chart-juzgado', [{type:'bar', orientation:'h', x: juz.y.slice().reverse(), y: juz.x.slice().reverse(), marker:{color:'#0dcaf0'}}], {margin:{l:120,r:10,t:10,b:30}}, {displayModeBar:false, responsive:true});
     Plotly.newPlot('chart-fiscalia', [{type:'bar', orientation:'h', x: fis.y.slice().reverse(), y: fis.x.slice().reverse(), marker:{color:'#fd7e14'}}], {margin:{l:120,r:10,t:10,b:30}}, {displayModeBar:false, responsive:true});
     Plotly.newPlot('chart-barrio', [{type:'bar', orientation:'h', x: bar.y.slice().reverse(), y: bar.x.slice().reverse(), marker:{color:'#20c997'}}], {margin:{l:160,r:10,t:10,b:30}}, {displayModeBar:false, responsive:true});
+
+    var cTipo = document.getElementById('chart-tipo');
+    var cMes = document.getElementById('chart-mes');
+    var cEstado = document.getElementById('chart-estado');
+    var cJuz = document.getElementById('chart-juzgado');
+    var cFis = document.getElementById('chart-fiscalia');
+    var cBar = document.getElementById('chart-barrio');
+    if (cTipo) cTipo.on('plotly_click', function(d){ if (d.points && d.points[0]) applyFilter('tipo_consigna', d.points[0].x); });
+    if (cMes) cMes.on('plotly_click', function(d){ if (d.points && d.points[0]) applyFilter('fecha_mes', d.points[0].x); });
+    if (cEstado) cEstado.on('plotly_click', function(d){ if (d.points && d.points[0]) { var label = String(d.points[0].label || '').toLowerCase(); applyFilter('estado', label.indexOf('final') >= 0 ? 'finalizada' : 'activa'); }});
+    if (cJuz) cJuz.on('plotly_click', function(d){ if (d.points && d.points[0]) applyFilter('juzgado', d.points[0].y); });
+    if (cFis) cFis.on('plotly_click', function(d){ if (d.points && d.points[0]) applyFilter('fiscalia', d.points[0].y); });
+    if (cBar) cBar.on('plotly_click', function(d){ if (d.points && d.points[0]) applyFilter('barrio', d.points[0].y); });
   })();
 </script>
 {% endblock %}
