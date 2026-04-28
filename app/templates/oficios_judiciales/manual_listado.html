@@ -37,13 +37,6 @@
     <div class="card-body">
         <form method="GET" class="row g-2">
             {% set est_sel = selected.getlist('estado') %}
-            <div class="col-md-3">
-                <label class="form-label form-label-sm mb-1"><i class="bi bi-check2-circle filtro-icon"></i> Estado</label>
-                <select id="f-estado" class="form-select form-select-sm" name="estado" multiple>
-                    <option value="activa" {{ 'selected' if 'activa' in est_sel or (not est_sel and selected.get('estado','activa') != 'todas') else '' }}>Activa</option>
-                    <option value="finalizada" {{ 'selected' if 'finalizada' in est_sel else '' }}>Finalizada</option>
-                </select>
-            </div>
             <div class="col-md-4">
                 <label class="form-label form-label-sm mb-1"><i class="bi bi-search filtro-icon"></i> Búsqueda global</label>
                 <input class="form-control form-control-sm" name="q" placeholder="Expediente, SEPS, persona, domicilio, barrio, carátula..." value="{{ selected.get('q','') }}">
@@ -57,18 +50,18 @@
                 </select>
             </div>
             <div class="col-md-2">
-                <label class="form-label form-label-sm mb-1"><i class="bi bi-building filtro-icon"></i> Juzgado</label>
-                <select id="f-juzgado" class="form-select form-select-sm" name="juzgado" multiple>
-                    {% for x in juzgados_opts %}
-                    <option value="{{ x }}" {{ 'selected' if x in selected.getlist('juzgado') else '' }}>{{ x }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-2">
                 <label class="form-label form-label-sm mb-1"><i class="bi bi-list-check filtro-icon"></i> Tipo medida</label>
                 <select id="f-medida" class="form-select form-select-sm" name="tipo_medida" multiple>
                     {% for x in medidas_opts %}
                     <option value="{{ x }}" {{ 'selected' if x in selected.getlist('tipo_medida') else '' }}>{{ x }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label form-label-sm mb-1"><i class="bi bi-building filtro-icon"></i> Juzgado</label>
+                <select id="f-juzgado" class="form-select form-select-sm" name="juzgado" multiple>
+                    {% for x in juzgados_opts %}
+                    <option value="{{ x }}" {{ 'selected' if x in selected.getlist('juzgado') else '' }}>{{ x }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -86,6 +79,13 @@
                     {% for x in barrios_opts %}
                     <option value="{{ x }}" {{ 'selected' if x in selected.getlist('barrio') else '' }}>{{ x }}</option>
                     {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label form-label-sm mb-1"><i class="bi bi-check2-circle filtro-icon"></i> Estado</label>
+                <select id="f-estado" class="form-select form-select-sm" name="estado" multiple>
+                    <option value="activa" {{ 'selected' if 'activa' in est_sel else '' }}>Activa</option>
+                    <option value="finalizada" {{ 'selected' if 'finalizada' in est_sel else '' }}>Finalizada</option>
                 </select>
             </div>
             <div class="col-12 d-flex gap-2">
@@ -146,7 +146,11 @@
                 </td>
                 <td>
                     <div><span class="tipo-pill {{ tipo_cls }}"><i class="bi {{ etapa.icono }}"></i> {{ etapa.nombre }}</span></div>
-                    <div class="small text-muted">{{ r.tipo_medida or '—' }}</div>
+                    {% if etapa.total and etapa.pos %}
+                    <div class="small text-muted">{{ etapa.pos }}/{{ etapa.total }} {{ etapa.nombre }}</div>
+                    {% else %}
+                    <div class="small text-muted">Etapa {{ etapa.nombre|lower }}</div>
+                    {% endif %}
                 </td>
                 <td>
                     {% if pr.total > 0 %}
@@ -162,7 +166,7 @@
                     {% if r.estado == 'activa' %}
                     <span class="badge text-bg-success"><i class="bi bi-check2-circle"></i> Activa</span>
                     {% else %}
-                    <span class="badge text-bg-secondary"><i class="bi bi-stop-circle"></i> Finalizada</span>
+                    <span class="badge text-bg-secondary"><i class="bi bi-stop-circle"></i> Inactiva</span>
                     {% endif %}
                 </td>
                 <td class="text-end">

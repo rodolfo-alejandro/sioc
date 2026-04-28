@@ -1749,10 +1749,6 @@ def manual_listado():
     if not _can_view():
         abort(403)
     estados = [e for e in request.args.getlist("estado") if e in ("activa", "finalizada")]
-    if not estados and _clean(request.args.get("estado")) not in ("todas", ""):
-        estados = ["activa"]
-    if not estados and _clean(request.args.get("estado")) != "todas":
-        estados = ["activa"]
     qtxt = _clean(request.args.get("q"))
     tipos_sel = [_clean(x) for x in request.args.getlist("tipo_consigna") if _clean(x)]
     juzgados_sel = [_clean(x) for x in request.args.getlist("juzgado") if _clean(x)]
@@ -1905,32 +1901,34 @@ def manual_listado():
                 if d > 0:
                     tramos.append((cat.nombre, d, n))
 
-            etapa = {"slug": "indeterminada", "nombre": "Indeterminada", "icono": "bi-infinity"}
+            etapa = {"slug": "indeterminada", "nombre": "Indeterminada", "icono": "bi-infinity", "pos": 0, "total": 0}
             if tramos:
                 acc = 0
                 chosen = tramos[-1]
-                for t in tramos:
+                chosen_idx = len(tramos) - 1
+                for idx, t in enumerate(tramos):
                     acc += t[1]
                     if trans < acc:
                         chosen = t
+                        chosen_idx = idx
                         break
                 n = chosen[2]
                 if "fija" in n:
-                    etapa = {"slug": "fija", "nombre": "Fija", "icono": "bi-anchor-fill"}
+                    etapa = {"slug": "fija", "nombre": "Fija", "icono": "bi-anchor-fill", "pos": chosen_idx + 1, "total": len(tramos)}
                 elif "ambulator" in n:
-                    etapa = {"slug": "ambulatoria", "nombre": "Ambulatoria", "icono": "bi-car-front-fill"}
+                    etapa = {"slug": "ambulatoria", "nombre": "Ambulatoria", "icono": "bi-car-front-fill", "pos": chosen_idx + 1, "total": len(tramos)}
                 elif "personal" in n:
-                    etapa = {"slug": "personalizada", "nombre": "Personalizada", "icono": "bi-person-circle"}
+                    etapa = {"slug": "personalizada", "nombre": "Personalizada", "icono": "bi-person-circle", "pos": chosen_idx + 1, "total": len(tramos)}
                 else:
-                    etapa = {"slug": _slug_tipo_consigna_desde_nombre(chosen[0]), "nombre": chosen[0], "icono": "bi-dot"}
+                    etapa = {"slug": _slug_tipo_consigna_desde_nombre(chosen[0]), "nombre": chosen[0], "icono": "bi-dot", "pos": chosen_idx + 1, "total": len(tramos)}
             elif has_indet:
-                etapa = {"slug": "indeterminada", "nombre": "Indeterminada", "icono": "bi-infinity"}
+                etapa = {"slug": "indeterminada", "nombre": "Indeterminada", "icono": "bi-infinity", "pos": 0, "total": 0}
             elif (r.tipo_consigna or "") == "fija":
-                etapa = {"slug": "fija", "nombre": "Fija", "icono": "bi-anchor-fill"}
+                etapa = {"slug": "fija", "nombre": "Fija", "icono": "bi-anchor-fill", "pos": 0, "total": 0}
             elif (r.tipo_consigna or "") == "ambulatoria":
-                etapa = {"slug": "ambulatoria", "nombre": "Ambulatoria", "icono": "bi-car-front-fill"}
+                etapa = {"slug": "ambulatoria", "nombre": "Ambulatoria", "icono": "bi-car-front-fill", "pos": 0, "total": 0}
             elif (r.tipo_consigna or "") == "personalizada":
-                etapa = {"slug": "personalizada", "nombre": "Personalizada", "icono": "bi-person-circle"}
+                etapa = {"slug": "personalizada", "nombre": "Personalizada", "icono": "bi-person-circle", "pos": 0, "total": 0}
             etapa_actual_map[r.id] = etapa
 
     tipos_consigna = []
