@@ -9,7 +9,7 @@ from urllib.parse import urlencode
 from datetime import datetime, timedelta, date
 
 import pandas as pd
-from flask import Response, abort, current_app, flash, redirect, render_template, request, url_for
+from flask import Response, abort, current_app, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import false, func, inspect, or_, text
 
@@ -2610,6 +2610,124 @@ def manual_reincidencias():
         fiscalias_opts=opts["fiscalias_opts"],
         barrios_opts=opts["barrios_opts"],
     )
+
+
+@bp.route("/manual/autofill", methods=["POST"])
+def manual_autofill():
+    if not _can_upload():
+        abort(403)
+    files = request.files.getlist("archivos")
+    files = [f for f in files if _clean(getattr(f, "filename", ""))]
+    if not files:
+        return jsonify({"ok": False, "error": "Debe seleccionar al menos un archivo."}), 400
+    files = sorted(files, key=lambda ff: _file_order_key(getattr(ff, "filename", "")))
+
+    merged = {}
+    warnings = []
+    for f in files:
+        name = _clean(f.filename)
+        raw = f.read()
+        if not raw:
+            continue
+        txt_ocr = ""
+        txt_qr = ""
+        if name.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
+            payload, _ = _extract_qr_text_from_image(raw)
+            if payload:
+                resolved, _u = _resolve_qr_payload(payload)
+                txt_qr = resolved or payload
+            txt_ocr, _err = _extract_ocr_text_from_image_with_error(raw)
+        elif name.lower().endswith(".pdf"):
+            txt_pdf = _extract_text_from_pdf(raw)
+            if len(_clean(txt_pdf)) >= _MIN_PDF_TEXT_LEN:
+                txt_ocr = txt_pdf
+            else:
+                txt_qr_pdf, txt_ocr_pdf, _qr_url_pdf, warn_list = _scan_pdf_as_images(raw)
+                if warn_list:
+                    warnings.extend([f"{name}: {w}" for w in warn_list])
+                txt_qr = txt_qr_pdf
+                txt_ocr = txt_ocr_pdf or txt_pdf
+        else:
+            warnings.append(f"{name}: formato no soportado.")
+            continue
+        parsed_qr = _parse_fields(txt_qr) if _clean(txt_qr) else {}
+        parsed_ocr = _parse_fields(txt_ocr) if _clean(txt_ocr) else {}
+        if _parsed_score(parsed_ocr) > _parsed_score(parsed_qr):
+            merged = _merge_parsed(merged, parsed_ocr)
+            merged = _merge_parsed(merged, parsed_qr)
+        else:
+            merged = _merge_parsed(merged, parsed_qr)
+            merged = _merge_parsed(merged, parsed_ocr)
+
+    if not merged:
+        return jsonify({"ok": False, "error": "No se pudo extraer información útil del archivo."}), 400
+
+    personas = []
+
+    def _add_person(nombre, dni, tipo, domicilio):
+        nom = _clean(nombre)
+        dd = _clean(dni)
+        dom = _clean(domicilio)
+        if not nom and not dd and not dom:
+            return
+        personas.append(
+            {
+                "nombre": nom,
+                "dni": dd,
+                "tipo": "denunciado" if _clean(tipo).lower() == "denunciado" else "victima",
+                "domicilio": dom,
+                "notificar": "si" if _clean(tipo).lower() == "denunciado" else "no",
+            }
+        )
+
+    _add_person(
+        merged.get("persona_denunciada"),
+        merged.get("dni_denunciado"),
+        "denunciado",
+        merged.get("domicilio_denunciado"),
+    )
+    _add_person(
+        merged.get("victima"),
+        merged.get("dni_victima"),
+        "victima",
+        merged.get("domicilio_victima"),
+    )
+    _add_person(
+        merged.get("victima_2"),
+        merged.get("dni_victima_2"),
+        "victima",
+        merged.get("domicilio_victima_2"),
+    )
+    _add_person(
+        merged.get("acusado_2"),
+        merged.get("dni_acusado_2"),
+        "denunciado",
+        merged.get("domicilio_acusado_2"),
+    )
+    _add_person(
+        merged.get("victima_3"),
+        merged.get("dni_victima_3"),
+        "victima",
+        merged.get("domicilio_victima_3"),
+    )
+    for ax in merged.get("acusados_extra") or []:
+        if isinstance(ax, dict):
+            _add_person(ax.get("nombre"), ax.get("dni"), "denunciado", ax.get("domicilio"))
+    for vx in merged.get("victimas_extra_detalle") or []:
+        if isinstance(vx, dict):
+            _add_person(vx.get("nombre"), vx.get("dni"), "victima", vx.get("domicilio"))
+
+    data = {
+        "expediente": _clean(merged.get("expediente")),
+        "caratula": _clean(merged.get("caratula")),
+        "juzgado": _clean(merged.get("juzgado")),
+        "tipo_medida": _clean(merged.get("tipo_medida")),
+        "fiscalia": _clean(merged.get("fiscalia")),
+        "fecha_notificacion": _to_input_date(merged.get("fecha_notificacion")),
+        "personas": personas,
+        "warnings": warnings,
+    }
+    return jsonify({"ok": True, "data": data})
 
 
 @bp.route("/manual/nuevo", methods=["GET", "POST"])

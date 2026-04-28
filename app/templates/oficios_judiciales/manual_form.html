@@ -14,8 +14,23 @@
     <h1><i class="bi bi-pencil-square"></i> Nueva Consigna Manual VIF</h1>
 </div>
 
+<ul class="nav nav-tabs mb-3">
+    <li class="nav-item"><a class="nav-link" href="{{ url_for('oficios_judiciales.manual_listado') }}"><i class="bi bi-list-ul"></i> Listado</a></li>
+    <li class="nav-item"><a class="nav-link active" href="#"><i class="bi bi-plus-circle"></i> Nueva carga</a></li>
+    <li class="nav-item"><a class="nav-link" href="{{ url_for('oficios_judiciales.manual_dashboard') }}"><i class="bi bi-bar-chart-line"></i> Dashboard</a></li>
+    <li class="nav-item"><a class="nav-link" href="{{ url_for('oficios_judiciales.manual_mapa') }}"><i class="bi bi-geo-alt"></i> Mapa</a></li>
+    <li class="nav-item"><a class="nav-link" href="{{ url_for('oficios_judiciales.manual_reincidencias') }}"><i class="bi bi-search"></i> Reincidencias</a></li>
+    <li class="nav-item"><a class="nav-link" href="{{ url_for('oficios_judiciales.catalogos') }}"><i class="bi bi-gear"></i> Catálogos</a></li>
+</ul>
+
 <form method="POST" class="row g-3">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="col-12 d-flex justify-content-end">
+        <input type="file" id="manual-autofill-files" accept=".jpg,.jpeg,.png,.webp,.pdf" multiple class="d-none">
+        <button class="btn btn-outline-primary btn-sm" type="button" id="btn-autofill-upload">
+            <i class="bi bi-cloud-upload"></i> Subir archivo (imagen/PDF)
+        </button>
+    </div>
     <div class="col-md-3">
         <label class="form-label">Expediente</label>
         <input class="form-control" name="expediente" required>
@@ -234,20 +249,21 @@
         mapaModal.show();
     });
 
-    function addRow() {
+    function addRow(prefill) {
+        prefill = prefill || {};
         var div = document.createElement('div');
         div.className = 'col-12 persona-row border rounded p-2';
         div.innerHTML = '' +
             '<div class="row g-2 align-items-end">' +
-            '<div class="col-md-3"><label class="form-label">Nombre</label><input class="form-control" name="persona_nombre[]"></div>' +
-            '<div class="col-md-2"><label class="form-label">DNI</label><input class="form-control" name="persona_dni[]"></div>' +
-            '<div class="col-md-7"><label class="form-label">Domicilio</label><input class="form-control" name="persona_domicilio[]"></div>' +
+            '<div class="col-md-3"><label class="form-label">Nombre</label><input class="form-control" name="persona_nombre[]" value="' + (prefill.nombre || '') + '"></div>' +
+            '<div class="col-md-2"><label class="form-label">DNI</label><input class="form-control" name="persona_dni[]" value="' + (prefill.dni || '') + '"></div>' +
+            '<div class="col-md-7"><label class="form-label">Domicilio</label><input class="form-control" name="persona_domicilio[]" value="' + (prefill.domicilio || '') + '"></div>' +
             '</div>' +
             '<div class="row g-2 align-items-end mt-1">' +
             '<div class="col-md-3"><label class="form-label">Barrio</label><select class="form-select ts-barrio" name="persona_barrio_id[]">' + barrioOptionsHtml + '</select></div>' +
-            '<div class="col-md-2"><label class="form-label">¿Notificar?</label><select class="form-select" name="persona_notificar[]"><option value="si">Sí</option><option value="no">No</option></select></div>' +
+            '<div class="col-md-2"><label class="form-label">¿Notificar?</label><select class="form-select" name="persona_notificar[]"><option value="si"' + ((prefill.notificar || '') === 'si' ? ' selected' : '') + '>Sí</option><option value="no"' + ((prefill.notificar || '') === 'no' ? ' selected' : '') + '>No</option></select></div>' +
             '<div class="col-md-4"><label class="form-label">Latitud, longitud</label><div class="input-group"><input class="form-control js-persona-coords" name="persona_latlng[]" type="text" placeholder="-24.xxxxxx, -65.xxxxxx" title="Pegá desde Google Maps o tocá el mapa" autocomplete="off"><button class="btn btn-outline-secondary js-mapa-btn" type="button" title="Elegir en mapa"><i class="bi bi-geo-alt"></i></button></div></div>' +
-            '<div class="col-md-2"><label class="form-label">Tipo</label><select class="form-select" name="persona_tipo[]"><option value="victima">Víctima</option><option value="denunciado">Acusado</option></select></div>' +
+            '<div class="col-md-2"><label class="form-label">Tipo</label><select class="form-select" name="persona_tipo[]"><option value="victima"' + ((prefill.tipo || '') === 'victima' ? ' selected' : '') + '>Víctima</option><option value="denunciado"' + ((prefill.tipo || '') === 'denunciado' ? ' selected' : '') + '>Acusado</option></select></div>' +
             '<div class="col-md-1"><label class="form-label d-block">&nbsp;</label><button class="btn btn-outline-danger w-100 btn-sm js-del" type="button">Quitar</button></div>' +
             '</div>';
         div.querySelector('.js-del').addEventListener('click', function () { div.remove(); });
@@ -255,7 +271,87 @@
         initBarrioSelect(div.querySelector('select.ts-barrio'));
     }
     btn.addEventListener('click', addRow);
+    window.manualAddPersonaRow = addRow;
     addRow();
+})();
+
+(function () {
+    var upBtn = document.getElementById('btn-autofill-upload');
+    var upInput = document.getElementById('manual-autofill-files');
+    if (!upBtn || !upInput) return;
+
+    function norm(s) {
+        return String(s || '').toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    function setInput(name, value) {
+        var el = document.querySelector('[name="' + name + '"]');
+        if (el && value) el.value = value;
+    }
+
+    function setTomSelectByText(selectId, value) {
+        var el = document.getElementById(selectId);
+        if (!el || !value) return;
+        var target = norm(value);
+        var tokens = target.split(/ · |,|;|\//).map(function (x) { return x.trim(); }).filter(Boolean);
+        if (!tokens.length) tokens = [target];
+        var vals = [];
+        for (var i = 0; i < el.options.length; i++) {
+            var o = el.options[i];
+            var txt = norm(o.text);
+            var match = tokens.some(function (t) { return txt.indexOf(t) >= 0 || t.indexOf(txt) >= 0; });
+            if (match) vals.push(o.value);
+        }
+        if (el.tomselect) {
+            el.tomselect.clear(true);
+            vals.forEach(function (v) { el.tomselect.addItem(v, true); });
+        }
+    }
+
+    upBtn.addEventListener('click', function () { upInput.click(); });
+    upInput.addEventListener('change', function () {
+        if (!upInput.files || !upInput.files.length) return;
+        var fd = new FormData();
+        for (var i = 0; i < upInput.files.length; i++) fd.append('archivos', upInput.files[i]);
+        upBtn.disabled = true;
+        var old = upBtn.innerHTML;
+        upBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Procesando...';
+        fetch('{{ url_for("oficios_judiciales.manual_autofill") }}', {
+            method: 'POST',
+            body: fd,
+            headers: { 'X-CSRFToken': '{{ csrf_token() }}' }
+        }).then(function (r) { return r.json(); })
+          .then(function (resp) {
+              if (!resp || !resp.ok) throw new Error((resp && resp.error) || 'No se pudo autocompletar');
+              var d = resp.data || {};
+              setInput('expediente', d.expediente || '');
+              setInput('caratula', d.caratula || '');
+              setInput('fecha_notificacion', d.fecha_notificacion || '');
+              setTomSelectByText('manual-juzgado', d.juzgado || '');
+              setTomSelectByText('manual-tipo-medida', d.tipo_medida || '');
+              setTomSelectByText('manual-fiscalia', d.fiscalia || '');
+              var wrap = document.getElementById('personas-wrap');
+              if (wrap && Array.isArray(d.personas) && d.personas.length) {
+                  wrap.innerHTML = '';
+                  d.personas.forEach(function (p) {
+                      if (window.manualAddPersonaRow) window.manualAddPersonaRow(p || {});
+                  });
+              }
+              if (Array.isArray(d.warnings) && d.warnings.length) {
+                  alert('Autocompletado con advertencias:\n- ' + d.warnings.join('\n- '));
+              }
+          })
+          .catch(function (e) { alert(e.message || 'Error al procesar archivo.'); })
+          .finally(function () {
+              upBtn.disabled = false;
+              upBtn.innerHTML = old;
+              upInput.value = '';
+          });
+    });
 })();
 </script>
 {% endblock %}
