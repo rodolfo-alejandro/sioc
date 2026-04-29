@@ -172,23 +172,26 @@ def _ensure_schema():
         db.session.execute(text("ALTER TABLE oficios_consignas ADD COLUMN seps_salida VARCHAR(64) NULL"))
         db.session.commit()
     # Ajustes de longitud para textos largos en tipo medida (catálogo y consigna).
+    # Nota: 191 evita errores de índice en MySQL/MariaDB con utf8mb4.
     try:
         cons_cols = {c.get("name"): c for c in insp.get_columns(ConsignaJudicial.__tablename__)}
         tcol = cons_cols.get("tipo_medida")
         tlen = getattr(tcol.get("type"), "length", None) if tcol else None
-        if tcol and tlen is not None and int(tlen) < 255:
-            db.session.execute(text("ALTER TABLE oficios_consignas MODIFY COLUMN tipo_medida VARCHAR(255) NULL"))
+        if tcol and tlen is not None and int(tlen) < 191:
+            db.session.execute(text("ALTER TABLE oficios_consignas MODIFY COLUMN tipo_medida VARCHAR(191) NULL"))
             db.session.commit()
     except Exception:
+        current_app.logger.exception("No se pudo ampliar oficios_consignas.tipo_medida a 191")
         db.session.rollback()
     try:
         tm_cols = {c.get("name"): c for c in insp.get_columns(CatalogoTipoMedida.__tablename__)}
         ncol = tm_cols.get("nombre")
         nlen = getattr(ncol.get("type"), "length", None) if ncol else None
-        if ncol and nlen is not None and int(nlen) < 255:
-            db.session.execute(text("ALTER TABLE oficios_catalogo_tipos_medida MODIFY COLUMN nombre VARCHAR(255) NOT NULL"))
+        if ncol and nlen is not None and int(nlen) < 191:
+            db.session.execute(text("ALTER TABLE oficios_catalogo_tipos_medida MODIFY COLUMN nombre VARCHAR(191) NOT NULL"))
             db.session.commit()
     except Exception:
+        current_app.logger.exception("No se pudo ampliar oficios_catalogo_tipos_medida.nombre a 191")
         db.session.rollback()
     pcols = {c.get("name") for c in insp.get_columns(ConsignaPersona.__tablename__)}
     if "notificar" not in pcols:
