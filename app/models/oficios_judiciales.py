@@ -20,7 +20,7 @@ class ConsignaJudicial(db.Model):
     juzgado = db.Column(db.String(255), nullable=True, index=True)
     juzgado_key = db.Column(db.String(255), nullable=True, index=True)
     caratula = db.Column(db.Text, nullable=True)
-    tipo_medida = db.Column(db.String(80), nullable=True, index=True)
+    tipo_medida = db.Column(db.String(255), nullable=True, index=True)
     tipo_consigna = db.Column(db.String(30), nullable=True, index=True)  # fija | ambulatoria | personalizada | indeterminada
     fiscalia = db.Column(db.String(255), nullable=True, index=True)
     fiscalia_key = db.Column(db.String(255), nullable=True, index=True)
@@ -151,7 +151,7 @@ class CatalogoTipoMedida(db.Model):
     __tablename__ = "oficios_catalogo_tipos_medida"
 
     id = db.Column(db.Integer, primary_key=True)
-    nombre = db.Column(db.String(120), nullable=False, unique=True, index=True)
+    nombre = db.Column(db.String(255), nullable=False, unique=True, index=True)
     activo = db.Column(db.Boolean, nullable=False, default=True, index=True)
 
 

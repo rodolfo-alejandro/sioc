@@ -171,6 +171,25 @@ def _ensure_schema():
     if "seps_salida" not in cols:
         db.session.execute(text("ALTER TABLE oficios_consignas ADD COLUMN seps_salida VARCHAR(64) NULL"))
         db.session.commit()
+    # Ajustes de longitud para textos largos en tipo medida (catálogo y consigna).
+    try:
+        cons_cols = {c.get("name"): c for c in insp.get_columns(ConsignaJudicial.__tablename__)}
+        tcol = cons_cols.get("tipo_medida")
+        tlen = getattr(tcol.get("type"), "length", None) if tcol else None
+        if tcol and tlen is not None and int(tlen) < 255:
+            db.session.execute(text("ALTER TABLE oficios_consignas MODIFY COLUMN tipo_medida VARCHAR(255) NULL"))
+            db.session.commit()
+    except Exception:
+        db.session.rollback()
+    try:
+        tm_cols = {c.get("name"): c for c in insp.get_columns(CatalogoTipoMedida.__tablename__)}
+        ncol = tm_cols.get("nombre")
+        nlen = getattr(ncol.get("type"), "length", None) if ncol else None
+        if ncol and nlen is not None and int(nlen) < 255:
+            db.session.execute(text("ALTER TABLE oficios_catalogo_tipos_medida MODIFY COLUMN nombre VARCHAR(255) NOT NULL"))
+            db.session.commit()
+    except Exception:
+        db.session.rollback()
     pcols = {c.get("name") for c in insp.get_columns(ConsignaPersona.__tablename__)}
     if "notificar" not in pcols:
         db.session.execute(text("ALTER TABLE oficios_consigna_personas ADD COLUMN notificar VARCHAR(20) NULL"))
