@@ -2130,7 +2130,28 @@ def manual_listado():
         estado_operativo_map=estado_operativo_map,
         pagination=pagination,
         export_url=export_url,
+        can_delete_superadmin=_is_superadmin(),
     )
+
+
+@bp.route("/manual/<int:consigna_id>/eliminar", methods=["POST"])
+def manual_eliminar(consigna_id: int):
+    if not _is_superadmin():
+        abort(403)
+    row = (
+        ConsignaJudicial.query.filter(
+            ConsignaJudicial.id == consigna_id,
+            ConsignaJudicial.unidad_id == current_user.unidad_id,
+            ConsignaJudicial.fuente_principal == "manual",
+        ).first()
+    )
+    if not row:
+        flash("No se encontró la consigna a eliminar.", "warning")
+        return redirect(url_for("oficios_judiciales.manual_listado"))
+    db.session.delete(row)
+    db.session.commit()
+    flash("Consigna eliminada correctamente.", "success")
+    return redirect(url_for("oficios_judiciales.manual_listado"))
 
 
 @bp.route("/manual/export.xlsx")
@@ -2800,7 +2821,7 @@ def manual_autofill():
 
 @bp.route("/manual/nuevo", methods=["GET", "POST"])
 def manual_nuevo():
-    if not _can_upload():
+    if not _can_view():
         abort(403)
     _ensure_schema()
     juzgados = CatalogoJuzgado.query.filter_by(activo=True).order_by(CatalogoJuzgado.nombre.asc()).all()
@@ -2814,6 +2835,12 @@ def manual_nuevo():
         CatalogoTipoConsigna.query.filter_by(activo=True).all(),
         key=_orden_tipo_consigna_catalogo,
     )
+    edit_id = _to_int_or_none(request.form.get("edit_id") or request.args.get("edit_id"))
+    row_edit = None
+    if edit_id:
+        row_edit = ConsignaJudicial.query.filter_by(
+            id=edit_id, unidad_id=current_user.unidad_id, fuente_principal="manual"
+        ).first()
     if request.method == "POST":
         exp = _clean(request.form.get("expediente"))
         caratula = _clean(request.form.get("caratula"))
@@ -2854,8 +2881,8 @@ def manual_nuevo():
         exp_key = _expediente_key(exp)
         juz_key = _juzgado_key(juz) if juz else ""
 
-        row = None
-        if exp_key:
+        row = row_edit
+        if row is None and exp_key:
             q = ConsignaJudicial.query.filter(
                 ConsignaJudicial.unidad_id == current_user.unidad_id,
                 ConsignaJudicial.expediente_key == exp_key,
@@ -2971,6 +2998,11 @@ def manual_nuevo():
                 )
             )
 
+        if row_edit:
+            ConsignaPersona.query.filter_by(consigna_id=row.id).delete(synchronize_session=False)
+            ConsignaDomicilio.query.filter_by(consigna_id=row.id).delete(synchronize_session=False)
+            ConsignaMedidaDetalle.query.filter_by(consigna_id=row.id).delete(synchronize_session=False)
+
         p_nombres = request.form.getlist("persona_nombre[]")
         p_dnis = request.form.getlist("persona_dni[]")
         p_tipos = request.form.getlist("persona_tipo[]")
@@ -3006,8 +3038,60 @@ def manual_nuevo():
 
         _reemplazar_dias_por_tipo(row.id, id_to_dias)
         db.session.commit()
-        flash("Consigna manual guardada.", "success")
+        flash("Consigna manual actualizada." if row_edit else "Consigna manual guardada.", "success")
         return redirect(url_for("oficios_judiciales.detalle", consigna_id=row.id))
+
+    form_data = {}
+    selected_juzgado_ids = []
+    selected_tipo_medida_ids = []
+    selected_fiscalia_ids = []
+    dias_por_tipo_prefill = {}
+    personas_prefill = []
+    if row_edit:
+        form_data = {
+            "expediente": row_edit.expediente or "",
+            "caratula": row_edit.caratula or "",
+            "fecha_notificacion": row_edit.fecha_notificacion.isoformat() if row_edit.fecha_notificacion else "",
+            "telefono_contacto": row_edit.telefono_contacto or "",
+            "seps_ingreso": row_edit.seps_ingreso or "",
+            "seps_salida": row_edit.seps_salida or "",
+            "motivo_indeterminada_id": row_edit.motivo_indeterminada_id or "",
+        }
+        def _split_names(v):
+            return [x.strip() for x in _clean(v).split("·") if _clean(x)]
+        jn = set(_split_names(row_edit.juzgado))
+        tn = set(_split_names(row_edit.tipo_medida))
+        fn = set(_split_names(row_edit.fiscalia))
+        selected_juzgado_ids = [j.id for j in juzgados if _clean(j.nombre) in jn]
+        selected_tipo_medida_ids = [t.id for t in tipos_medida if _clean(t.nombre) in tn]
+        selected_fiscalia_ids = [f.id for f in fiscalias if _clean(f.nombre) in fn]
+        for dp, cat in (
+            db.session.query(ConsignaDiasPorTipo, CatalogoTipoConsigna)
+            .join(CatalogoTipoConsigna, ConsignaDiasPorTipo.tipo_catalogo_id == CatalogoTipoConsigna.id)
+            .filter(ConsignaDiasPorTipo.consigna_id == row_edit.id)
+            .all()
+        ):
+            dias_por_tipo_prefill[dp.tipo_catalogo_id] = int(dp.dias or 0)
+        pers = ConsignaPersona.query.filter_by(consigna_id=row_edit.id).order_by(ConsignaPersona.id.asc()).all()
+        doms = ConsignaDomicilio.query.filter_by(consigna_id=row_edit.id).order_by(ConsignaDomicilio.id.asc()).all()
+        dom_by_tipo = {}
+        for d in doms:
+            dom_by_tipo.setdefault(_clean(d.tipo).lower(), []).append(d)
+        for p in pers:
+            pt = _clean(p.tipo).lower()
+            cand = (dom_by_tipo.get(pt) or dom_by_tipo.get("victima") or [])
+            dsel = cand[0] if cand else None
+            personas_prefill.append(
+                {
+                    "nombre": p.nombre or "",
+                    "dni": p.dni or "",
+                    "tipo": "denunciado" if pt == "denunciado" else "victima",
+                    "notificar": p.notificar or ("si" if pt == "denunciado" else "no"),
+                    "domicilio": dsel.direccion if dsel else "",
+                    "latlng": f"{dsel.latitud}, {dsel.longitud}" if dsel and dsel.latitud is not None and dsel.longitud is not None else "",
+                    "barrio_id": "",
+                }
+            )
     return render_template(
         "oficios_judiciales/manual_form.html",
         juzgados=juzgados,
@@ -3016,6 +3100,13 @@ def manual_nuevo():
         barrios=barrios,
         motivos_indeterminada=motivos_indeterminada,
         tipos_consigna_catalogo=tipos_consigna_catalogo,
+        edit_id=(row_edit.id if row_edit else ""),
+        form_data=form_data,
+        selected_juzgado_ids=selected_juzgado_ids,
+        selected_tipo_medida_ids=selected_tipo_medida_ids,
+        selected_fiscalia_ids=selected_fiscalia_ids,
+        dias_por_tipo_prefill=dias_por_tipo_prefill,
+        personas_prefill=personas_prefill,
     )
 
 

@@ -25,6 +25,7 @@
 
 <form method="POST" class="row g-3">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="edit_id" value="{{ edit_id or '' }}">
     <div class="col-12 d-flex justify-content-end">
         <input type="file" id="manual-autofill-files" accept=".jpg,.jpeg,.png,.webp,.pdf" multiple class="d-none">
         <button class="btn btn-outline-primary btn-sm" type="button" id="btn-autofill-upload">
@@ -33,26 +34,26 @@
     </div>
     <div class="col-md-3">
         <label class="form-label">Expediente</label>
-        <input class="form-control" name="expediente" required>
+        <input class="form-control" name="expediente" value="{{ form_data.get('expediente','') }}" required>
     </div>
     <div class="col-md-4">
         <label class="form-label">Juzgado</label>
         <select id="manual-juzgado" class="form-select ts-manual" name="juzgado_id" multiple autocomplete="off">
             {% for j in juzgados %}
-            <option value="{{ j.id }}">{{ j.nombre }}</option>
+            <option value="{{ j.id }}" {{ 'selected' if j.id in (selected_juzgado_ids or []) else '' }}>{{ j.nombre }}</option>
             {% endfor %}
         </select>
     </div>
     <div class="col-md-5">
         <label class="form-label">Carátula</label>
-        <textarea class="form-control" name="caratula" rows="2" placeholder="Detalle completo de carátula"></textarea>
+        <textarea class="form-control" name="caratula" rows="2" placeholder="Detalle completo de carátula">{{ form_data.get('caratula','') }}</textarea>
     </div>
 
     <div class="col-md-4">
         <label class="form-label">Tipo medida</label>
         <select id="manual-tipo-medida" class="form-select ts-manual" name="tipo_medida_id" multiple autocomplete="off">
             {% for t in tipos_medida %}
-            <option value="{{ t.id }}">{{ t.nombre }}</option>
+            <option value="{{ t.id }}" {{ 'selected' if t.id in (selected_tipo_medida_ids or []) else '' }}>{{ t.nombre }}</option>
             {% endfor %}
         </select>
     </div>
@@ -60,11 +61,11 @@
         <label class="form-label">Fiscalía</label>
         <select id="manual-fiscalia" class="form-select ts-manual" name="fiscalia_id" multiple autocomplete="off">
             {% for f in fiscalias %}
-            <option value="{{ f.id }}">{{ f.nombre }}</option>
+            <option value="{{ f.id }}" {{ 'selected' if f.id in (selected_fiscalia_ids or []) else '' }}>{{ f.nombre }}</option>
             {% endfor %}
         </select>
     </div>
-    <div class="col-md-3"><label class="form-label">Fecha notificación</label><input class="form-control" type="date" name="fecha_notificacion"></div>
+    <div class="col-md-3"><label class="form-label">Fecha notificación</label><input class="form-control" type="date" name="fecha_notificacion" value="{{ form_data.get('fecha_notificacion','') }}"></div>
 
     <div class="col-12 mt-2"><small class="text-muted">Días por tipo (catálogo). “Indeterminada” u similares: Sí/No, no suma al total de días.</small></div>
     {% if tipos_consigna_catalogo %}
@@ -73,30 +74,30 @@
         <label class="form-label">{{ tc.nombre }}</label>
         {% if 'indeterm' in tc.nombre|lower %}
         <select class="form-select js-indet-si-no" name="dias_por_tipo_{{ tc.id }}" id="dias-pt-{{ tc.id }}" title="Medida indeterminada (sin plazo en días)">
-            <option value="0" selected>No</option>
-            <option value="1">Sí</option>
+            <option value="0" {{ 'selected' if (dias_por_tipo_prefill.get(tc.id, 0)|int) == 0 else '' }}>No</option>
+            <option value="1" {{ 'selected' if (dias_por_tipo_prefill.get(tc.id, 0)|int) > 0 else '' }}>Sí</option>
         </select>
         {% else %}
-        <input type="number" min="0" step="1" class="form-control js-dia-parte" name="dias_por_tipo_{{ tc.id }}" id="dias-pt-{{ tc.id }}" value="" title="Cantidad de días — {{ tc.nombre }}">
+        <input type="number" min="0" step="1" class="form-control js-dia-parte" name="dias_por_tipo_{{ tc.id }}" id="dias-pt-{{ tc.id }}" value="{{ dias_por_tipo_prefill.get(tc.id,'') }}" title="Cantidad de días — {{ tc.nombre }}">
         {% endif %}
     </div>
     {% endfor %}
     {% else %}
     <div class="col-12"><p class="text-warning small mb-0">No hay tipos en el catálogo. Cargalos en <a href="{{ url_for('oficios_judiciales.catalogos') }}">Oficios → Catálogos</a> (pestaña Tipos de consigna).</p></div>
     {% endif %}
-    <div class="col-md-2"><label class="form-label">Días total</label><input class="form-control bg-light" type="text" id="manual-dias-total" value="0" readonly autocomplete="off" title="Suma solo de días numéricos (no incluye indeterminada Sí/No)"></div>
     <div class="col-md-5 d-none" id="wrap-motivo-indeterminada">
         <label class="form-label">Motivo de indeterminada (si corresponde)</label>
         <select class="form-select" name="motivo_indeterminada_id" id="motivo-indeterminada-id">
             <option value="">Seleccionar…</option>
             {% for m in motivos_indeterminada %}
-            <option value="{{ m.id }}">{{ m.nombre }}</option>
+            <option value="{{ m.id }}" {{ 'selected' if (form_data.get('motivo_indeterminada_id')|int) == m.id else '' }}>{{ m.nombre }}</option>
             {% endfor %}
         </select>
     </div>
-    <div class="col-md-3"><label class="form-label">Teléfono contacto</label><input class="form-control" name="telefono_contacto"></div>
-    <div class="col-md-3"><label class="form-label">SEPS ingreso</label><input class="form-control" name="seps_ingreso" placeholder="Nº expediente interno SEPS" autocomplete="off" title="Seguimiento en sistema policial (ingreso)"></div>
-    <div class="col-md-3"><label class="form-label">SEPS salida</label><input class="form-control" name="seps_salida" placeholder="Nº expediente interno SEPS" autocomplete="off" title="Seguimiento en sistema policial (salida)"></div>
+    <div class="col-md-2"><label class="form-label">Días total</label><input class="form-control bg-light" type="text" id="manual-dias-total" value="0" readonly autocomplete="off" title="Suma solo de días numéricos (no incluye indeterminada Sí/No)"></div>
+    <div class="col-md-3"><label class="form-label">Teléfono contacto</label><input class="form-control" name="telefono_contacto" value="{{ form_data.get('telefono_contacto','') }}"></div>
+    <div class="col-md-3"><label class="form-label">SEPS ingreso</label><input class="form-control" name="seps_ingreso" placeholder="Nº expediente interno SEPS" autocomplete="off" title="Seguimiento en sistema policial (ingreso)" value="{{ form_data.get('seps_ingreso','') }}"></div>
+    <div class="col-md-3"><label class="form-label">SEPS salida</label><input class="form-control" name="seps_salida" placeholder="Nº expediente interno SEPS" autocomplete="off" title="Seguimiento en sistema policial (salida)" value="{{ form_data.get('seps_salida','') }}"></div>
 
     <div class="col-12">
         <div class="card">
@@ -112,7 +113,7 @@
 
     <div class="col-12 d-flex gap-2">
         <a class="btn btn-outline-secondary" href="{{ url_for('oficios_judiciales.manual_listado') }}">Cancelar</a>
-        <button class="btn btn-primary" type="submit">Guardar</button>
+        <button class="btn btn-primary" type="submit">{{ 'Actualizar' if edit_id else 'Guardar' }}</button>
     </div>
 </form>
 
@@ -292,17 +293,26 @@
             '<div class="row g-2 align-items-end mt-1">' +
             '<div class="col-md-3"><label class="form-label">Barrio</label><select class="form-select ts-barrio" name="persona_barrio_id[]">' + barrioOptionsHtml + '</select></div>' +
             '<div class="col-md-2"><label class="form-label">¿Notificar?</label><select class="form-select" name="persona_notificar[]"><option value="si"' + ((prefill.notificar || '') === 'si' ? ' selected' : '') + '>Sí</option><option value="no"' + ((prefill.notificar || '') === 'no' ? ' selected' : '') + '>No</option></select></div>' +
-            '<div class="col-md-4"><label class="form-label">Latitud, longitud</label><div class="input-group"><input class="form-control js-persona-coords" name="persona_latlng[]" type="text" placeholder="-24.xxxxxx, -65.xxxxxx" title="Pegá desde Google Maps o tocá el mapa" autocomplete="off"><button class="btn btn-outline-secondary js-mapa-btn" type="button" title="Elegir en mapa"><i class="bi bi-geo-alt"></i></button></div></div>' +
+            '<div class="col-md-4"><label class="form-label">Latitud, longitud</label><div class="input-group"><input class="form-control js-persona-coords" name="persona_latlng[]" type="text" placeholder="-24.xxxxxx, -65.xxxxxx" title="Pegá desde Google Maps o tocá el mapa" autocomplete="off" value="' + (prefill.latlng || '') + '"><button class="btn btn-outline-secondary js-mapa-btn" type="button" title="Elegir en mapa"><i class="bi bi-geo-alt"></i></button></div></div>' +
             '<div class="col-md-2"><label class="form-label">Tipo</label><select class="form-select" name="persona_tipo[]"><option value="victima"' + ((prefill.tipo || '') === 'victima' ? ' selected' : '') + '>Víctima</option><option value="denunciado"' + ((prefill.tipo || '') === 'denunciado' ? ' selected' : '') + '>Acusado</option></select></div>' +
             '<div class="col-md-1"><label class="form-label d-block">&nbsp;</label><button class="btn btn-outline-danger w-100 btn-sm js-del" type="button">Quitar</button></div>' +
             '</div>';
         div.querySelector('.js-del').addEventListener('click', function () { div.remove(); });
         wrap.appendChild(div);
         initBarrioSelect(div.querySelector('select.ts-barrio'));
+        if (prefill.barrio_id) {
+            var bsel = div.querySelector('select.ts-barrio');
+            if (bsel && bsel.tomselect) bsel.tomselect.setValue(String(prefill.barrio_id), true);
+        }
     }
     btn.addEventListener('click', addRow);
     window.manualAddPersonaRow = addRow;
-    addRow();
+    var preloaded = {{ personas_prefill|tojson if personas_prefill is defined else '[]' }};
+    if (Array.isArray(preloaded) && preloaded.length) {
+        preloaded.forEach(function (p) { addRow(p || {}); });
+    } else {
+        addRow();
+    }
 })();
 
 (function () {

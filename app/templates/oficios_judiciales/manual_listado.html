@@ -222,7 +222,14 @@
                     {% set c = coords_map.get(r.id) %}
                     <a class="btn btn-sm btn-outline-success mb-1" href="https://www.google.com/maps?q={{ c[0] }},{{ c[1] }}" target="_blank" rel="noopener"><i class="bi bi-geo-alt"></i></a>
                     {% endif %}
+                    <a class="btn btn-sm btn-outline-warning mb-1" href="{{ url_for('oficios_judiciales.manual_nuevo', edit_id=r.id) }}" title="Editar"><i class="bi bi-pencil"></i></a>
                     <a class="btn btn-sm btn-outline-primary mb-1" href="{{ url_for('oficios_judiciales.detalle', consigna_id=r.id) }}"><i class="bi bi-eye"></i></a>
+                    {% if can_delete_superadmin %}
+                    <form method="POST" action="{{ url_for('oficios_judiciales.manual_eliminar', consigna_id=r.id) }}" class="d-inline" onsubmit="return confirm('¿Eliminar esta consigna manual? Esta acción no se puede deshacer.');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="btn btn-sm btn-outline-danger mb-1" type="submit" title="Eliminar"><i class="bi bi-trash"></i></button>
+                    </form>
+                    {% endif %}
                 </td>
             </tr>
             {% else %}
