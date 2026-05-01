@@ -15,8 +15,8 @@ class ConsignaJudicial(db.Model):
     unidad_id = db.Column(db.Integer, db.ForeignKey("unidades.id"), nullable=False, index=True)
     creado_por = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)
 
-    expediente = db.Column(db.String(120), nullable=True, index=True)
-    expediente_key = db.Column(db.String(120), nullable=True, index=True)
+    expediente = db.Column(db.String(191), nullable=True, index=True)
+    expediente_key = db.Column(db.String(191), nullable=True, index=True)
     juzgado = db.Column(db.String(255), nullable=True, index=True)
     juzgado_key = db.Column(db.String(255), nullable=True, index=True)
     caratula = db.Column(db.Text, nullable=True)
@@ -24,9 +24,9 @@ class ConsignaJudicial(db.Model):
     tipo_consigna = db.Column(db.String(30), nullable=True, index=True)  # fija | ambulatoria | personalizada | indeterminada
     fiscalia = db.Column(db.String(255), nullable=True, index=True)
     fiscalia_key = db.Column(db.String(255), nullable=True, index=True)
-    telefono_contacto = db.Column(db.String(80), nullable=True, index=True)
-    seps_ingreso = db.Column(db.String(64), nullable=True, index=True)
-    seps_salida = db.Column(db.String(64), nullable=True, index=True)
+    telefono_contacto = db.Column(db.String(120), nullable=True, index=True)
+    seps_ingreso = db.Column(db.String(128), nullable=True, index=True)
+    seps_salida = db.Column(db.String(128), nullable=True, index=True)
     fecha_oficio = db.Column(db.Date, nullable=True, index=True)
     fecha_notificacion = db.Column(db.Date, nullable=True, index=True)  # inicio real
     cantidad_dias = db.Column(db.Integer, nullable=True)
@@ -34,7 +34,7 @@ class ConsignaJudicial(db.Model):
     dias_ambulatoria = db.Column(db.Integer, nullable=True)
     dias_personalizada = db.Column(db.Integer, nullable=True)
     distancia = db.Column(db.String(80), nullable=True)
-    turnos = db.Column(db.String(120), nullable=True)
+    turnos = db.Column(db.String(255), nullable=True)
     acusado_notificar = db.Column(db.String(20), nullable=True)  # si | no | indeterminada
     estado = db.Column(db.String(40), nullable=False, default="activa", index=True)
     observaciones = db.Column(db.Text, nullable=True)
@@ -42,7 +42,7 @@ class ConsignaJudicial(db.Model):
     texto_fuente = db.Column(db.Text, nullable=True)
     fuente_principal = db.Column(db.String(20), nullable=False, default="ocr")  # ocr | qr
     qr_url = db.Column(db.String(500), nullable=True)
-    archivo_origen = db.Column(db.String(255), nullable=True)
+    archivo_origen = db.Column(db.String(500), nullable=True)
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -171,17 +171,57 @@ def _ensure_schema():
     if "seps_salida" not in cols:
         db.session.execute(text("ALTER TABLE oficios_consignas ADD COLUMN seps_salida VARCHAR(64) NULL"))
         db.session.commit()
-    # Ajustes de longitud para textos largos en tipo medida (catálogo y consigna).
+    # Ajustes de longitudes/texto para campos extensos.
     # Nota: 191 evita errores de índice en MySQL/MariaDB con utf8mb4.
     try:
         cons_cols = {c.get("name"): c for c in insp.get_columns(ConsignaJudicial.__tablename__)}
+        exp_col = cons_cols.get("expediente")
+        exp_len = getattr(exp_col.get("type"), "length", None) if exp_col else None
+        if exp_col and exp_len is not None and int(exp_len) < 191:
+            db.session.execute(text("ALTER TABLE oficios_consignas MODIFY COLUMN expediente VARCHAR(191) NULL"))
+            db.session.commit()
+        expk_col = cons_cols.get("expediente_key")
+        expk_len = getattr(expk_col.get("type"), "length", None) if expk_col else None
+        if expk_col and expk_len is not None and int(expk_len) < 191:
+            db.session.execute(text("ALTER TABLE oficios_consignas MODIFY COLUMN expediente_key VARCHAR(191) NULL"))
+            db.session.commit()
+        car_col = cons_cols.get("caratula")
+        car_type = str(car_col.get("type")).lower() if car_col else ""
+        if car_col and ("char" in car_type or "varchar" in car_type):
+            db.session.execute(text("ALTER TABLE oficios_consignas MODIFY COLUMN caratula TEXT NULL"))
+            db.session.commit()
         tcol = cons_cols.get("tipo_medida")
         tlen = getattr(tcol.get("type"), "length", None) if tcol else None
         if tcol and tlen is not None and int(tlen) < 191:
             db.session.execute(text("ALTER TABLE oficios_consignas MODIFY COLUMN tipo_medida VARCHAR(191) NULL"))
             db.session.commit()
+        tel_col = cons_cols.get("telefono_contacto")
+        tel_len = getattr(tel_col.get("type"), "length", None) if tel_col else None
+        if tel_col and tel_len is not None and int(tel_len) < 120:
+            db.session.execute(text("ALTER TABLE oficios_consignas MODIFY COLUMN telefono_contacto VARCHAR(120) NULL"))
+            db.session.commit()
+        seps_in_col = cons_cols.get("seps_ingreso")
+        seps_in_len = getattr(seps_in_col.get("type"), "length", None) if seps_in_col else None
+        if seps_in_col and seps_in_len is not None and int(seps_in_len) < 128:
+            db.session.execute(text("ALTER TABLE oficios_consignas MODIFY COLUMN seps_ingreso VARCHAR(128) NULL"))
+            db.session.commit()
+        seps_out_col = cons_cols.get("seps_salida")
+        seps_out_len = getattr(seps_out_col.get("type"), "length", None) if seps_out_col else None
+        if seps_out_col and seps_out_len is not None and int(seps_out_len) < 128:
+            db.session.execute(text("ALTER TABLE oficios_consignas MODIFY COLUMN seps_salida VARCHAR(128) NULL"))
+            db.session.commit()
+        turn_col = cons_cols.get("turnos")
+        turn_len = getattr(turn_col.get("type"), "length", None) if turn_col else None
+        if turn_col and turn_len is not None and int(turn_len) < 255:
+            db.session.execute(text("ALTER TABLE oficios_consignas MODIFY COLUMN turnos VARCHAR(255) NULL"))
+            db.session.commit()
+        orig_col = cons_cols.get("archivo_origen")
+        orig_len = getattr(orig_col.get("type"), "length", None) if orig_col else None
+        if orig_col and orig_len is not None and int(orig_len) < 500:
+            db.session.execute(text("ALTER TABLE oficios_consignas MODIFY COLUMN archivo_origen VARCHAR(500) NULL"))
+            db.session.commit()
     except Exception:
-        current_app.logger.exception("No se pudo ampliar oficios_consignas.tipo_medida a 191")
+        current_app.logger.exception("No se pudieron ampliar campos extensos en oficios_consignas")
         db.session.rollback()
     try:
         tm_cols = {c.get("name"): c for c in insp.get_columns(CatalogoTipoMedida.__tablename__)}
