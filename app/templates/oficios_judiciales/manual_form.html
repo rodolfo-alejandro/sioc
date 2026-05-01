@@ -85,6 +85,15 @@
     <div class="col-12"><p class="text-warning small mb-0">No hay tipos en el catálogo. Cargalos en <a href="{{ url_for('oficios_judiciales.catalogos') }}">Oficios → Catálogos</a> (pestaña Tipos de consigna).</p></div>
     {% endif %}
     <div class="col-md-2"><label class="form-label">Días total</label><input class="form-control bg-light" type="text" id="manual-dias-total" value="0" readonly autocomplete="off" title="Suma solo de días numéricos (no incluye indeterminada Sí/No)"></div>
+    <div class="col-md-5 d-none" id="wrap-motivo-indeterminada">
+        <label class="form-label">Motivo de indeterminada (si corresponde)</label>
+        <select class="form-select" name="motivo_indeterminada_id" id="motivo-indeterminada-id">
+            <option value="">Seleccionar…</option>
+            {% for m in motivos_indeterminada %}
+            <option value="{{ m.id }}">{{ m.nombre }}</option>
+            {% endfor %}
+        </select>
+    </div>
     <div class="col-md-3"><label class="form-label">Teléfono contacto</label><input class="form-control" name="telefono_contacto"></div>
     <div class="col-md-3"><label class="form-label">SEPS ingreso</label><input class="form-control" name="seps_ingreso" placeholder="Nº expediente interno SEPS" autocomplete="off" title="Seguimiento en sistema policial (ingreso)"></div>
     <div class="col-md-3"><label class="form-label">SEPS salida</label><input class="form-control" name="seps_salida" placeholder="Nº expediente interno SEPS" autocomplete="off" title="Seguimiento en sistema policial (salida)"></div>
@@ -159,14 +168,35 @@
         var el = document.getElementById('manual-dias-total');
         if (el) el.value = String(sum);
     }
+    function refreshIndeterminadaRules() {
+        var hasIndet = false;
+        document.querySelectorAll('.js-indet-si-no').forEach(function (sel) {
+            if ((sel.value || '0') === '1') hasIndet = true;
+        });
+        var motivoWrap = document.getElementById('wrap-motivo-indeterminada');
+        var motivoSel = document.getElementById('motivo-indeterminada-id');
+        document.querySelectorAll('.js-dia-parte').forEach(function (inp) {
+            if (hasIndet) {
+                inp.value = '';
+                inp.setAttribute('disabled', 'disabled');
+                inp.setAttribute('title', 'Si la consigna es indeterminada, no se cargan días por tramo.');
+            } else {
+                inp.removeAttribute('disabled');
+                inp.setAttribute('title', inp.getAttribute('title') || '');
+            }
+        });
+        if (motivoWrap) motivoWrap.classList.toggle('d-none', !hasIndet);
+        if (!hasIndet && motivoSel) motivoSel.value = '';
+        refreshTotal();
+    }
     document.querySelectorAll('.js-dia-parte').forEach(function (inp) {
         inp.addEventListener('input', refreshTotal);
         inp.addEventListener('change', refreshTotal);
     });
     document.querySelectorAll('.js-indet-si-no').forEach(function (sel) {
-        sel.addEventListener('change', refreshTotal);
+        sel.addEventListener('change', refreshIndeterminadaRules);
     });
-    refreshTotal();
+    refreshIndeterminadaRules();
 })();
 
 (function () {

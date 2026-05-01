@@ -78,6 +78,9 @@
                 <div><strong>Carátula:</strong> {{ row.caratula or '—' }}</div>
                 <div><strong>Fecha notificación:</strong> {{ row.fecha_notificacion|localtime('%d/%m/%Y') if row.fecha_notificacion else '—' }}</div>
                 <div><strong>Total días:</strong> {{ row.cantidad_dias or '—' }}</div>
+                {% if row.motivo_indeterminada %}
+                <div><strong>Motivo indeterminada:</strong> {{ row.motivo_indeterminada.nombre }}</div>
+                {% endif %}
             </div>
         </div>
     </div>

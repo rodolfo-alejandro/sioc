@@ -19,6 +19,7 @@ from app.models.oficios_judiciales import (
     CatalogoBarrio,
     CatalogoFiscalia,
     CatalogoJuzgado,
+    CatalogoMotivoIndeterminada,
     CatalogoTipoConsigna,
     CatalogoTipoMedida,
     ConsignaDiasPorTipo,
@@ -129,6 +130,7 @@ def _ensure_schema():
         CatalogoTipoMedida,
         CatalogoTipoConsigna,
         CatalogoFiscalia,
+        CatalogoMotivoIndeterminada,
         CatalogoBarrio,
         ConsignaDiasPorTipo,
     ):
@@ -170,6 +172,9 @@ def _ensure_schema():
         db.session.commit()
     if "seps_salida" not in cols:
         db.session.execute(text("ALTER TABLE oficios_consignas ADD COLUMN seps_salida VARCHAR(64) NULL"))
+        db.session.commit()
+    if "motivo_indeterminada_id" not in cols:
+        db.session.execute(text("ALTER TABLE oficios_consignas ADD COLUMN motivo_indeterminada_id INT NULL"))
         db.session.commit()
     # Ajustes de longitudes/texto para campos extensos.
     # Nota: 191 evita errores de índice en MySQL/MariaDB con utf8mb4.
@@ -2275,6 +2280,7 @@ def manual_export_xlsx():
                 "dias_total": total,
                 "estado_operativo": _manual_estado_operativo(r),
                 "etapa_actual": etapa_nombre,
+                "motivo_indeterminada": (r.motivo_indeterminada.nombre if getattr(r, "motivo_indeterminada", None) else ""),
                 "progreso": f"{trans}/{total}" if total > 0 else "0/0",
                 "personas": personas_txt,
                 "domicilios": domicilios_txt,
@@ -2800,6 +2806,9 @@ def manual_nuevo():
     juzgados = CatalogoJuzgado.query.filter_by(activo=True).order_by(CatalogoJuzgado.nombre.asc()).all()
     tipos_medida = CatalogoTipoMedida.query.filter_by(activo=True).order_by(CatalogoTipoMedida.nombre.asc()).all()
     fiscalias = CatalogoFiscalia.query.filter_by(activo=True).order_by(CatalogoFiscalia.nombre.asc()).all()
+    motivos_indeterminada = (
+        CatalogoMotivoIndeterminada.query.filter_by(activo=True).order_by(CatalogoMotivoIndeterminada.nombre.asc()).all()
+    )
     barrios = CatalogoBarrio.query.filter_by(activo=True).order_by(CatalogoBarrio.nombre.asc()).all()
     tipos_consigna_catalogo = sorted(
         CatalogoTipoConsigna.query.filter_by(activo=True).all(),
@@ -2819,21 +2828,29 @@ def manual_nuevo():
         tipo_medida = " · ".join(tm_n) if tm_n else ""
         fiscalia = " · ".join(fis_n) if fis_n else ""
         cat_by_id = {c.id: c for c in tipos_consigna_catalogo}
+        motivo_indeterminada_id = _to_int_or_none(request.form.get("motivo_indeterminada_id"))
         id_to_dias: dict[int, int] = {}
+        has_indeterminada = False
         for tc in tipos_consigna_catalogo:
             v = _to_int_or_none(request.form.get(f"dias_por_tipo_{tc.id}"))
             d = 0 if v is None else max(0, v)
             if _es_tipo_indeterminada_catalogo(tc.nombre):
                 d = 1 if d else 0
+                has_indeterminada = has_indeterminada or bool(d)
             id_to_dias[tc.id] = d
+        if has_indeterminada:
+            # Regla de negocio: si es indeterminada, no pueden coexistir tramos en días.
+            for tc in tipos_consigna_catalogo:
+                if not _es_tipo_indeterminada_catalogo(tc.nombre):
+                    id_to_dias[tc.id] = 0
         cantidad_dias = 0
         for tc in tipos_consigna_catalogo:
             d = id_to_dias.get(tc.id, 0)
             if _es_tipo_indeterminada_catalogo(tc.nombre):
                 continue
             cantidad_dias += d
-        tipo_consigna = _derive_tipo_consigna_desde_catalogo(id_to_dias, cat_by_id)
-        d_fija, d_amb, d_pers = _legacy_tres_columnas_desde_catalogo(id_to_dias, cat_by_id)
+        tipo_consigna = "indeterminada" if has_indeterminada else _derive_tipo_consigna_desde_catalogo(id_to_dias, cat_by_id)
+        d_fija, d_amb, d_pers = (0, 0, 0) if has_indeterminada else _legacy_tres_columnas_desde_catalogo(id_to_dias, cat_by_id)
         exp_key = _expediente_key(exp)
         juz_key = _juzgado_key(juz) if juz else ""
 
@@ -2865,6 +2882,7 @@ def manual_nuevo():
                 telefono_contacto=tel_contacto,
                 seps_ingreso=seps_ingreso or None,
                 seps_salida=seps_salida or None,
+                motivo_indeterminada_id=motivo_indeterminada_id if has_indeterminada else None,
                 fecha_oficio=None,
                 fecha_notificacion=_parse_date(_clean(request.form.get("fecha_notificacion"))),
                 cantidad_dias=cantidad_dias if cantidad_dias else None,
@@ -2888,6 +2906,7 @@ def manual_nuevo():
             row.telefono_contacto = tel_contacto or row.telefono_contacto
             row.seps_ingreso = seps_ingreso or None
             row.seps_salida = seps_salida or None
+            row.motivo_indeterminada_id = motivo_indeterminada_id if has_indeterminada else None
             row.cantidad_dias = cantidad_dias or None
             row.dias_fija = d_fija or None
             row.dias_ambulatoria = d_amb or None
@@ -2995,6 +3014,7 @@ def manual_nuevo():
         tipos_medida=tipos_medida,
         fiscalias=fiscalias,
         barrios=barrios,
+        motivos_indeterminada=motivos_indeterminada,
         tipos_consigna_catalogo=tipos_consigna_catalogo,
     )
 
@@ -3026,6 +3046,11 @@ def catalogos():
             nombre = _clean(request.form.get("nombre"))
             if nombre and not CatalogoFiscalia.query.filter_by(nombre=nombre).first():
                 db.session.add(CatalogoFiscalia(nombre=nombre, clave=_fiscalia_key(nombre), activo=True))
+                db.session.commit()
+        elif action == "add_motivo_indeterminada":
+            nombre = _clean(request.form.get("nombre"))
+            if nombre and not CatalogoMotivoIndeterminada.query.filter_by(nombre=nombre).first():
+                db.session.add(CatalogoMotivoIndeterminada(nombre=nombre, activo=True))
                 db.session.commit()
         elif action == "import_barrios_json":
             try:
@@ -3171,6 +3196,26 @@ def catalogos():
             if row:
                 db.session.delete(row)
                 db.session.commit()
+        elif action == "edit_motivo_indeterminada":
+            rid = _to_int_or_none(request.form.get("item_id"))
+            nombre = _clean(request.form.get("nombre"))
+            row = CatalogoMotivoIndeterminada.query.get(rid) if rid else None
+            if row and nombre:
+                dup = CatalogoMotivoIndeterminada.query.filter(
+                    CatalogoMotivoIndeterminada.id != row.id,
+                    func.lower(CatalogoMotivoIndeterminada.nombre) == nombre.lower(),
+                ).first()
+                if dup:
+                    flash("Ya existe ese motivo de indeterminada.", "warning")
+                else:
+                    row.nombre = nombre
+                    db.session.commit()
+        elif action == "delete_motivo_indeterminada":
+            rid = _to_int_or_none(request.form.get("item_id"))
+            row = CatalogoMotivoIndeterminada.query.get(rid) if rid else None
+            if row:
+                db.session.delete(row)
+                db.session.commit()
         elif action == "edit_barrio":
             rid = _to_int_or_none(request.form.get("item_id"))
             nombre = _clean(request.form.get("nombre"))
@@ -3200,6 +3245,7 @@ def catalogos():
     tipos_medida = CatalogoTipoMedida.query.order_by(CatalogoTipoMedida.nombre.asc()).all()
     tipos_consigna = CatalogoTipoConsigna.query.order_by(CatalogoTipoConsigna.nombre.asc()).all()
     fiscalias = CatalogoFiscalia.query.order_by(CatalogoFiscalia.nombre.asc()).all()
+    motivos_indeterminada = CatalogoMotivoIndeterminada.query.order_by(CatalogoMotivoIndeterminada.nombre.asc()).all()
     barrios = CatalogoBarrio.query.order_by(CatalogoBarrio.nombre.asc()).all()
     return render_template(
         "oficios_judiciales/catalogos.html",
@@ -3207,6 +3253,7 @@ def catalogos():
         tipos_medida=tipos_medida,
         tipos_consigna=tipos_consigna,
         fiscalias=fiscalias,
+        motivos_indeterminada=motivos_indeterminada,
         barrios=barrios,
     )
 

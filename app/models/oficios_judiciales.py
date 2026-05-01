@@ -43,6 +43,7 @@ class ConsignaJudicial(db.Model):
     fuente_principal = db.Column(db.String(20), nullable=False, default="ocr")  # ocr | qr
     qr_url = db.Column(db.String(500), nullable=True)
     archivo_origen = db.Column(db.String(500), nullable=True)
+    motivo_indeterminada_id = db.Column(db.Integer, db.ForeignKey("oficios_catalogo_motivos_indeterminada.id"), nullable=True, index=True)
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -74,6 +75,7 @@ class ConsignaJudicial(db.Model):
         lazy="dynamic",
         cascade="all, delete-orphan",
     )
+    motivo_indeterminada = db.relationship("CatalogoMotivoIndeterminada", backref=db.backref("consignas", lazy="dynamic"))
 
 
 class ConsignaDiasPorTipo(db.Model):
@@ -169,6 +171,14 @@ class CatalogoFiscalia(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nombre = db.Column(db.String(255), nullable=False, unique=True, index=True)
     clave = db.Column(db.String(255), nullable=True, index=True)
+    activo = db.Column(db.Boolean, nullable=False, default=True, index=True)
+
+
+class CatalogoMotivoIndeterminada(db.Model):
+    __tablename__ = "oficios_catalogo_motivos_indeterminada"
+
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(191), nullable=False, unique=True, index=True)
     activo = db.Column(db.Boolean, nullable=False, default=True, index=True)
 
 
