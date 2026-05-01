@@ -1289,6 +1289,7 @@ def _parsed_score(parsed: dict) -> int:
 
 
 def _q_base():
+    _ensure_schema()
     return ConsignaJudicial.query.filter(ConsignaJudicial.unidad_id == current_user.unidad_id)
 
 
