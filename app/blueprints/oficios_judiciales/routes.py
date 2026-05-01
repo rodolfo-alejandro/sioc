@@ -2615,7 +2615,11 @@ def manual_reincidencias():
             ConsignaJudicial.fuente_principal == "manual",
             ConsignaJudicial.id.in_(allowed_ids),
         )
-        .order_by(ConsignaJudicial.fecha_notificacion.desc().nullslast(), ConsignaJudicial.id.desc())
+        .order_by(
+            ConsignaJudicial.fecha_notificacion.is_(None),
+            ConsignaJudicial.fecha_notificacion.desc(),
+            ConsignaJudicial.id.desc(),
+        )
         .all()
     )
     grupos = {}
