@@ -2626,15 +2626,17 @@ def manual_reincidencias():
     for p, cj in pers_rows:
         nombre = _clean(p.nombre)
         dni = _clean(p.dni)
+        dni_norm = _digits_only(dni)
         if not nombre and not dni:
             continue
-        key = f"dni:{dni}" if dni else f"nom:{_ascii_lower_no_accent(nombre)}"
+        key = f"dni:{dni_norm}" if dni_norm else f"nom:{_ascii_lower_no_accent(nombre)}"
         g = grupos.setdefault(
             key,
             {
                 "persona_key": key,
                 "nombre": nombre,
                 "dni": dni,
+                "dni_norm": dni_norm,
                 "n": 0,
                 "activa": 0,
                 "finalizada": 0,
@@ -2670,11 +2672,13 @@ def manual_reincidencias():
     coincidencias = [g for g in grupos.values() if g["n"] > 1]
     if qtxt:
         qn = _ascii_lower_no_accent(qtxt)
+        qd = _digits_only(qtxt)
         coincidencias = [
             g
             for g in coincidencias
             if qn in _ascii_lower_no_accent(g.get("nombre", ""))
             or qn in _ascii_lower_no_accent(g.get("dni", ""))
+            or (qd and qd in _digits_only(g.get("dni", "")))
         ]
     coincidencias.sort(
         key=lambda g: (
@@ -2688,14 +2692,63 @@ def manual_reincidencias():
     if not persona_sel and coincidencias:
         persona_sel = coincidencias[0]["persona_key"]
     detalle = []
+    persona_resumen = None
+    detalle_points = []
     for g in coincidencias:
         if g.get("persona_key") == persona_sel:
             detalle = list(g.get("items", []))
+            total = int(g.get("n", 0))
+            activas = int(g.get("activa", 0))
+            finalizadas = int(g.get("finalizada", 0))
+            if activas > 0 and finalizadas > 0:
+                estado_txt = "tiene historial mixto (activas y finalizadas)"
+            elif activas > 0:
+                estado_txt = "tiene consignas activas en curso"
+            else:
+                estado_txt = "solo tiene consignas finalizadas"
+            persona_resumen = {
+                "nombre": g.get("nombre") or "Sin nombre",
+                "dni": g.get("dni") or "",
+                "total": total,
+                "activas": activas,
+                "finalizadas": finalizadas,
+                "estado_txt": estado_txt,
+            }
             break
+    if detalle:
+        detalle_by_id = {int(d.get("id")): d for d in detalle if d.get("id")}
+        dom_rows = (
+            db.session.query(ConsignaDomicilio)
+            .filter(
+                ConsignaDomicilio.consigna_id.in_(list(detalle_by_id.keys())),
+                ConsignaDomicilio.latitud.isnot(None),
+                ConsignaDomicilio.longitud.isnot(None),
+            )
+            .all()
+        )
+        for d in dom_rows:
+            ref = detalle_by_id.get(int(d.consigna_id))
+            if not ref:
+                continue
+            detalle_points.append(
+                {
+                    "id": int(d.consigna_id),
+                    "expediente": ref.get("expediente") or "",
+                    "tipo_consigna": ref.get("tipo_consigna") or "",
+                    "estado": ref.get("estado") or "",
+                    "barrio": d.barrio_nombre or "",
+                    "direccion": d.direccion or "",
+                    "lat": d.latitud,
+                    "lng": d.longitud,
+                    "detalle_url": url_for("oficios_judiciales.detalle", consigna_id=d.consigna_id),
+                }
+            )
     return render_template(
         "oficios_judiciales/manual_reincidencias.html",
         rows=coincidencias,
         detalle=detalle,
+        persona_resumen=persona_resumen,
+        detalle_points_json=json.dumps(detalle_points),
         persona_sel=persona_sel,
         selected=request.args,
         tipos_consigna=opts["tipos_consigna"],
