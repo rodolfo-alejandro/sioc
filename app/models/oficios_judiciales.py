@@ -50,6 +50,7 @@ class ConsignaJudicial(db.Model):
         nullable=True,
         index=True,
     )
+    tipo_base_indeterminada = db.Column(db.String(30), nullable=True, index=True)  # fija | ambulatoria | personalizada
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -136,6 +137,7 @@ class ConsignaPersona(db.Model):
     nombre_key = db.Column(db.String(255), nullable=True, index=True)
     dni = db.Column(db.String(40), nullable=True, index=True)
     dni_key = db.Column(db.String(20), nullable=True, index=True)
+    es_menor = db.Column(db.Boolean, nullable=False, default=False, index=True)
     tipo = db.Column(db.String(30), nullable=False, index=True)  # victima | denunciado | notificado
     notificar = db.Column(db.String(20), nullable=True)  # si | no | indeterminada
 

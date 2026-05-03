@@ -186,6 +186,13 @@ def _ensure_schema():
         except Exception:
             current_app.logger.exception("No se pudo agregar estado_expediente_id en oficios_consignas")
             db.session.rollback()
+    if "tipo_base_indeterminada" not in cols:
+        try:
+            db.session.execute(text("ALTER TABLE oficios_consignas ADD COLUMN tipo_base_indeterminada VARCHAR(30) NULL"))
+            db.session.commit()
+        except Exception:
+            current_app.logger.exception("No se pudo agregar tipo_base_indeterminada en oficios_consignas")
+            db.session.rollback()
     # Ajustes de longitudes/texto para campos extensos.
     # Nota: 191 evita errores de índice en MySQL/MariaDB con utf8mb4.
     try:
@@ -257,6 +264,9 @@ def _ensure_schema():
         db.session.commit()
     if "dni_key" not in pcols:
         db.session.execute(text("ALTER TABLE oficios_consigna_personas ADD COLUMN dni_key VARCHAR(20) NULL"))
+        db.session.commit()
+    if "es_menor" not in pcols:
+        db.session.execute(text("ALTER TABLE oficios_consigna_personas ADD COLUMN es_menor TINYINT(1) NOT NULL DEFAULT 0"))
         db.session.commit()
     dcols = {c.get("name") for c in insp.get_columns(ConsignaDomicilio.__tablename__)}
     if "latitud" not in dcols:
@@ -1391,6 +1401,17 @@ def _manual_etapa_slug_desde_pares(r: ConsignaJudicial, pares_raw: list, trans: 
     return "indeterminada"
 
 
+def _label_indeterminada_con_base(row: ConsignaJudicial) -> str:
+    base = _clean(getattr(row, "tipo_base_indeterminada", "")).lower()
+    if base == "fija":
+        return "Indeterminada (base fija)"
+    if base == "ambulatoria":
+        return "Indeterminada (base ambulatoria)"
+    if base == "personalizada":
+        return "Indeterminada (base personalizada)"
+    return "Indeterminada"
+
+
 def _orden_cronologia_tipo_consigna(cat: CatalogoTipoConsigna) -> tuple:
     """
     Orden de lectura de plazos en cadena: personalizada → fija → ambulatoria → indeterminada; otros al final.
@@ -2169,13 +2190,29 @@ def manual_listado():
                 else:
                     etapa = {"slug": _slug_tipo_consigna_desde_nombre(chosen[0]), "nombre": chosen[0], "icono": "bi-dot", "pos": chosen_idx + 1, "total": len(tramos), "cumplidas": cumplidas}
             elif has_indet:
-                etapa = {"slug": "indeterminada", "nombre": "Indeterminada", "icono": "bi-infinity", "pos": 0, "total": 0, "cumplidas": []}
+                etapa = {
+                    "slug": "indeterminada",
+                    "nombre": _label_indeterminada_con_base(r),
+                    "icono": "bi-infinity",
+                    "pos": 0,
+                    "total": 0,
+                    "cumplidas": [],
+                }
             elif (r.tipo_consigna or "") == "fija":
                 etapa = {"slug": "fija", "nombre": "Fija", "icono": "bi-anchor-fill", "pos": 0, "total": 0, "cumplidas": []}
             elif (r.tipo_consigna or "") == "ambulatoria":
                 etapa = {"slug": "ambulatoria", "nombre": "Ambulatoria", "icono": "bi-car-front-fill", "pos": 0, "total": 0, "cumplidas": []}
             elif (r.tipo_consigna or "") == "personalizada":
                 etapa = {"slug": "personalizada", "nombre": "Personalizada", "icono": "bi-person-circle", "pos": 0, "total": 0, "cumplidas": []}
+            elif (r.tipo_consigna or "") == "indeterminada":
+                etapa = {
+                    "slug": "indeterminada",
+                    "nombre": _label_indeterminada_con_base(r),
+                    "icono": "bi-infinity",
+                    "pos": 0,
+                    "total": 0,
+                    "cumplidas": [],
+                }
             if estado_operativo_map.get(r.id) == "finalizada" and tramos:
                 etapa["cumplidas"] = [t[0] for t in tramos]
             etapa_actual_map[r.id] = etapa
@@ -2367,7 +2404,7 @@ def manual_export_xlsx():
             else:
                 etapa_nombre = _clean(chosen[0]) or "Indeterminada"
         elif has_indet:
-            etapa_nombre = "Indeterminada"
+            etapa_nombre = _label_indeterminada_con_base(r)
         else:
             tc = _clean(r.tipo_consigna).lower()
             if tc == "fija":
@@ -2377,7 +2414,7 @@ def manual_export_xlsx():
             elif tc == "personalizada":
                 etapa_nombre = "Personalizada"
             elif tc == "indeterminada":
-                etapa_nombre = "Indeterminada"
+                etapa_nombre = _label_indeterminada_con_base(r)
         personas_txt = " | ".join(
             [
                 f"{(_clean(p.tipo) or 'persona').title()}: {_clean(p.nombre) or '—'} ({_clean(p.dni) or 'SIN DNI'})"
@@ -2405,6 +2442,7 @@ def manual_export_xlsx():
                 "fecha_oficio": r.fecha_oficio,
                 "dias_total": total,
                 "estado_expediente": ee.nombre if ee else "",
+                "tipo_base_indeterminada": (r.tipo_base_indeterminada or ""),
                 "estado_operativo": _manual_estado_operativo(r, cat_row=ee),
                 "etapa_actual": etapa_nombre,
                 "motivo_indeterminada": (r.motivo_indeterminada.nombre if getattr(r, "motivo_indeterminada", None) else ""),
@@ -2817,7 +2855,7 @@ def manual_mapa():
             "fija": "Fija",
             "ambulatoria": "Ambulatoria",
             "personalizada": "Personalizada",
-            "indeterminada": "Indeterminada",
+            "indeterminada": _label_indeterminada_con_base(r),
         }.get(etapa_slug, etapa_slug.title())
         points.append(
             {
@@ -2914,7 +2952,11 @@ def manual_reincidencias():
                 "dni": dni,
                 "id": cj.id,
                 "expediente": cj.expediente,
-                "tipo_consigna": cj.tipo_consigna,
+                "tipo_consigna": (
+                    _label_indeterminada_con_base(cj)
+                    if _clean(cj.tipo_consigna).lower() == "indeterminada"
+                    else cj.tipo_consigna
+                ),
                 "estado": est,
                 "fecha_notificacion": cj.fecha_notificacion,
             }
@@ -3160,6 +3202,9 @@ def manual_nuevo():
     if request.method == "POST":
         ee_id = _to_int_or_none(request.form.get("estado_expediente_id"))
         ee_row = CatalogoEstadoExpediente.query.filter_by(id=ee_id, activo=True).first() if ee_id else None
+        tipo_base_indeterminada = _clean(request.form.get("tipo_base_indeterminada")).lower()
+        if tipo_base_indeterminada not in {"fija", "ambulatoria", "personalizada"}:
+            tipo_base_indeterminada = ""
         exp = _clean(request.form.get("expediente"))
         caratula = _clean(request.form.get("caratula"))
         estado = "activa"
@@ -3229,6 +3274,7 @@ def manual_nuevo():
                 seps_salida=seps_salida or None,
                 motivo_indeterminada_id=motivo_indeterminada_id if has_indeterminada else None,
                 estado_expediente_id=ee_row.id if ee_row else None,
+                tipo_base_indeterminada=tipo_base_indeterminada if has_indeterminada else None,
                 fecha_oficio=None,
                 fecha_notificacion=_parse_date(_clean(request.form.get("fecha_notificacion"))),
                 cantidad_dias=cantidad_dias if cantidad_dias else None,
@@ -3254,6 +3300,7 @@ def manual_nuevo():
             row.seps_salida = seps_salida or None
             row.motivo_indeterminada_id = motivo_indeterminada_id if has_indeterminada else None
             row.estado_expediente_id = ee_row.id if ee_row else None
+            row.tipo_base_indeterminada = tipo_base_indeterminada if has_indeterminada else None
             row.cantidad_dias = cantidad_dias or None
             row.dias_fija = d_fija or None
             row.dias_ambulatoria = d_amb or None
@@ -3261,7 +3308,7 @@ def manual_nuevo():
             row.fecha_notificacion = _parse_date(_clean(request.form.get("fecha_notificacion"))) or row.fecha_notificacion
             row.estado = "activa"
 
-        def _add_person_manual(nombre, dni, tipo, notificar):
+        def _add_person_manual(nombre, dni, tipo, notificar, es_menor):
             nom = _clean(nombre)
             if not nom:
                 return
@@ -3275,6 +3322,7 @@ def manual_nuevo():
                 exists = ConsignaPersona.query.filter_by(consigna_id=row.id, tipo=tipo, nombre_key=nom_k).first()
             if exists:
                 exists.notificar = _normalize_notificar(notificar, exists.notificar or "no")
+                exists.es_menor = bool(es_menor)
                 return
             db.session.add(
                 ConsignaPersona(
@@ -3283,6 +3331,7 @@ def manual_nuevo():
                     nombre_key=nom_k,
                     dni=dni_n,
                     dni_key=dni_k,
+                    es_menor=bool(es_menor),
                     tipo=tipo,
                     notificar=_normalize_notificar(notificar, "no"),
                 )
@@ -3327,6 +3376,7 @@ def manual_nuevo():
         p_dnis = request.form.getlist("persona_dni[]")
         p_tipos = request.form.getlist("persona_tipo[]")
         p_noti = request.form.getlist("persona_notificar[]")
+        p_menor = request.form.getlist("persona_es_menor[]")
         p_dom = request.form.getlist("persona_domicilio[]")
         p_latlng = request.form.getlist("persona_latlng[]")
         p_barrio = request.form.getlist("persona_barrio_id[]")
@@ -3335,6 +3385,7 @@ def manual_nuevo():
             len(p_dnis),
             len(p_tipos),
             len(p_noti),
+            len(p_menor),
             len(p_dom),
             len(p_latlng),
             len(p_barrio),
@@ -3344,6 +3395,8 @@ def manual_nuevo():
             dni = p_dnis[i] if i < len(p_dnis) else ""
             tipo = _clean(p_tipos[i] if i < len(p_tipos) else "victima") or "victima"
             noti = p_noti[i] if i < len(p_noti) else "no"
+            menor_raw = _clean(p_menor[i] if i < len(p_menor) else "")
+            es_menor = menor_raw in {"si", "1", "true", "on"}
             dom = p_dom[i] if i < len(p_dom) else ""
             lat = lng = ""
             if i < len(p_latlng):
@@ -3353,7 +3406,7 @@ def manual_nuevo():
                 if ln is not None:
                     lng = str(ln)
             barr = p_barrio[i] if i < len(p_barrio) else ""
-            _add_person_manual(nombre, dni, tipo, noti)
+            _add_person_manual(nombre, dni, tipo, noti, es_menor)
             _add_domicilio_manual(dom, tipo, lat, lng, barr)
 
         _reemplazar_dias_por_tipo(row.id, id_to_dias)
@@ -3377,6 +3430,7 @@ def manual_nuevo():
             "seps_salida": row_edit.seps_salida or "",
             "motivo_indeterminada_id": row_edit.motivo_indeterminada_id or "",
             "estado_expediente_id": row_edit.estado_expediente_id or "",
+            "tipo_base_indeterminada": row_edit.tipo_base_indeterminada or "",
         }
         def _split_names(v):
             return [x.strip() for x in _clean(v).split("·") if _clean(x)]
@@ -3407,6 +3461,7 @@ def manual_nuevo():
                     "nombre": p.nombre or "",
                     "dni": p.dni or "",
                     "tipo": "denunciado" if pt == "denunciado" else "victima",
+                    "es_menor": bool(getattr(p, "es_menor", False)),
                     "notificar": p.notificar or ("si" if pt == "denunciado" else "no"),
                     "domicilio": dsel.direccion if dsel else "",
                     "latlng": f"{dsel.latitud}, {dsel.longitud}" if dsel and dsel.latitud is not None and dsel.longitud is not None else "",
@@ -3832,7 +3887,14 @@ def detalle(consigna_id: int):
         d = int(dp.dias or 0)
         if d > 0:
             tramos.append((cat.nombre, d, n))
-    etapa_actual = {"slug": "indeterminada", "nombre": "Indeterminada", "icono": "bi-infinity", "pos": 0, "total": 0, "cumplidas": []}
+    etapa_actual = {
+        "slug": "indeterminada",
+        "nombre": _label_indeterminada_con_base(row),
+        "icono": "bi-infinity",
+        "pos": 0,
+        "total": 0,
+        "cumplidas": [],
+    }
     if tramos:
         acc = 0
         chosen = tramos[-1]
@@ -3859,7 +3921,14 @@ def detalle(consigna_id: int):
         else:
             etapa_actual = {"slug": _slug_tipo_consigna_desde_nombre(chosen[0]), "nombre": chosen[0], "icono": "bi-dot", "pos": chosen_idx + 1, "total": len(tramos), "cumplidas": cumplidas}
     elif has_indet:
-        etapa_actual = {"slug": "indeterminada", "nombre": "Indeterminada", "icono": "bi-infinity", "pos": 0, "total": 0, "cumplidas": []}
+        etapa_actual = {
+            "slug": "indeterminada",
+            "nombre": _label_indeterminada_con_base(row),
+            "icono": "bi-infinity",
+            "pos": 0,
+            "total": 0,
+            "cumplidas": [],
+        }
     if estado_operativo == "finalizada" and tramos:
         etapa_actual["cumplidas"] = [t[0] for t in tramos]
 

@@ -66,6 +66,17 @@
         </select>
     </div>
     <div class="col-md-3"><label class="form-label">Fecha notificación</label><input class="form-control" type="date" name="fecha_notificacion" value="{{ form_data.get('fecha_notificacion','') }}"></div>
+    <div class="col-md-6">
+        <label class="form-label">Estado del expediente (judicial)</label>
+        <select class="form-select" name="estado_expediente_id">
+            <option value="">— Cumplimiento operativo en curso —</option>
+            {% set ee_sel = form_data.get('estado_expediente_id') %}
+            {% for e in estados_expediente %}
+            <option value="{{ e.id }}" {% if ee_sel != '' and ee_sel is not none and (ee_sel|int) == e.id %}selected{% endif %}>{{ e.nombre }}{% if e.bloquea_cumplimiento %} — sin cómputo de consigna{% endif %}</option>
+            {% endfor %}
+        </select>
+        <div class="form-text">Si el expediente quedó archivado, desestimado o con providencia sin medida, elegí el estado: no corre el plazo de consigna.</div>
+    </div>
 
     <div class="col-12 mt-2"><small class="text-muted">Días por tipo (catálogo). “Indeterminada” u similares: Sí/No, no suma al total de días.</small></div>
     {% if tipos_consigna_catalogo %}
@@ -94,22 +105,20 @@
             {% endfor %}
         </select>
     </div>
+    <div class="col-md-4 d-none" id="wrap-tipo-base-indeterminada">
+        <label class="form-label">Tipo base de indeterminada</label>
+        <select class="form-select" name="tipo_base_indeterminada" id="tipo-base-indeterminada">
+            <option value="">Seleccionar…</option>
+            <option value="fija" {{ 'selected' if form_data.get('tipo_base_indeterminada') == 'fija' else '' }}>Fija</option>
+            <option value="ambulatoria" {{ 'selected' if form_data.get('tipo_base_indeterminada') == 'ambulatoria' else '' }}>Ambulatoria</option>
+            <option value="personalizada" {{ 'selected' if form_data.get('tipo_base_indeterminada') == 'personalizada' else '' }}>Personalizada</option>
+        </select>
+        <div class="form-text">Sirve para clasificar la indeterminada según su naturaleza (sin fijar plazo).</div>
+    </div>
     <div class="col-md-2"><label class="form-label">Días total</label><input class="form-control bg-light" type="text" id="manual-dias-total" value="0" readonly autocomplete="off" title="Suma solo de días numéricos (no incluye indeterminada Sí/No)"></div>
     <div class="col-md-3"><label class="form-label">Teléfono contacto</label><input class="form-control" name="telefono_contacto" value="{{ form_data.get('telefono_contacto','') }}"></div>
     <div class="col-md-3"><label class="form-label">SEPS ingreso</label><input class="form-control" name="seps_ingreso" placeholder="Nº expediente interno SEPS" autocomplete="off" title="Seguimiento en sistema policial (ingreso)" value="{{ form_data.get('seps_ingreso','') }}"></div>
     <div class="col-md-3"><label class="form-label">SEPS salida</label><input class="form-control" name="seps_salida" placeholder="Nº expediente interno SEPS" autocomplete="off" title="Seguimiento en sistema policial (salida)" value="{{ form_data.get('seps_salida','') }}"></div>
-
-    <div class="col-md-6">
-        <label class="form-label">Estado del expediente (judicial)</label>
-        <select class="form-select" name="estado_expediente_id">
-            <option value="">— Cumplimiento operativo en curso —</option>
-            {% set ee_sel = form_data.get('estado_expediente_id') %}
-            {% for e in estados_expediente %}
-            <option value="{{ e.id }}" {% if ee_sel != '' and ee_sel is not none and (ee_sel|int) == e.id %}selected{% endif %}>{{ e.nombre }}{% if e.bloquea_cumplimiento %} — sin cómputo de consigna{% endif %}</option>
-            {% endfor %}
-        </select>
-        <div class="form-text">Si el expediente quedó archivado, desestimado o con providencia sin medida, elegí el estado: no corre el plazo de consigna.</div>
-    </div>
 
     <div class="col-12">
         <div class="card">
@@ -188,6 +197,8 @@
         });
         var motivoWrap = document.getElementById('wrap-motivo-indeterminada');
         var motivoSel = document.getElementById('motivo-indeterminada-id');
+        var tipoBaseWrap = document.getElementById('wrap-tipo-base-indeterminada');
+        var tipoBaseSel = document.getElementById('tipo-base-indeterminada');
         document.querySelectorAll('.js-dia-parte').forEach(function (inp) {
             if (hasIndet) {
                 inp.value = '';
@@ -199,7 +210,9 @@
             }
         });
         if (motivoWrap) motivoWrap.classList.toggle('d-none', !hasIndet);
+        if (tipoBaseWrap) tipoBaseWrap.classList.toggle('d-none', !hasIndet);
         if (!hasIndet && motivoSel) motivoSel.value = '';
+        if (!hasIndet && tipoBaseSel) tipoBaseSel.value = '';
         refreshTotal();
     }
     document.querySelectorAll('.js-dia-parte').forEach(function (inp) {
@@ -305,8 +318,9 @@
             '<div class="row g-2 align-items-end mt-1">' +
             '<div class="col-md-3"><label class="form-label">Barrio</label><select class="form-select ts-barrio" name="persona_barrio_id[]">' + barrioOptionsHtml + '</select></div>' +
             '<div class="col-md-2"><label class="form-label">¿Notificar?</label><select class="form-select" name="persona_notificar[]"><option value="si"' + ((prefill.notificar || '') === 'si' ? ' selected' : '') + '>Sí</option><option value="no"' + ((prefill.notificar || '') === 'no' ? ' selected' : '') + '>No</option></select></div>' +
-            '<div class="col-md-4"><label class="form-label">Latitud, longitud</label><div class="input-group"><input class="form-control js-persona-coords" name="persona_latlng[]" type="text" placeholder="-24.xxxxxx, -65.xxxxxx" title="Pegá desde Google Maps o tocá el mapa" autocomplete="off" value="' + (prefill.latlng || '') + '"><button class="btn btn-outline-secondary js-mapa-btn" type="button" title="Elegir en mapa"><i class="bi bi-geo-alt"></i></button></div></div>' +
+            '<div class="col-md-3"><label class="form-label">Latitud, longitud</label><div class="input-group"><input class="form-control js-persona-coords" name="persona_latlng[]" type="text" placeholder="-24.xxxxxx, -65.xxxxxx" title="Pegá desde Google Maps o tocá el mapa" autocomplete="off" value="' + (prefill.latlng || '') + '"><button class="btn btn-outline-secondary js-mapa-btn" type="button" title="Elegir en mapa"><i class="bi bi-geo-alt"></i></button></div></div>' +
             '<div class="col-md-2"><label class="form-label">Tipo</label><select class="form-select" name="persona_tipo[]"><option value="victima"' + ((prefill.tipo || '') === 'victima' ? ' selected' : '') + '>Víctima</option><option value="denunciado"' + ((prefill.tipo || '') === 'denunciado' ? ' selected' : '') + '>Acusado</option></select></div>' +
+            '<div class="col-md-1"><label class="form-label">Menor</label><select class="form-select" name="persona_es_menor[]"><option value="no"' + ((prefill.es_menor ? '' : ' selected')) + '>No</option><option value="si"' + ((prefill.es_menor ? ' selected' : '')) + '>Sí</option></select></div>' +
             '<div class="col-md-1"><label class="form-label d-block">&nbsp;</label><button class="btn btn-outline-danger w-100 btn-sm js-del" type="button">Quitar</button></div>' +
             '</div>';
         div.querySelector('.js-del').addEventListener('click', function () { div.remove(); });

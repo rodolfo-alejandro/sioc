@@ -109,6 +109,7 @@
                                 <td class="ps-3">
                                     <strong>{{ x.persona.nombre if x.persona else '—' }}</strong>
                                     <span class="text-muted small">({{ x.persona.tipo if x.persona else '—' }})</span>
+                                    {% if x.persona and x.persona.es_menor %}<span class="badge text-bg-warning text-dark ms-1">Menor</span>{% endif %}
                                     {% if x.persona and x.persona.dni %}<div class="small text-muted">DNI: {{ x.persona.dni }}</div>{% endif %}
                                 </td>
                                 <td>{{ x.domicilio.direccion if x.domicilio else '—' }}</td>
