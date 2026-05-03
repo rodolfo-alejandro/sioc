@@ -2535,6 +2535,15 @@ def manual_export_ficha_victimologica_xlsx():
         plist = pers_map.get(con_id, [])
         return [x for x in plist if _clean(x.tipo).lower() == tipo]
 
+    def _join_personas(con_id: int, tipo: str, attr: str):
+        plist = _pick_personas(con_id, tipo)
+        vals = []
+        for p in plist:
+            v = _clean(getattr(p, attr, ""))
+            if v:
+                vals.append(v)
+        return " / ".join(vals)
+
     def _pick_domicilio(con_id: int, tipo: str):
         dlist = dom_map.get(con_id, [])
         first_match = next((x for x in dlist if _clean(x.tipo).lower() == tipo), None)
@@ -2651,8 +2660,19 @@ def manual_export_ficha_victimologica_xlsx():
             ws.cell(cur, 1).fill = section_fill
             ws.cell(cur, 1).border = border
             cur += 1
+            first_rid = (g.get("items") or [None])[0]
+            first_row = row_map.get(first_rid) if first_rid else None
+            d_vict_hdr = _pick_domicilio(first_rid, "victima") if first_rid else None
             _set_pair(ws, cur, "Apellido y nombre", getattr(vict, "nombre", "") if vict else "")
             _set_pair(ws, cur, "DNI", getattr(vict, "dni", "") if vict else "")
+            cur += 1
+            _set_pair(ws, cur, "Teléfono", _clean(getattr(first_row, "telefono_contacto", "")))
+            _set_pair(ws, cur, "E-mail", "")
+            cur += 1
+            _set_pair(ws, cur, "FF/SS", "")
+            _set_pair(ws, cur, "Domicilio", "")
+            if d_vict_hdr:
+                ws.cell(cur, 2, d_vict_hdr.direccion or "")
             cur += 1
             _set_pair(ws, cur, "Menor", "SI" if (vict and vict.es_menor) else "NO")
             _set_pair(ws, cur, "Total consignas", str(len(g.get("items") or [])))
@@ -2665,6 +2685,8 @@ def manual_export_ficha_victimologica_xlsx():
                 acus = _pick_persona(r.id, "denunciado")
                 d_vict = _pick_domicilio(r.id, "victima")
                 d_acus = _pick_domicilio(r.id, "denunciado")
+                acus_nombres = _join_personas(r.id, "denunciado", "nombre")
+                acus_dnis = _join_personas(r.id, "denunciado", "dni")
                 fija_d, pers_d, amb_d = _dias_tipo(r.id)
                 ee = cat_estado_map.get(r.estado_expediente_id) if r.estado_expediente_id else None
                 dxy = d_vict or d_acus
@@ -2690,8 +2712,8 @@ def manual_export_ficha_victimologica_xlsx():
                 _set_pair(ws, cur, "Domicilio víctima", d_vict.direccion if d_vict else "")
                 _set_pair(ws, cur, "Domicilio acusado", d_acus.direccion if d_acus else "")
                 cur += 1
-                _set_pair(ws, cur, "Acusado/Agresor", acus.nombre if acus else "")
-                _set_pair(ws, cur, "DNI acusado", acus.dni if acus else "")
+                _set_pair(ws, cur, "Apellido y nombre acusado", acus_nombres or (acus.nombre if acus else ""))
+                _set_pair(ws, cur, "DNI acusado", acus_dnis or (acus.dni if acus else ""))
                 cur += 1
                 _set_pair(ws, cur, "Consigna fija (días)", str(fija_d))
                 _set_pair(ws, cur, "Consigna personalizada (días)", str(pers_d))
