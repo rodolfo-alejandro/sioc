@@ -2223,6 +2223,9 @@ def manual_listado():
     export_url = url_for("oficios_judiciales.manual_export_xlsx")
     if args_multi:
         export_url = f"{export_url}?{urlencode(args_multi, doseq=True)}"
+    export_ficha_url = url_for("oficios_judiciales.manual_export_ficha_victimologica_xlsx")
+    if args_multi:
+        export_ficha_url = f"{export_ficha_url}?{urlencode(args_multi, doseq=True)}"
     args_estad = {k: list(v) for k, v in args_multi.items()}
     args_estad["year"] = [str(datetime.utcnow().year)]
     export_estad_url = url_for("oficios_judiciales.manual_export_estadistico_anual")
@@ -2264,6 +2267,7 @@ def manual_listado():
         estado_operativo_map=estado_operativo_map,
         pagination=pagination,
         export_url=export_url,
+        export_ficha_url=export_ficha_url,
         export_estad_url=export_estad_url,
         can_delete_superadmin=_is_superadmin(),
     )
@@ -2460,6 +2464,159 @@ def manual_export_xlsx():
         bio.read(),
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f"attachment; filename=consignas_filtradas_{datetime.utcnow().strftime('%Y%m%d_%H%M')}.xlsx"},
+    )
+
+
+@bp.route("/manual/export-ficha-victimologica.xlsx")
+def manual_export_ficha_victimologica_xlsx():
+    """
+    Export tipo planilla victimológica (1 fila por consigna con víctima/acusado).
+    Respeta filtros activos del listado manual.
+    """
+    if not (_can_export() or _can_view()):
+        abort(403)
+    q, estados, _opts = _manual_apply_filters_query()
+    rows = q.order_by(ConsignaJudicial.created_at.desc()).all()
+    cat_estado_map = _catalogo_estado_map(rows)
+    estados_efectivos = estados or ["activa"]
+    est_set = set(estados_efectivos)
+    rows = [
+        r
+        for r in rows
+        if _manual_estado_operativo(r, cat_row=cat_estado_map.get(r.estado_expediente_id)) in est_set
+    ]
+    if not rows:
+        bio = io.BytesIO()
+        pd.DataFrame(
+            [
+                {
+                    "ID": None,
+                    "FECHA DE CARGA": "",
+                    "N° AP O EXPEDIENTE": "",
+                    "EXPTE CT": "",
+                    "DEPENDENCIA ORIGEN": "",
+                    "TIPO DE ORIGEN": "",
+                    "FECHA DE INICIO": "",
+                    "CONSIGNA FIJA": "",
+                    "DIAS DE FIJA": 0,
+                    "CONSIGNA PERSONALIZADA": "",
+                    "DIAS PERSONALIZADA": 0,
+                    "CONSIGNA AMBULATORIA": "",
+                    "DIAS AMBULATORIA": 0,
+                    "VICTIMA APELLIDO Y NOMBRE": "",
+                    "VICTIMA DNI": "",
+                    "VICTIMA DOMICILIO": "",
+                    "VICTIMA MENOR": "",
+                    "ACUSADO APELLIDO Y NOMBRE": "",
+                    "ACUSADO DNI": "",
+                    "ACUSADO DOMICILIO": "",
+                    "LATITUD-LONGITUD": "",
+                }
+            ]
+        ).iloc[0:0].to_excel(bio, index=False)
+        bio.seek(0)
+        return Response(
+            bio.read(),
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename=ficha_victimologica_{datetime.utcnow().strftime('%Y%m%d_%H%M')}.xlsx"},
+        )
+
+    row_ids = [r.id for r in rows]
+    personas = (
+        ConsignaPersona.query.filter(ConsignaPersona.consigna_id.in_(row_ids))
+        .order_by(ConsignaPersona.consigna_id.asc(), ConsignaPersona.id.asc())
+        .all()
+    )
+    domicilios = (
+        ConsignaDomicilio.query.filter(ConsignaDomicilio.consigna_id.in_(row_ids))
+        .order_by(ConsignaDomicilio.consigna_id.asc(), ConsignaDomicilio.id.asc())
+        .all()
+    )
+    dias_pairs = (
+        db.session.query(ConsignaDiasPorTipo, CatalogoTipoConsigna)
+        .join(CatalogoTipoConsigna, ConsignaDiasPorTipo.tipo_catalogo_id == CatalogoTipoConsigna.id)
+        .filter(ConsignaDiasPorTipo.consigna_id.in_(row_ids))
+        .all()
+    )
+    pers_map: dict[int, list[ConsignaPersona]] = {}
+    for p in personas:
+        pers_map.setdefault(p.consigna_id, []).append(p)
+    dom_map: dict[int, list[ConsignaDomicilio]] = {}
+    for d in domicilios:
+        dom_map.setdefault(d.consigna_id, []).append(d)
+    dias_map: dict[int, list[tuple[ConsignaDiasPorTipo, CatalogoTipoConsigna]]] = {}
+    for dp, cat in dias_pairs:
+        dias_map.setdefault(dp.consigna_id, []).append((dp, cat))
+
+    def _pick_persona(con_id: int, tipo: str):
+        plist = pers_map.get(con_id, [])
+        return next((x for x in plist if _clean(x.tipo).lower() == tipo), None)
+
+    def _pick_domicilio(con_id: int, tipo: str):
+        dlist = dom_map.get(con_id, [])
+        first_match = next((x for x in dlist if _clean(x.tipo).lower() == tipo), None)
+        return first_match or (dlist[0] if dlist else None)
+
+    def _dias_tipo(con_id: int):
+        fija = pers = amb = 0
+        for dp, cat in dias_map.get(con_id, []):
+            n = _ascii_lower_no_accent(cat.nombre)
+            d = int(dp.dias or 0)
+            if d <= 0:
+                continue
+            if "fija" in n:
+                fija += d
+            elif "personal" in n:
+                pers += d
+            elif "ambulator" in n:
+                amb += d
+        return fija, pers, amb
+
+    dep_origen = _clean(getattr(current_user, "unidad_nombre", "")) or _clean(getattr(getattr(current_user, "unidad", None), "nombre", ""))
+    out_rows = []
+    for r in rows:
+        vict = _pick_persona(r.id, "victima")
+        acus = _pick_persona(r.id, "denunciado")
+        d_vict = _pick_domicilio(r.id, "victima")
+        d_acus = _pick_domicilio(r.id, "denunciado")
+        fija_d, pers_d, amb_d = _dias_tipo(r.id)
+        latlng = ""
+        dxy = d_vict or d_acus
+        if dxy and dxy.latitud is not None and dxy.longitud is not None:
+            latlng = f"{dxy.latitud}, {dxy.longitud}"
+        ee = cat_estado_map.get(r.estado_expediente_id) if r.estado_expediente_id else None
+        out_rows.append(
+            {
+                "ID": r.id,
+                "FECHA DE CARGA": r.created_at,
+                "N° AP O EXPEDIENTE": r.expediente or "",
+                "EXPTE CT": r.seps_ingreso or r.seps_salida or "",
+                "DEPENDENCIA ORIGEN": dep_origen or "",
+                "TIPO DE ORIGEN": (ee.nombre if ee else "Manual"),
+                "FECHA DE INICIO": r.fecha_notificacion,
+                "CONSIGNA FIJA": "FIJA" if fija_d > 0 else "",
+                "DIAS DE FIJA": fija_d,
+                "CONSIGNA PERSONALIZADA": "PERSONALIZADA" if pers_d > 0 else "",
+                "DIAS PERSONALIZADA": pers_d,
+                "CONSIGNA AMBULATORIA": "AMBULATORIA" if amb_d > 0 else "",
+                "DIAS AMBULATORIA": amb_d,
+                "VICTIMA APELLIDO Y NOMBRE": (vict.nombre if vict else ""),
+                "VICTIMA DNI": (vict.dni if vict else ""),
+                "VICTIMA DOMICILIO": (d_vict.direccion if d_vict else ""),
+                "VICTIMA MENOR": ("SI" if (vict and vict.es_menor) else "NO"),
+                "ACUSADO APELLIDO Y NOMBRE": (acus.nombre if acus else ""),
+                "ACUSADO DNI": (acus.dni if acus else ""),
+                "ACUSADO DOMICILIO": (d_acus.direccion if d_acus else ""),
+                "LATITUD-LONGITUD": latlng,
+            }
+        )
+    bio = io.BytesIO()
+    pd.DataFrame(out_rows).to_excel(bio, index=False)
+    bio.seek(0)
+    return Response(
+        bio.read(),
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename=ficha_victimologica_{datetime.utcnow().strftime('%Y%m%d_%H%M')}.xlsx"},
     )
 
 

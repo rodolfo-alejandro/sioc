@@ -31,6 +31,12 @@
   .table tbody tr.row-soft-vencida > td { box-shadow: inset 0 0 0 9999px rgba(220, 53, 69, 0.02); }
   .table tbody tr.row-soft-por-vencer > td { box-shadow: inset 0 0 0 9999px rgba(255, 193, 7, 0.02); }
   .table tbody tr.row-soft-vigente > td { box-shadow: inset 0 0 0 9999px rgba(25, 135, 84, 0.02); }
+  .export-menu-group { width: 100%; }
+  .export-menu-group > .btn { width: 100%; }
+  @media (min-width: 768px) {
+    .export-menu-group { width: auto; }
+    .export-menu-group > .btn { width: auto; }
+  }
 </style>
 {% endblock %}
 {% block content %}
@@ -111,15 +117,16 @@
                 <label class="form-label form-label-sm mb-1"><i class="bi bi-calendar3 filtro-icon"></i> Fecha hasta</label>
                 <input class="form-control form-control-sm" type="date" name="fecha_hasta" value="{{ selected.get('fecha_hasta','') }}">
             </div>
-            <div class="col-md-2 d-flex gap-2 align-items-end">
+            <div class="col-12 col-md-3 d-flex gap-2 align-items-end">
                 <button class="btn btn-outline-primary btn-sm" type="submit">Aplicar</button>
                 <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('oficios_judiciales.manual_listado') }}">Limpiar</a>
-                <div class="btn-group btn-group-sm">
+                <div class="btn-group btn-group-sm export-menu-group">
                     <button type="button" class="btn btn-outline-success dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="bi bi-download"></i> Exportar
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end">
                         <li><a class="dropdown-item" href="{{ export_url }}" title="Filas según filtros"><i class="bi bi-file-earmark-excel me-2"></i>Excel detallado</a></li>
+                        <li><a class="dropdown-item" href="{{ export_ficha_url }}" title="Formato tipo ficha victimológica (mismos filtros)"><i class="bi bi-person-vcard me-2"></i>Ficha victimológica</a></li>
                         <li><a class="dropdown-item" href="{{ export_estad_url }}" title="Matriz mensual año actual (mismos filtros)"><i class="bi bi-table me-2"></i>Excel estadístico</a></li>
                     </ul>
                 </div>
