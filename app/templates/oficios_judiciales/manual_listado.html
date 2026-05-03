@@ -114,8 +114,15 @@
             <div class="col-md-2 d-flex gap-2 align-items-end">
                 <button class="btn btn-outline-primary btn-sm" type="submit">Aplicar</button>
                 <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('oficios_judiciales.manual_listado') }}">Limpiar</a>
-                <a class="btn btn-outline-success btn-sm" href="{{ export_url }}" title="Filas según filtros"><i class="bi bi-file-earmark-excel"></i> Excel</a>
-                <a class="btn btn-outline-success btn-sm" href="{{ export_estad_url }}" title="Matriz mensual año actual (mismos filtros)"><i class="bi bi-table"></i> Estadístico</a>
+                <div class="btn-group btn-group-sm">
+                    <button type="button" class="btn btn-outline-success dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-download"></i> Exportar
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="{{ export_url }}" title="Filas según filtros"><i class="bi bi-file-earmark-excel me-2"></i>Excel detallado</a></li>
+                        <li><a class="dropdown-item" href="{{ export_estad_url }}" title="Matriz mensual año actual (mismos filtros)"><i class="bi bi-table me-2"></i>Excel estadístico</a></li>
+                    </ul>
+                </div>
             </div>
         </form>
     </div>
