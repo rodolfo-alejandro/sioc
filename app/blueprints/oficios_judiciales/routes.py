@@ -2470,7 +2470,8 @@ def manual_export_xlsx():
 @bp.route("/manual/export-ficha-victimologica.xlsx")
 def manual_export_ficha_victimologica_xlsx():
     """
-    Export en formato vertical, ficha individual por víctima.
+    Export en formato vertical, ficha por víctima en hojas separadas.
+    Consolida (concatena) todas las consignas de la misma víctima en su hoja.
     Respeta filtros activos del listado manual.
     """
     if not (_can_export() or _can_view()):
@@ -2489,17 +2490,8 @@ def manual_export_ficha_victimologica_xlsx():
     from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
     wb = Workbook()
-    ws = wb.active
-    ws.title = "Fichas"
-
-    ws.column_dimensions["A"].width = 28
-    ws.column_dimensions["B"].width = 28
-    ws.column_dimensions["C"].width = 14
-    ws.column_dimensions["D"].width = 28
-    ws.column_dimensions["E"].width = 14
-    ws.column_dimensions["F"].width = 14
-    ws.column_dimensions["G"].width = 28
-    ws.column_dimensions["H"].width = 28
+    ws0 = wb.active
+    ws0.title = "Fichas"
 
     thin = Side(style="thin", color="CCCCCC")
     border = Border(left=thin, right=thin, top=thin, bottom=thin)
@@ -2533,6 +2525,8 @@ def manual_export_ficha_victimologica_xlsx():
     for dp, cat in dias_pairs:
         dias_map.setdefault(dp.consigna_id, []).append((dp, cat))
 
+    row_map = {r.id: r for r in rows}
+
     def _pick_persona(con_id: int, tipo: str):
         plist = pers_map.get(con_id, [])
         return next((x for x in plist if _clean(x.tipo).lower() == tipo), None)
@@ -2561,6 +2555,29 @@ def manual_export_ficha_victimologica_xlsx():
                 amb += d
         return fija, pers, amb
 
+    def _victima_key(v):
+        if v is None:
+            return "sin_victima"
+        d = _digits_only(getattr(v, "dni", ""))
+        if d:
+            return f"dni:{d}"
+        n = _ascii_lower_no_accent(getattr(v, "nombre", "") or "")
+        return f"nom:{n or 'sin_nombre'}"
+
+    def _safe_sheet_title(base: str, used: set[str]) -> str:
+        t = re.sub(r"[\\/*?:\[\]]", "_", _clean(base))[:31] or "FICHA"
+        if t not in used:
+            used.add(t)
+            return t
+        i = 2
+        while True:
+            suff = f"_{i}"
+            cand = (t[: 31 - len(suff)] + suff) if len(t) + len(suff) > 31 else (t + suff)
+            if cand not in used:
+                used.add(cand)
+                return cand
+            i += 1
+
     def _fmt_date(v):
         if not v:
             return ""
@@ -2568,7 +2585,7 @@ def manual_export_ficha_victimologica_xlsx():
             return v.strftime("%d/%m/%Y")
         return str(v)
 
-    def _set_pair(rr: int, c_label: str, c_value: str):
+    def _set_pair(ws, rr: int, c_label: str, c_value: str):
         ws.cell(rr, 1, c_label).font = Font(bold=True)
         ws.cell(rr, 2, c_value)
         ws.cell(rr, 1).border = border
@@ -2578,50 +2595,55 @@ def manual_export_ficha_victimologica_xlsx():
         ws.cell(rr, 2).alignment = Alignment(vertical="center", wrap_text=True)
 
     dep_origen = _clean(getattr(current_user, "unidad_nombre", "")) or _clean(getattr(getattr(current_user, "unidad", None), "nombre", ""))
-    cur = 1
-    fichas_n = 0
-
-    if not rows:
-        ws.cell(cur, 1, "Sin datos para los filtros aplicados.").font = Font(bold=True)
-        cur += 1
-
+    victim_groups: dict[str, dict] = {}
     for r in rows:
-        victimas = _pick_personas(r.id, "victima")
-        if not victimas:
-            victimas = [None]
-        acus = _pick_persona(r.id, "denunciado")
-        d_acus = _pick_domicilio(r.id, "denunciado")
-        fija_d, pers_d, amb_d = _dias_tipo(r.id)
-        ee = cat_estado_map.get(r.estado_expediente_id) if r.estado_expediente_id else None
-        for vict in victimas:
-            fichas_n += 1
-            d_vict = _pick_domicilio(r.id, "victima")
-            dxy = d_vict or d_acus
-            latlng = ""
-            if dxy and dxy.latitud is not None and dxy.longitud is not None:
-                latlng = f"{dxy.latitud}, {dxy.longitud}"
+        victimas = _pick_personas(r.id, "victima") or [None]
+        for v in victimas:
+            k = _victima_key(v)
+            g = victim_groups.setdefault(
+                k,
+                {
+                    "victima": v,
+                    "items": [],
+                },
+            )
+            if g["victima"] is None and v is not None:
+                g["victima"] = v
+            g["items"].append(r.id)
 
+    used_titles: set[str] = set()
+    if not rows:
+        ws0.cell(1, 1, "Sin datos para los filtros aplicados.").font = Font(bold=True)
+    else:
+        wb.remove(ws0)
+        for idx, (_vk, g) in enumerate(victim_groups.items(), start=1):
+            vict = g.get("victima")
+            dni_s = _digits_only(getattr(vict, "dni", "")) if vict else ""
+            if dni_s:
+                base_title = dni_s
+            else:
+                base_title = f"VICTIMA_{idx}"
+            ws = wb.create_sheet(title=_safe_sheet_title(base_title, used_titles))
+            ws.column_dimensions["A"].width = 28
+            ws.column_dimensions["B"].width = 28
+            ws.column_dimensions["C"].width = 14
+            ws.column_dimensions["D"].width = 28
+            ws.column_dimensions["E"].width = 14
+            ws.column_dimensions["F"].width = 14
+            ws.column_dimensions["G"].width = 28
+            ws.column_dimensions["H"].width = 28
+
+            cur = 1
             ws.merge_cells(start_row=cur, start_column=1, end_row=cur, end_column=8)
-            ws.cell(cur, 1, f"REGISTRO VICTIMOLOGICO - VICTIMA VIF (Ficha {fichas_n})").font = Font(bold=True, size=12)
+            ws.cell(cur, 1, "REGISTRO VICTIMOLOGICO - VICTIMA VIF").font = Font(bold=True, size=12)
             ws.cell(cur, 1).fill = title_fill
             ws.cell(cur, 1).alignment = Alignment(horizontal="center", vertical="center")
             ws.cell(cur, 1).border = border
             cur += 1
-
             ws.merge_cells(start_row=cur, start_column=1, end_row=cur, end_column=8)
             ws.cell(cur, 1, dep_origen or "DEPENDENCIA").font = Font(bold=True)
             ws.cell(cur, 1).alignment = Alignment(horizontal="center")
             ws.cell(cur, 1).border = border
-            cur += 1
-
-            _set_pair(cur, "ID", str(r.id))
-            _set_pair(cur, "Fecha de carga", _fmt_date(r.created_at))
-            cur += 1
-            _set_pair(cur, "N° AP o expediente", r.expediente or "")
-            _set_pair(cur, "EXPTE CT", r.seps_ingreso or r.seps_salida or "")
-            cur += 1
-            _set_pair(cur, "Tipo de origen", ee.nombre if ee else "Manual")
-            _set_pair(cur, "Fecha de inicio", _fmt_date(r.fecha_notificacion))
             cur += 1
 
             ws.merge_cells(start_row=cur, start_column=1, end_row=cur, end_column=8)
@@ -2629,44 +2651,60 @@ def manual_export_ficha_victimologica_xlsx():
             ws.cell(cur, 1).fill = section_fill
             ws.cell(cur, 1).border = border
             cur += 1
-
-            _set_pair(cur, "Apellido y nombre", vict.nombre if vict else "")
-            _set_pair(cur, "DNI", vict.dni if vict else "")
+            _set_pair(ws, cur, "Apellido y nombre", getattr(vict, "nombre", "") if vict else "")
+            _set_pair(ws, cur, "DNI", getattr(vict, "dni", "") if vict else "")
             cur += 1
-            _set_pair(cur, "Domicilio", d_vict.direccion if d_vict else "")
-            _set_pair(cur, "Menor", "SI" if (vict and vict.es_menor) else "NO")
-            cur += 1
-
-            ws.merge_cells(start_row=cur, start_column=1, end_row=cur, end_column=8)
-            ws.cell(cur, 1, "DATOS ACUSADO/AGRESOR").font = Font(bold=True)
-            ws.cell(cur, 1).fill = section_fill
-            ws.cell(cur, 1).border = border
-            cur += 1
-
-            _set_pair(cur, "Apellido y nombre", acus.nombre if acus else "")
-            _set_pair(cur, "DNI", acus.dni if acus else "")
-            cur += 1
-            _set_pair(cur, "Domicilio", d_acus.direccion if d_acus else "")
-            _set_pair(cur, "Latitud/Longitud", latlng)
-            cur += 1
-
-            ws.merge_cells(start_row=cur, start_column=1, end_row=cur, end_column=8)
-            ws.cell(cur, 1, "CONSIGNA / MEDIDA").font = Font(bold=True)
-            ws.cell(cur, 1).fill = section_fill
-            ws.cell(cur, 1).border = border
-            cur += 1
-
-            _set_pair(cur, "Consigna fija (días)", str(fija_d))
-            _set_pair(cur, "Consigna personalizada (días)", str(pers_d))
-            cur += 1
-            _set_pair(cur, "Consigna ambulatoria (días)", str(amb_d))
-            _set_pair(cur, "Estado expediente", ee.nombre if ee else "")
-            cur += 1
-            _set_pair(cur, "Carátula", r.caratula or "")
-            ws.merge_cells(start_row=cur, start_column=2, end_row=cur, end_column=8)
-            ws.cell(cur, 2).alignment = Alignment(wrap_text=True, vertical="top")
-            ws.row_dimensions[cur].height = 36
+            _set_pair(ws, cur, "Menor", "SI" if (vict and vict.es_menor) else "NO")
+            _set_pair(ws, cur, "Total consignas", str(len(g.get("items") or [])))
             cur += 2
+
+            for pos, rid in enumerate(g.get("items") or [], start=1):
+                r = row_map.get(rid)
+                if not r:
+                    continue
+                acus = _pick_persona(r.id, "denunciado")
+                d_vict = _pick_domicilio(r.id, "victima")
+                d_acus = _pick_domicilio(r.id, "denunciado")
+                fija_d, pers_d, amb_d = _dias_tipo(r.id)
+                ee = cat_estado_map.get(r.estado_expediente_id) if r.estado_expediente_id else None
+                dxy = d_vict or d_acus
+                latlng = ""
+                if dxy and dxy.latitud is not None and dxy.longitud is not None:
+                    latlng = f"{dxy.latitud}, {dxy.longitud}"
+
+                ws.merge_cells(start_row=cur, start_column=1, end_row=cur, end_column=8)
+                ws.cell(cur, 1, f"CONSIGNA {pos}").font = Font(bold=True)
+                ws.cell(cur, 1).fill = section_fill
+                ws.cell(cur, 1).border = border
+                cur += 1
+
+                _set_pair(ws, cur, "ID", str(r.id))
+                _set_pair(ws, cur, "Fecha de carga", _fmt_date(r.created_at))
+                cur += 1
+                _set_pair(ws, cur, "N° AP o expediente", r.expediente or "")
+                _set_pair(ws, cur, "EXPTE CT", r.seps_ingreso or r.seps_salida or "")
+                cur += 1
+                _set_pair(ws, cur, "Tipo de origen", ee.nombre if ee else "Manual")
+                _set_pair(ws, cur, "Fecha de inicio", _fmt_date(r.fecha_notificacion))
+                cur += 1
+                _set_pair(ws, cur, "Domicilio víctima", d_vict.direccion if d_vict else "")
+                _set_pair(ws, cur, "Domicilio acusado", d_acus.direccion if d_acus else "")
+                cur += 1
+                _set_pair(ws, cur, "Acusado/Agresor", acus.nombre if acus else "")
+                _set_pair(ws, cur, "DNI acusado", acus.dni if acus else "")
+                cur += 1
+                _set_pair(ws, cur, "Consigna fija (días)", str(fija_d))
+                _set_pair(ws, cur, "Consigna personalizada (días)", str(pers_d))
+                cur += 1
+                _set_pair(ws, cur, "Consigna ambulatoria (días)", str(amb_d))
+                _set_pair(ws, cur, "Latitud/Longitud", latlng)
+                cur += 1
+                _set_pair(ws, cur, "Estado expediente", ee.nombre if ee else "")
+                _set_pair(ws, cur, "Carátula", r.caratula or "")
+                ws.merge_cells(start_row=cur, start_column=2, end_row=cur, end_column=8)
+                ws.cell(cur, 2).alignment = Alignment(wrap_text=True, vertical="top")
+                ws.row_dimensions[cur].height = 32
+                cur += 2
 
     bio = io.BytesIO()
     wb.save(bio)
