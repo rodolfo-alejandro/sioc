@@ -26,7 +26,7 @@
             <div class="col-md-2"><label class="form-label form-label-sm mb-1"><i class="bi bi-building"></i> Juzgado</label><select id="f-juzgado" class="form-select form-select-sm" name="juzgado" multiple>{% for x in juzgados_opts %}<option value="{{ x }}" {{ 'selected' if x in selected.getlist('juzgado') else '' }}>{{ x }}</option>{% endfor %}</select></div>
             <div class="col-md-2"><label class="form-label form-label-sm mb-1"><i class="bi bi-bank2"></i> Fiscalía</label><select id="f-fiscalia" class="form-select form-select-sm" name="fiscalia" multiple>{% for x in fiscalias_opts %}<option value="{{ x }}" {{ 'selected' if x in selected.getlist('fiscalia') else '' }}>{{ x }}</option>{% endfor %}</select></div>
             <div class="col-md-2"><label class="form-label form-label-sm mb-1"><i class="bi bi-geo-alt"></i> Barrio</label><select id="f-barrio" class="form-select form-select-sm" name="barrio" multiple>{% for x in barrios_opts %}<option value="{{ x }}" {{ 'selected' if x in selected.getlist('barrio') else '' }}>{{ x }}</option>{% endfor %}</select></div>
-            <div class="col-md-2"><label class="form-label form-label-sm mb-1"><i class="bi bi-check2-circle"></i> Estado</label><select id="f-estado" class="form-select form-select-sm" name="estado" multiple><option value="activa" {{ 'selected' if 'activa' in est_sel else '' }}>Activa</option><option value="finalizada" {{ 'selected' if 'finalizada' in est_sel else '' }}>Finalizada</option></select></div>
+            <div class="col-md-2"><label class="form-label form-label-sm mb-1"><i class="bi bi-check2-circle"></i> Estado</label><select id="f-estado" class="form-select form-select-sm" name="estado" multiple><option value="activa" {{ 'selected' if 'activa' in est_sel else '' }}>Activa</option><option value="finalizada" {{ 'selected' if 'finalizada' in est_sel else '' }}>Finalizada</option><option value="sin_tramite" {{ 'selected' if 'sin_tramite' in est_sel else '' }}>Sin trámite judicial</option></select></div>
             <div class="col-md-2"><label class="form-label form-label-sm mb-1"><i class="bi bi-calendar3"></i> Fecha desde</label><input class="form-control form-control-sm" type="date" name="fecha_desde" value="{{ selected.get('fecha_desde','') }}"></div>
             <div class="col-md-2"><label class="form-label form-label-sm mb-1"><i class="bi bi-calendar3"></i> Fecha hasta</label><input class="form-control form-control-sm" type="date" name="fecha_hasta" value="{{ selected.get('fecha_hasta','') }}"></div>
             <div class="col-md-2 d-flex gap-2 align-items-end"><button class="btn btn-outline-primary btn-sm" type="submit">Aplicar</button><a class="btn btn-outline-secondary btn-sm" href="{{ url_for('oficios_judiciales.manual_dashboard') }}">Limpiar</a></div>
@@ -35,9 +35,10 @@
 </div>
 
 <div class="row g-3 mb-3">
-    <div class="col-md-4"><div class="card"><div class="card-body"><small class="text-muted">Total</small><h3 class="mb-0">{{ total }}</h3></div></div></div>
-    <div class="col-md-4"><div class="card"><div class="card-body"><small class="text-muted">Activas</small><h3 class="mb-0 text-success">{{ activas }}</h3></div></div></div>
-    <div class="col-md-4"><div class="card"><div class="card-body"><small class="text-muted">Finalizadas</small><h3 class="mb-0 text-secondary">{{ finalizadas }}</h3></div></div></div>
+    <div class="col-md-3"><div class="card"><div class="card-body"><small class="text-muted">Total</small><h3 class="mb-0">{{ total }}</h3></div></div></div>
+    <div class="col-md-3"><div class="card"><div class="card-body"><small class="text-muted">Activas</small><h3 class="mb-0 text-success">{{ activas }}</h3></div></div></div>
+    <div class="col-md-3"><div class="card"><div class="card-body"><small class="text-muted">Finalizadas</small><h3 class="mb-0 text-secondary">{{ finalizadas }}</h3></div></div></div>
+    <div class="col-md-3"><div class="card"><div class="card-body"><small class="text-muted">Sin trámite judicial</small><h3 class="mb-0 text-warning">{{ sin_tramite_n }}</h3></div></div></div>
 </div>
 
 <div class="row g-3 mb-3">
@@ -186,7 +187,13 @@
     }
 
     Plotly.newPlot('chart-tipo', [{type:'bar', x: tipo.x, y: tipo.y, marker:{color:'#6f42c1'}}], {margin:{l:40,r:10,t:10,b:90}, xaxis:{type:'category'}}, {displayModeBar:false, responsive:true});
-    Plotly.newPlot('chart-estado', [{type:'bar', x: estado.x, y: estado.y, marker:{color:['#198754','#6c757d']}}], {margin:{l:40,r:10,t:10,b:60}, xaxis:{type:'category'}}, {displayModeBar:false, responsive:true});
+    var colsEst = estado.x.map(function(x){
+      var s = String(x).toLowerCase();
+      if (s.indexOf('trámite') >= 0 || s.indexOf('tramite') >= 0) return '#ffc107';
+      if (s.indexOf('activ') >= 0) return '#198754';
+      return '#6c757d';
+    });
+    Plotly.newPlot('chart-estado', [{type:'bar', x: estado.x, y: estado.y, marker:{color: colsEst}}], {margin:{l:40,r:10,t:10,b:60}, xaxis:{type:'category'}}, {displayModeBar:false, responsive:true});
     Plotly.newPlot('chart-mes', [{type:'bar', x: mes.x, y: mes.y, marker:{color:'#0d6efd'}}], {margin:{l:40,r:10,t:10,b:70}, xaxis:{type:'category'}}, {displayModeBar:false, responsive:true});
     Plotly.newPlot('chart-juzgado', [{type:'bar', x: juz.x, y: juz.y, marker:{color:'#0dcaf0'}}], {margin:{l:40,r:10,t:10,b:130}, xaxis:{type:'category'}}, {displayModeBar:false, responsive:true});
     Plotly.newPlot('chart-fiscalia', [{type:'bar', x: fis.x, y: fis.y, marker:{color:'#fd7e14'}}], {margin:{l:40,r:10,t:10,b:130}, xaxis:{type:'category'}}, {displayModeBar:false, responsive:true});
@@ -198,9 +205,20 @@
     var cJuz = document.getElementById('chart-juzgado');
     var cFis = document.getElementById('chart-fiscalia');
     var cBar = document.getElementById('chart-barrio');
-    if (cTipo) cTipo.on('plotly_click', function(d){ if (d.points && d.points[0]) { var label = String(d.points[0].x || ''); var slug = tipoSlugMap[label] || label.toLowerCase(); applyFilter('tipo_consigna', slug); }});
+    if (cTipo) cTipo.on('plotly_click', function(d){ if (d.points && d.points[0]) {
+      var label = String(d.points[0].x || '');
+      if (label.indexOf('trámite') >= 0 || label.toLowerCase().indexOf('tramite') >= 0) { applyFilter('estado', 'sin_tramite'); return; }
+      var slug = tipoSlugMap[label] || label.toLowerCase();
+      applyFilter('tipo_consigna', slug);
+    }});
     if (cMes) cMes.on('plotly_click', function(d){ if (d.points && d.points[0]) applyFilter('fecha_mes', d.points[0].x); });
-    if (cEstado) cEstado.on('plotly_click', function(d){ if (d.points && d.points[0]) { var label = String(d.points[0].x || '').toLowerCase(); applyFilter('estado', label.indexOf('final') >= 0 ? 'finalizada' : 'activa'); }});
+    if (cEstado) cEstado.on('plotly_click', function(d){ if (d.points && d.points[0]) {
+      var label = String(d.points[0].x || '');
+      var sl = label.toLowerCase();
+      if (sl.indexOf('trámite') >= 0 || sl.indexOf('tramite') >= 0) applyFilter('estado', 'sin_tramite');
+      else if (sl.indexOf('final') >= 0) applyFilter('estado', 'finalizada');
+      else applyFilter('estado', 'activa');
+    }});
     if (cJuz) cJuz.on('plotly_click', function(d){ if (d.points && d.points[0]) applyFilter('juzgado', d.points[0].x); });
     if (cFis) cFis.on('plotly_click', function(d){ if (d.points && d.points[0]) applyFilter('fiscalia', d.points[0].x); });
     if (cBar) cBar.on('plotly_click', function(d){ if (d.points && d.points[0]) applyFilter('barrio', d.points[0].x); });

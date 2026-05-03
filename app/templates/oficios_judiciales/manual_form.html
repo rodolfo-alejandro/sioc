@@ -99,6 +99,18 @@
     <div class="col-md-3"><label class="form-label">SEPS ingreso</label><input class="form-control" name="seps_ingreso" placeholder="Nº expediente interno SEPS" autocomplete="off" title="Seguimiento en sistema policial (ingreso)" value="{{ form_data.get('seps_ingreso','') }}"></div>
     <div class="col-md-3"><label class="form-label">SEPS salida</label><input class="form-control" name="seps_salida" placeholder="Nº expediente interno SEPS" autocomplete="off" title="Seguimiento en sistema policial (salida)" value="{{ form_data.get('seps_salida','') }}"></div>
 
+    <div class="col-md-6">
+        <label class="form-label">Estado del expediente (judicial)</label>
+        <select class="form-select" name="estado_expediente_id">
+            <option value="">— Cumplimiento operativo en curso —</option>
+            {% set ee_sel = form_data.get('estado_expediente_id') %}
+            {% for e in estados_expediente %}
+            <option value="{{ e.id }}" {% if ee_sel != '' and ee_sel is not none and (ee_sel|int) == e.id %}selected{% endif %}>{{ e.nombre }}{% if e.bloquea_cumplimiento %} — sin cómputo de consigna{% endif %}</option>
+            {% endfor %}
+        </select>
+        <div class="form-text">Si el expediente quedó archivado, desestimado o con providencia sin medida, elegí el estado: no corre el plazo de consigna.</div>
+    </div>
+
     <div class="col-12">
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">

@@ -44,6 +44,12 @@ class ConsignaJudicial(db.Model):
     qr_url = db.Column(db.String(500), nullable=True)
     archivo_origen = db.Column(db.String(500), nullable=True)
     motivo_indeterminada_id = db.Column(db.Integer, db.ForeignKey("oficios_catalogo_motivos_indeterminada.id"), nullable=True, index=True)
+    estado_expediente_id = db.Column(
+        db.Integer,
+        db.ForeignKey("oficios_catalogo_estados_expediente.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -76,6 +82,21 @@ class ConsignaJudicial(db.Model):
         cascade="all, delete-orphan",
     )
     motivo_indeterminada = db.relationship("CatalogoMotivoIndeterminada", backref=db.backref("consignas", lazy="dynamic"))
+    estado_expediente = db.relationship("CatalogoEstadoExpediente", backref=db.backref("consignas", lazy="dynamic"))
+
+
+class CatalogoEstadoExpediente(db.Model):
+    """
+    Estado procesal del expediente (archivo, desestimación, providencia, etc.).
+    Si bloquea_cumplimiento es True, no se considera «consigna en curso» para cómputo operativo.
+    """
+
+    __tablename__ = "oficios_catalogo_estados_expediente"
+
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(191), nullable=False, unique=True, index=True)
+    bloquea_cumplimiento = db.Column(db.Boolean, nullable=False, default=False, index=True)
+    activo = db.Column(db.Boolean, nullable=False, default=True, index=True)
 
 
 class ConsignaDiasPorTipo(db.Model):

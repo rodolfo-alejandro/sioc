@@ -100,6 +100,7 @@
                 <select id="f-estado" class="form-select form-select-sm" name="estado" multiple>
                     <option value="activa" {{ 'selected' if 'activa' in est_sel else '' }}>Activa</option>
                     <option value="finalizada" {{ 'selected' if 'finalizada' in est_sel else '' }}>Finalizada</option>
+                    <option value="sin_tramite" {{ 'selected' if 'sin_tramite' in est_sel else '' }}>Sin trámite judicial</option>
                 </select>
             </div>
             <div class="col-md-2">
@@ -113,7 +114,8 @@
             <div class="col-md-2 d-flex gap-2 align-items-end">
                 <button class="btn btn-outline-primary btn-sm" type="submit">Aplicar</button>
                 <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('oficios_judiciales.manual_listado') }}">Limpiar</a>
-                <a class="btn btn-outline-success btn-sm" href="{{ export_url }}"><i class="bi bi-file-earmark-excel"></i> Excel</a>
+                <a class="btn btn-outline-success btn-sm" href="{{ export_url }}" title="Filas según filtros"><i class="bi bi-file-earmark-excel"></i> Excel</a>
+                <a class="btn btn-outline-success btn-sm" href="{{ export_estad_url }}" title="Matriz mensual año actual (mismos filtros)"><i class="bi bi-table"></i> Estadístico</a>
             </div>
         </form>
     </div>
@@ -156,7 +158,9 @@
             {% if etapa.slug == 'indeterminada' %}{% set row_cls = 'row-tipo-indeterminada' %}{% endif %}
             {% if etapa.slug == 'mixta' %}{% set row_cls = 'row-tipo-mixta' %}{% endif %}
             {% set est_op = estado_operativo_map.get(r.id, r.estado) %}
-            {% if est_op == 'finalizada' or (pr.total > 0 and pr.transcurridos >= pr.total) %}
+            {% if est_op == 'sin_tramite' %}
+              {# expediente sin cumplimiento operativo: sin sombreado de plazo #}
+            {% elif est_op == 'finalizada' or (pr.total > 0 and pr.transcurridos >= pr.total) %}
               {% set row_cls = row_cls + ' row-soft-vencida' %}
             {% elif pr.total > 0 and (pr.total - pr.transcurridos) <= 3 %}
               {% set row_cls = row_cls + ' row-soft-por-vencer' %}
@@ -194,7 +198,9 @@
                     {% endif %}
                 </td>
                 <td>
-                    {% if pr.total > 0 %}
+                    {% if est_op == 'sin_tramite' %}
+                    <span class="text-muted small">No aplica</span>
+                    {% elif pr.total > 0 %}
                     <div class="small"><strong>{{ pr.transcurridos }}</strong> / {{ pr.total }} días</div>
                     <div class="progress" style="height: 6px;">
                         <div class="progress-bar" role="progressbar" style="width: {{ ((pr.transcurridos * 100 / pr.total) if pr.total > 0 else 0)|round(0, 'floor') }}%"></div>
@@ -204,7 +210,9 @@
                     {% endif %}
                 </td>
                 <td>
-                    {% if est_op == 'activa' %}
+                    {% if est_op == 'sin_tramite' %}
+                    <span class="badge text-bg-warning text-dark"><i class="bi bi-folder-x"></i> Sin trámite judicial</span>
+                    {% elif est_op == 'activa' %}
                     <span class="badge text-bg-success"><i class="bi bi-check2-circle"></i> Activa · {{ etapa.nombre }}</span>
                     {% else %}
                     <span class="badge text-bg-secondary"><i class="bi bi-stop-circle"></i> Inactiva / Finalizada</span>

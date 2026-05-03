@@ -12,11 +12,13 @@ import pandas as pd
 from flask import Response, abort, current_app, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import false, func, inspect, or_, text
+from sqlalchemy.orm import joinedload
 
 from app.blueprints.oficios_judiciales import bp
 from app.extensions import db
 from app.models.oficios_judiciales import (
     CatalogoBarrio,
+    CatalogoEstadoExpediente,
     CatalogoFiscalia,
     CatalogoJuzgado,
     CatalogoMotivoIndeterminada,
@@ -131,6 +133,7 @@ def _ensure_schema():
         CatalogoTipoConsigna,
         CatalogoFiscalia,
         CatalogoMotivoIndeterminada,
+        CatalogoEstadoExpediente,
         CatalogoBarrio,
         ConsignaDiasPorTipo,
     ):
@@ -176,6 +179,13 @@ def _ensure_schema():
     if "motivo_indeterminada_id" not in cols:
         db.session.execute(text("ALTER TABLE oficios_consignas ADD COLUMN motivo_indeterminada_id INT NULL"))
         db.session.commit()
+    if "estado_expediente_id" not in cols:
+        try:
+            db.session.execute(text("ALTER TABLE oficios_consignas ADD COLUMN estado_expediente_id INT NULL"))
+            db.session.commit()
+        except Exception:
+            current_app.logger.exception("No se pudo agregar estado_expediente_id en oficios_consignas")
+            db.session.rollback()
     # Ajustes de longitudes/texto para campos extensos.
     # Nota: 191 evita errores de índice en MySQL/MariaDB con utf8mb4.
     try:
@@ -261,6 +271,18 @@ def _ensure_schema():
     if "barrio_nombre" not in dcols:
         db.session.execute(text("ALTER TABLE oficios_consigna_domicilios ADD COLUMN barrio_nombre VARCHAR(255) NULL"))
         db.session.commit()
+    try:
+        if CatalogoEstadoExpediente.query.count() == 0:
+            for nombre, bloq in (
+                ("Archivo", True),
+                ("Desestimada", True),
+                ("Providencia judicial", True),
+            ):
+                db.session.add(CatalogoEstadoExpediente(nombre=nombre, bloquea_cumplimiento=bloq, activo=True))
+            db.session.commit()
+    except Exception:
+        current_app.logger.exception("Seed CatalogoEstadoExpediente")
+        db.session.rollback()
     _schema_checked = True
 
 
@@ -1293,7 +1315,17 @@ def _q_base():
     return ConsignaJudicial.query.filter(ConsignaJudicial.unidad_id == current_user.unidad_id)
 
 
-def _manual_estado_operativo(row: ConsignaJudicial, today: date | None = None) -> str:
+def _manual_estado_operativo(
+    row: ConsignaJudicial,
+    today: date | None = None,
+    *,
+    cat_row: CatalogoEstadoExpediente | None = None,
+) -> str:
+    cr = cat_row
+    if cr is None and getattr(row, "estado_expediente_id", None):
+        cr = db.session.get(CatalogoEstadoExpediente, row.estado_expediente_id)
+    if cr and getattr(cr, "bloquea_cumplimiento", False):
+        return "sin_tramite"
     tdy = today or datetime.utcnow().date()
     if _clean(row.estado).lower() == "finalizada":
         return "finalizada"
@@ -1304,6 +1336,59 @@ def _manual_estado_operativo(row: ConsignaJudicial, today: date | None = None) -
         if vto <= tdy:
             return "finalizada"
     return "activa"
+
+
+def _catalogo_estado_map(rows: list) -> dict[int, CatalogoEstadoExpediente]:
+    eids = {r.estado_expediente_id for r in rows if getattr(r, "estado_expediente_id", None)}
+    if not eids:
+        return {}
+    return {c.id: c for c in CatalogoEstadoExpediente.query.filter(CatalogoEstadoExpediente.id.in_(eids)).all()}
+
+
+def _manual_compute_trans_dias(row: ConsignaJudicial, today: date | None = None) -> int:
+    tdy = today or datetime.utcnow().date()
+    total = int(row.cantidad_dias or 0)
+    if not row.fecha_notificacion or total <= 0:
+        return 0
+    trans = max(0, (tdy - row.fecha_notificacion).days)
+    return min(trans, total)
+
+
+def _manual_etapa_slug_desde_pares(r: ConsignaJudicial, pares_raw: list, trans: int) -> str:
+    pares = list(pares_raw)
+    pares.sort(key=lambda p: _orden_cronologia_tipo_consigna(p[1]))
+    has_indet = False
+    tramos = []
+    for dp, cat in pares:
+        n = _ascii_lower_no_accent(cat.nombre)
+        if "indeterm" in n:
+            has_indet = bool(dp.dias)
+            continue
+        d = int(dp.dias or 0)
+        if d > 0:
+            tramos.append((cat.nombre, d, n))
+    if tramos:
+        acc = 0
+        chosen = tramos[-1]
+        for t in tramos:
+            acc += t[1]
+            if trans < acc:
+                chosen = t
+                break
+        n = chosen[2]
+        if "fija" in n:
+            return "fija"
+        if "ambulator" in n:
+            return "ambulatoria"
+        if "personal" in n:
+            return "personalizada"
+        return "mixta"
+    if has_indet:
+        return "indeterminada"
+    tc = _clean(r.tipo_consigna).lower()
+    if tc in {"fija", "ambulatoria", "personalizada", "indeterminada", "mixta"}:
+        return tc
+    return "indeterminada"
 
 
 def _orden_cronologia_tipo_consigna(cat: CatalogoTipoConsigna) -> tuple:
@@ -1358,6 +1443,15 @@ def _cronologia_plazos_dias(
 
 
 def _vencimiento_info(row: ConsignaJudicial, today: date | None = None) -> dict:
+    if getattr(row, "estado_expediente_id", None):
+        st = db.session.get(CatalogoEstadoExpediente, row.estado_expediente_id)
+        if st and st.bloquea_cumplimiento:
+            return {
+                "estado": "sin_cumplimiento",
+                "label": f"Sin cumplimiento operativo ({st.nombre})",
+                "dias_restantes": None,
+                "fecha_vencimiento": None,
+            }
     tdy = today or datetime.utcnow().date()
     inicio = row.fecha_notificacion
     dias = row.cantidad_dias
@@ -1400,7 +1494,8 @@ def _manual_filter_options():
 def _manual_apply_filters_query():
     opts = _manual_filter_options()
     catalogo_tipos = opts["catalogo_tipos"]
-    estados = [e for e in request.args.getlist("estado") if e in ("activa", "finalizada")]
+    estados = [e for e in request.args.getlist("estado") if e in ("activa", "finalizada", "sin_tramite", "sin_trámite")]
+    estados = ["sin_tramite" if e == "sin_trámite" else e for e in estados]
     qtxt = _clean(request.args.get("q"))
     tipos_sel = [_clean(x) for x in request.args.getlist("tipo_consigna") if _clean(x)]
     juzgados_sel = [_clean(x) for x in request.args.getlist("juzgado") if _clean(x)]
@@ -1936,21 +2031,15 @@ def manual_listado():
     per_page = max(10, min(100, _to_int_or_none(request.args.get("per_page")) or 25))
     today = datetime.utcnow().date()
 
-    def _estado_operativo(r: ConsignaJudicial) -> str:
-        if _clean(r.estado).lower() == "finalizada":
-            return "finalizada"
-        inicio = r.fecha_notificacion
-        dias = int(r.cantidad_dias or 0)
-        if inicio and dias > 0:
-            vto = inicio + timedelta(days=dias)
-            if vto <= today:
-                return "finalizada"
-        return "activa"
-
     estados_efectivos = estados or ["activa"]
     rows_all = q.order_by(ConsignaJudicial.created_at.desc()).all()
+    cat_estado_map = _catalogo_estado_map(rows_all)
     estados_set = set(estados_efectivos)
-    rows_all = [r for r in rows_all if _estado_operativo(r) in estados_set]
+    rows_all = [
+        r
+        for r in rows_all
+        if _manual_estado_operativo(r, cat_row=cat_estado_map.get(r.estado_expediente_id)) in estados_set
+    ]
 
     total_rows = len(rows_all)
     total_pages = max(1, (total_rows + per_page - 1) // per_page)
@@ -2017,7 +2106,9 @@ def manual_listado():
             persona_domicilio_map[r.id] = items
         for r in rows:
             total = int(r.cantidad_dias or 0)
-            estado_operativo_map[r.id] = _estado_operativo(r)
+            estado_operativo_map[r.id] = _manual_estado_operativo(
+                r, cat_row=cat_estado_map.get(r.estado_expediente_id)
+            )
             if r.fecha_notificacion and total > 0:
                 trans = max(0, (today - r.fecha_notificacion).days)
                 if trans > total:
@@ -2095,6 +2186,11 @@ def manual_listado():
     export_url = url_for("oficios_judiciales.manual_export_xlsx")
     if args_multi:
         export_url = f"{export_url}?{urlencode(args_multi, doseq=True)}"
+    args_estad = {k: list(v) for k, v in args_multi.items()}
+    args_estad["year"] = [str(datetime.utcnow().year)]
+    export_estad_url = url_for("oficios_judiciales.manual_export_estadistico_anual")
+    if args_estad:
+        export_estad_url = f"{export_estad_url}?{urlencode(args_estad, doseq=True)}"
 
     def _page_url(n: int) -> str:
         data = {k: list(v) for k, v in args_multi.items()}
@@ -2131,6 +2227,7 @@ def manual_listado():
         estado_operativo_map=estado_operativo_map,
         pagination=pagination,
         export_url=export_url,
+        export_estad_url=export_estad_url,
         can_delete_superadmin=_is_superadmin(),
     )
 
@@ -2161,9 +2258,14 @@ def manual_export_xlsx():
         abort(403)
     q, estados, _opts = _manual_apply_filters_query()
     rows = q.order_by(ConsignaJudicial.created_at.desc()).all()
+    cat_estado_map = _catalogo_estado_map(rows)
     estados_efectivos = estados or ["activa"]
     est_set = set(estados_efectivos)
-    rows = [r for r in rows if _manual_estado_operativo(r) in est_set]
+    rows = [
+        r
+        for r in rows
+        if _manual_estado_operativo(r, cat_row=cat_estado_map.get(r.estado_expediente_id)) in est_set
+    ]
     if not rows:
         bio = io.BytesIO()
         pd.DataFrame(
@@ -2181,6 +2283,7 @@ def manual_export_xlsx():
                     "fecha_oficio": "",
                     "dias_total": 0,
                     "estado_operativo": "",
+                    "estado_expediente": "",
                     "etapa_actual": "",
                     "progreso": "",
                     "personas": "",
@@ -2287,6 +2390,7 @@ def manual_export_xlsx():
         coords_txt = " | ".join(
             [f"{d.latitud}, {d.longitud}" for d in doms_row if d.latitud is not None and d.longitud is not None]
         )
+        ee = cat_estado_map.get(r.estado_expediente_id) if r.estado_expediente_id else None
         out_rows.append(
             {
                 "id": r.id,
@@ -2300,7 +2404,8 @@ def manual_export_xlsx():
                 "fecha_notificacion": r.fecha_notificacion,
                 "fecha_oficio": r.fecha_oficio,
                 "dias_total": total,
-                "estado_operativo": _manual_estado_operativo(r),
+                "estado_expediente": ee.nombre if ee else "",
+                "estado_operativo": _manual_estado_operativo(r, cat_row=ee),
                 "etapa_actual": etapa_nombre,
                 "motivo_indeterminada": (r.motivo_indeterminada.nombre if getattr(r, "motivo_indeterminada", None) else ""),
                 "progreso": f"{trans}/{total}" if total > 0 else "0/0",
@@ -2320,24 +2425,154 @@ def manual_export_xlsx():
     )
 
 
+@bp.route("/manual/export-estadistico-anual.xlsx")
+def manual_export_estadistico_anual():
+    """
+    Matriz mensual (ENE–DIC) estilo informe policial: totales y reparto víctima/acusado por etapa.
+    Respeta los mismos filtros que el listado (búsqueda, barrio, fechas, etc.), pero siempre por año civil de fecha de notificación.
+    """
+    if not (_can_export() or _can_view()):
+        abort(403)
+    year = _to_int_or_none(request.args.get("year")) or datetime.utcnow().year
+    q, _est, _opts = _manual_apply_filters_query()
+    rows = q.all()
+    cats = _catalogo_estado_map(rows)
+    rows_y = [r for r in rows if r.fecha_notificacion and r.fecha_notificacion.year == year]
+    meses = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"]
+    if not rows_y:
+        bio = io.BytesIO()
+        pd.DataFrame([{"Rubro": "", **{m: "" for m in meses}, "TOTAL": ""}]).iloc[0:0].to_excel(bio, index=False)
+        bio.seek(0)
+        return Response(
+            bio.read(),
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={
+                "Content-Disposition": f"attachment; filename=estadistico_consignas_{year}_vacio_{datetime.utcnow().strftime('%Y%m%d_%H%M')}.xlsx"
+            },
+        )
+
+    ids = [r.id for r in rows_y]
+    pers = ConsignaPersona.query.filter(ConsignaPersona.consigna_id.in_(ids)).all()
+    pers_map: dict[int, list] = {}
+    for p in pers:
+        pers_map.setdefault(p.consigna_id, []).append(p)
+    dias_pairs = (
+        db.session.query(ConsignaDiasPorTipo, CatalogoTipoConsigna)
+        .join(CatalogoTipoConsigna, ConsignaDiasPorTipo.tipo_catalogo_id == CatalogoTipoConsigna.id)
+        .filter(ConsignaDiasPorTipo.consigna_id.in_(ids))
+        .all()
+    )
+    dias_map: dict[int, list] = {}
+    for dp, cat in dias_pairs:
+        dias_map.setdefault(dp.consigna_id, []).append((dp, cat))
+
+    rubros: dict[str, dict[str, int]] = {}
+
+    def bump(label: str, month: int, n: int = 1):
+        if label not in rubros:
+            rubros[label] = {m: 0 for m in meses}
+            rubros[label]["TOTAL"] = 0
+        rubros[label][meses[month - 1]] += n
+        rubros[label]["TOTAL"] += n
+
+    today = datetime.utcnow().date()
+    for r in rows_y:
+        m = int(r.fecha_notificacion.month)
+        op = _manual_estado_operativo(r, cat_row=cats.get(r.estado_expediente_id))
+        bump("Total cargadas (por mes de fecha notificación)", m)
+        if op == "sin_tramite":
+            bump("Sin cumplimiento judicial (estado expediente)", m)
+            continue
+        bump("Con cumplimiento operativo", m)
+        trans = _manual_compute_trans_dias(r, today)
+        slug = _manual_etapa_slug_desde_pares(r, dias_map.get(r.id, []), trans)
+        plist = pers_map.get(r.id, [])
+        has_v = any(_clean(x.tipo).lower() == "victima" for x in plist)
+        has_a = any(_clean(x.tipo).lower() == "denunciado" for x in plist)
+        if has_v:
+            if slug == "fija":
+                bump("Víctimas — Fija", m)
+            elif slug == "ambulatoria":
+                bump("Víctimas — Ambulatoria", m)
+            elif slug == "personalizada":
+                bump("Víctimas — Personalizada", m)
+            elif slug in ("indeterminada", "mixta"):
+                bump("Víctimas — Indeterminada / mixta", m)
+        if has_a:
+            if slug == "fija":
+                bump("Acusados — Fija", m)
+            elif slug == "ambulatoria":
+                bump("Acusados — Ambulatoria", m)
+            elif slug == "personalizada":
+                bump("Acusados — Personalizada", m)
+            elif slug in ("indeterminada", "mixta"):
+                bump("Acusados — Indeterminada / mixta", m)
+
+    order = [
+        "Total cargadas (por mes de fecha notificación)",
+        "Sin cumplimiento judicial (estado expediente)",
+        "Con cumplimiento operativo",
+        "Víctimas — Fija",
+        "Víctimas — Ambulatoria",
+        "Víctimas — Personalizada",
+        "Víctimas — Indeterminada / mixta",
+        "Acusados — Fija",
+        "Acusados — Ambulatoria",
+        "Acusados — Personalizada",
+        "Acusados — Indeterminada / mixta",
+    ]
+    out_list = []
+    for lab in order:
+        if lab not in rubros:
+            continue
+        row = {"Rubro / indicador": lab, **{mm: int(rubros[lab][mm]) for mm in meses}, "TOTAL": int(rubros[lab]["TOTAL"])}
+        out_list.append(row)
+    for lab, data in rubros.items():
+        if lab in order:
+            continue
+        out_list.append({"Rubro / indicador": lab, **{mm: int(data[mm]) for mm in meses}, "TOTAL": int(data["TOTAL"])})
+
+    bio = io.BytesIO()
+    with pd.ExcelWriter(bio, engine="openpyxl") as writer:
+        pd.DataFrame(out_list).to_excel(writer, sheet_name=f"Consignas {year}", index=False)
+        pd.DataFrame(
+            [
+                {
+                    "Nota": "Los totales usan la fecha de notificación de cada consigna. "
+                    "«Sin cumplimiento judicial» corresponde a estados del expediente marcados en catálogo como que bloquean cumplimiento."
+                }
+            ]
+        ).to_excel(writer, sheet_name="Leyenda", index=False)
+    bio.seek(0)
+    return Response(
+        bio.read(),
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f"attachment; filename=estadistico_consignas_{year}_{datetime.utcnow().strftime('%Y%m%d_%H%M')}.xlsx"
+        },
+    )
+
+
 @bp.route("/manual/dashboard")
 def manual_dashboard():
     if not _can_view():
         abort(403)
     base, estados, opts = _manual_apply_filters_query()
     rows = base.all()
+    cats = _catalogo_estado_map(rows)
     if estados:
         est_set = set(estados)
-        rows = [r for r in rows if _manual_estado_operativo(r) in est_set]
+        rows = [r for r in rows if _manual_estado_operativo(r, cat_row=cats.get(r.estado_expediente_id)) in est_set]
     total = len(rows)
-    activas = len([r for r in rows if _manual_estado_operativo(r) == "activa"])
-    finalizadas = len([r for r in rows if _manual_estado_operativo(r) == "finalizada"])
+    activas = len([r for r in rows if _manual_estado_operativo(r, cat_row=cats.get(r.estado_expediente_id)) == "activa"])
+    finalizadas = len([r for r in rows if _manual_estado_operativo(r, cat_row=cats.get(r.estado_expediente_id)) == "finalizada"])
+    sin_tramite_n = len([r for r in rows if _manual_estado_operativo(r, cat_row=cats.get(r.estado_expediente_id)) == "sin_tramite"])
     by_tipo = {}
     by_mes = {}
     by_fecha = {}
     by_juzgado = {}
     by_fiscalia = {}
-    by_estado = {"Activa": 0, "Finalizada": 0}
+    by_estado = {"Activa": 0, "Finalizada": 0, "Sin trámite judicial": 0}
     row_ids = [r.id for r in rows]
     dias_por_consigna = {}
     if row_ids:
@@ -2397,14 +2632,22 @@ def manual_dashboard():
         return tc or "indeterminada"
 
     for r in rows:
-        t = _etapa_dashboard(r)
-        by_tipo[t] = by_tipo.get(t, 0) + 1
+        op = _manual_estado_operativo(r, cat_row=cats.get(r.estado_expediente_id))
+        if op == "sin_tramite":
+            by_tipo["sin_tramite"] = by_tipo.get("sin_tramite", 0) + 1
+        else:
+            t = _etapa_dashboard(r)
+            by_tipo[t] = by_tipo.get(t, 0) + 1
         j = _clean(r.juzgado) or "—"
         by_juzgado[j] = by_juzgado.get(j, 0) + 1
         f = _clean(r.fiscalia) or "—"
         by_fiscalia[f] = by_fiscalia.get(f, 0) + 1
-        e = "Activa" if _manual_estado_operativo(r) == "activa" else "Finalizada"
-        by_estado[e] = by_estado.get(e, 0) + 1
+        if op == "sin_tramite":
+            by_estado["Sin trámite judicial"] = by_estado.get("Sin trámite judicial", 0) + 1
+        elif op == "activa":
+            by_estado["Activa"] = by_estado.get("Activa", 0) + 1
+        else:
+            by_estado["Finalizada"] = by_estado.get("Finalizada", 0) + 1
         dt = r.fecha_notificacion or (r.created_at.date() if r.created_at else None)
         if dt:
             mk = f"{dt.year:04d}-{dt.month:02d}"
@@ -2416,6 +2659,7 @@ def manual_dashboard():
         "fija": "Fija",
         "personalizada": "Personalizada",
         "indeterminada": "Indeterminada",
+        "sin_tramite": "Sin trámite judicial",
     }
     por_tipo = [
         (tipo_labels.get(k, _clean(k).title() or "Indeterminada"), int(v))
@@ -2461,6 +2705,7 @@ def manual_dashboard():
         total=total,
         activas=activas,
         finalizadas=finalizadas,
+        sin_tramite_n=sin_tramite_n,
         total_mes_actual=total_mes_actual,
         total_mes_anterior=total_mes_anterior,
         variacion_mensual_pct=variacion_mensual_pct,
@@ -2490,8 +2735,13 @@ def manual_mapa():
     base, estados, opts = _manual_apply_filters_query()
     estados_efectivos = estados or ["activa"]
     base_rows = base.all()
+    cat_estado_map = _catalogo_estado_map(base_rows)
     est_set = set(estados_efectivos)
-    base_rows = [r for r in base_rows if _manual_estado_operativo(r) in est_set]
+    base_rows = [
+        r
+        for r in base_rows
+        if _manual_estado_operativo(r, cat_row=cat_estado_map.get(r.estado_expediente_id)) in est_set
+    ]
     allowed_ids = [r.id for r in base_rows] or [-1]
     q = (
         db.session.query(ConsignaJudicial, ConsignaDomicilio)
@@ -2575,7 +2825,7 @@ def manual_mapa():
                 "expediente": r.expediente,
                 "tipo_consigna": tipo_label,
                 "tipo_slug": etapa_slug,
-                "estado": _manual_estado_operativo(r),
+                "estado": _manual_estado_operativo(r, cat_row=cat_estado_map.get(r.estado_expediente_id)),
                 "barrio": d.barrio_nombre or "",
                 "direccion": d.direccion or "",
                 "lat": d.latitud,
@@ -2602,8 +2852,13 @@ def manual_reincidencias():
     base, estados, opts = _manual_apply_filters_query()
     estados_efectivos = estados or ["activa"]
     base_rows = base.all()
+    cat_estado_map = _catalogo_estado_map(base_rows)
     est_set = set(estados_efectivos)
-    base_rows = [r for r in base_rows if _manual_estado_operativo(r) in est_set]
+    base_rows = [
+        r
+        for r in base_rows
+        if _manual_estado_operativo(r, cat_row=cat_estado_map.get(r.estado_expediente_id)) in est_set
+    ]
     allowed_ids = [r.id for r in base_rows] or [-1]
     qtxt = _clean(request.args.get("q"))
     persona_sel = _clean(request.args.get("persona_key"))
@@ -2645,7 +2900,7 @@ def manual_reincidencias():
             },
         )
         g["n"] += 1
-        est = _manual_estado_operativo(cj)
+        est = _manual_estado_operativo(cj, cat_row=cat_estado_map.get(cj.estado_expediente_id))
         if est == "activa":
             g["activa"] += 1
         else:
@@ -2888,6 +3143,9 @@ def manual_nuevo():
     motivos_indeterminada = (
         CatalogoMotivoIndeterminada.query.filter_by(activo=True).order_by(CatalogoMotivoIndeterminada.nombre.asc()).all()
     )
+    estados_expediente = (
+        CatalogoEstadoExpediente.query.filter_by(activo=True).order_by(CatalogoEstadoExpediente.nombre.asc()).all()
+    )
     barrios = CatalogoBarrio.query.filter_by(activo=True).order_by(CatalogoBarrio.nombre.asc()).all()
     tipos_consigna_catalogo = sorted(
         CatalogoTipoConsigna.query.filter_by(activo=True).all(),
@@ -2900,6 +3158,8 @@ def manual_nuevo():
             id=edit_id, unidad_id=current_user.unidad_id, fuente_principal="manual"
         ).first()
     if request.method == "POST":
+        ee_id = _to_int_or_none(request.form.get("estado_expediente_id"))
+        ee_row = CatalogoEstadoExpediente.query.filter_by(id=ee_id, activo=True).first() if ee_id else None
         exp = _clean(request.form.get("expediente"))
         caratula = _clean(request.form.get("caratula"))
         estado = "activa"
@@ -2968,6 +3228,7 @@ def manual_nuevo():
                 seps_ingreso=seps_ingreso or None,
                 seps_salida=seps_salida or None,
                 motivo_indeterminada_id=motivo_indeterminada_id if has_indeterminada else None,
+                estado_expediente_id=ee_row.id if ee_row else None,
                 fecha_oficio=None,
                 fecha_notificacion=_parse_date(_clean(request.form.get("fecha_notificacion"))),
                 cantidad_dias=cantidad_dias if cantidad_dias else None,
@@ -2992,6 +3253,7 @@ def manual_nuevo():
             row.seps_ingreso = seps_ingreso or None
             row.seps_salida = seps_salida or None
             row.motivo_indeterminada_id = motivo_indeterminada_id if has_indeterminada else None
+            row.estado_expediente_id = ee_row.id if ee_row else None
             row.cantidad_dias = cantidad_dias or None
             row.dias_fija = d_fija or None
             row.dias_ambulatoria = d_amb or None
@@ -3114,6 +3376,7 @@ def manual_nuevo():
             "seps_ingreso": row_edit.seps_ingreso or "",
             "seps_salida": row_edit.seps_salida or "",
             "motivo_indeterminada_id": row_edit.motivo_indeterminada_id or "",
+            "estado_expediente_id": row_edit.estado_expediente_id or "",
         }
         def _split_names(v):
             return [x.strip() for x in _clean(v).split("·") if _clean(x)]
@@ -3165,6 +3428,7 @@ def manual_nuevo():
         selected_fiscalia_ids=selected_fiscalia_ids,
         dias_por_tipo_prefill=dias_por_tipo_prefill,
         personas_prefill=personas_prefill,
+        estados_expediente=estados_expediente,
     )
 
 
@@ -3365,6 +3629,36 @@ def catalogos():
             if row:
                 db.session.delete(row)
                 db.session.commit()
+        elif action == "add_estado_expediente":
+            nombre = _clean(request.form.get("nombre"))
+            bloq = request.form.get("bloquea_cumplimiento") == "1"
+            if nombre and not CatalogoEstadoExpediente.query.filter(func.lower(CatalogoEstadoExpediente.nombre) == nombre.lower()).first():
+                db.session.add(CatalogoEstadoExpediente(nombre=nombre, bloquea_cumplimiento=bloq, activo=True))
+                db.session.commit()
+        elif action == "edit_estado_expediente":
+            rid = _to_int_or_none(request.form.get("item_id"))
+            nombre = _clean(request.form.get("nombre"))
+            bloq = request.form.get("bloquea_cumplimiento") == "1"
+            row = CatalogoEstadoExpediente.query.get(rid) if rid else None
+            if row and nombre:
+                dup = CatalogoEstadoExpediente.query.filter(
+                    CatalogoEstadoExpediente.id != row.id, func.lower(CatalogoEstadoExpediente.nombre) == nombre.lower()
+                ).first()
+                if dup:
+                    flash("Ya existe ese estado de expediente.", "warning")
+                else:
+                    row.nombre = nombre
+                    row.bloquea_cumplimiento = bloq
+                    db.session.commit()
+        elif action == "delete_estado_expediente":
+            rid = _to_int_or_none(request.form.get("item_id"))
+            row = CatalogoEstadoExpediente.query.get(rid) if rid else None
+            if row:
+                ConsignaJudicial.query.filter_by(estado_expediente_id=row.id).update(
+                    {ConsignaJudicial.estado_expediente_id: None}, synchronize_session=False
+                )
+                db.session.delete(row)
+                db.session.commit()
         elif action == "edit_barrio":
             rid = _to_int_or_none(request.form.get("item_id"))
             nombre = _clean(request.form.get("nombre"))
@@ -3395,6 +3689,7 @@ def catalogos():
     tipos_consigna = CatalogoTipoConsigna.query.order_by(CatalogoTipoConsigna.nombre.asc()).all()
     fiscalias = CatalogoFiscalia.query.order_by(CatalogoFiscalia.nombre.asc()).all()
     motivos_indeterminada = CatalogoMotivoIndeterminada.query.order_by(CatalogoMotivoIndeterminada.nombre.asc()).all()
+    estados_expediente = CatalogoEstadoExpediente.query.order_by(CatalogoEstadoExpediente.nombre.asc()).all()
     barrios = CatalogoBarrio.query.order_by(CatalogoBarrio.nombre.asc()).all()
     return render_template(
         "oficios_judiciales/catalogos.html",
@@ -3403,6 +3698,7 @@ def catalogos():
         tipos_consigna=tipos_consigna,
         fiscalias=fiscalias,
         motivos_indeterminada=motivos_indeterminada,
+        estados_expediente=estados_expediente,
         barrios=barrios,
     )
 
@@ -3492,7 +3788,12 @@ def detalle(consigna_id: int):
     if not _can_view():
         abort(403)
     _ensure_schema()
-    row = _q_base().filter(ConsignaJudicial.id == consigna_id).first_or_404()
+    row = (
+        _q_base()
+        .options(joinedload(ConsignaJudicial.estado_expediente), joinedload(ConsignaJudicial.motivo_indeterminada))
+        .filter(ConsignaJudicial.id == consigna_id)
+        .first_or_404()
+    )
     venc = _vencimiento_info(row)
     dias_por_tipo_detalle = (
         db.session.query(ConsignaDiasPorTipo, CatalogoTipoConsigna)
@@ -3519,13 +3820,7 @@ def detalle(consigna_id: int):
         trans = 0
     progreso_detalle = {"transcurridos": trans, "total": total}
 
-    estado_operativo = "activa"
-    if _clean(row.estado).lower() == "finalizada":
-        estado_operativo = "finalizada"
-    elif row.fecha_notificacion and total > 0:
-        vto = row.fecha_notificacion + timedelta(days=total)
-        if vto <= today:
-            estado_operativo = "finalizada"
+    estado_operativo = _manual_estado_operativo(row, cat_row=row.estado_expediente)
 
     has_indet = False
     tramos = []
@@ -3621,6 +3916,7 @@ def detalle(consigna_id: int):
     return render_template(
         "oficios_judiciales/detalle.html",
         row=row,
+        estado_expediente_nombre=(row.estado_expediente.nombre if row.estado_expediente else ""),
         venc=venc,
         dias_por_tipo_detalle=dias_por_tipo_detalle,
         cronologia_plazos=cronologia_plazos,

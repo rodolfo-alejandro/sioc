@@ -40,7 +40,9 @@
                     </div>
                     <div class="col-md-3">
                         <div class="small text-muted">Progreso general</div>
-                        {% if progreso_detalle.total > 0 %}
+                        {% if estado_operativo == 'sin_tramite' %}
+                        <div class="text-muted">No aplica (expediente sin cumplimiento de consigna)</div>
+                        {% elif progreso_detalle.total > 0 %}
                         <div><strong>{{ progreso_detalle.transcurridos }}</strong> / {{ progreso_detalle.total }} días</div>
                         <div class="progress mt-1" style="height: 6px;">
                             <div class="progress-bar" role="progressbar" style="width: {{ ((progreso_detalle.transcurridos * 100 / progreso_detalle.total) if progreso_detalle.total > 0 else 0)|round(0, 'floor') }}%"></div>
@@ -51,7 +53,9 @@
                     </div>
                     <div class="col-md-3">
                         <div class="small text-muted">Estado</div>
-                        {% if estado_operativo == 'activa' %}
+                        {% if estado_operativo == 'sin_tramite' %}
+                        <div><span class="badge text-bg-warning text-dark"><i class="bi bi-folder-x"></i> Sin trámite judicial</span></div>
+                        {% elif estado_operativo == 'activa' %}
                         <div><span class="badge text-bg-success"><i class="bi bi-check2-circle"></i> Activa · {{ etapa_actual.nombre }}</span></div>
                         {% else %}
                         <div><span class="badge text-bg-secondary"><i class="bi bi-stop-circle"></i> Inactiva / Finalizada</span></div>
@@ -77,6 +81,7 @@
                 <div><strong>Tipo medida:</strong> {{ row.tipo_medida or '—' }}</div>
                 <div><strong>Carátula:</strong> {{ row.caratula or '—' }}</div>
                 <div><strong>Fecha notificación:</strong> {{ row.fecha_notificacion|localtime('%d/%m/%Y') if row.fecha_notificacion else '—' }}</div>
+                <div><strong>Estado expediente:</strong> {{ estado_expediente_nombre or '—' }}</div>
                 <div><strong>Total días:</strong> {{ row.cantidad_dias or '—' }}</div>
                 {% if row.motivo_indeterminada %}
                 <div><strong>Motivo indeterminada:</strong> {{ row.motivo_indeterminada.nombre }}</div>

@@ -27,7 +27,7 @@
             <div class="col-md-2"><label class="form-label form-label-sm mb-1"><i class="bi bi-building"></i> Juzgado</label><select id="f-juzgado" class="form-select form-select-sm" name="juzgado" multiple>{% for x in juzgados_opts %}<option value="{{ x }}" {{ 'selected' if x in selected.getlist('juzgado') else '' }}>{{ x }}</option>{% endfor %}</select></div>
             <div class="col-md-2"><label class="form-label form-label-sm mb-1"><i class="bi bi-bank2"></i> Fiscalía</label><select id="f-fiscalia" class="form-select form-select-sm" name="fiscalia" multiple>{% for x in fiscalias_opts %}<option value="{{ x }}" {{ 'selected' if x in selected.getlist('fiscalia') else '' }}>{{ x }}</option>{% endfor %}</select></div>
             <div class="col-md-2"><label class="form-label form-label-sm mb-1"><i class="bi bi-geo-alt"></i> Barrio</label><select id="f-barrio" class="form-select form-select-sm" name="barrio" multiple>{% for x in barrios_opts %}<option value="{{ x }}" {{ 'selected' if x in selected.getlist('barrio') else '' }}>{{ x }}</option>{% endfor %}</select></div>
-            <div class="col-md-2"><label class="form-label form-label-sm mb-1"><i class="bi bi-check2-circle"></i> Estado</label><select id="f-estado" class="form-select form-select-sm" name="estado" multiple><option value="activa" {{ 'selected' if 'activa' in est_sel else '' }}>Activa</option><option value="finalizada" {{ 'selected' if 'finalizada' in est_sel else '' }}>Finalizada</option></select></div>
+            <div class="col-md-2"><label class="form-label form-label-sm mb-1"><i class="bi bi-check2-circle"></i> Estado</label><select id="f-estado" class="form-select form-select-sm" name="estado" multiple><option value="activa" {{ 'selected' if 'activa' in est_sel else '' }}>Activa</option><option value="finalizada" {{ 'selected' if 'finalizada' in est_sel else '' }}>Finalizada</option><option value="sin_tramite" {{ 'selected' if 'sin_tramite' in est_sel else '' }}>Sin trámite judicial</option></select></div>
             <div class="col-md-2"><label class="form-label form-label-sm mb-1"><i class="bi bi-calendar3"></i> Fecha desde</label><input class="form-control form-control-sm" type="date" name="fecha_desde" value="{{ selected.get('fecha_desde','') }}"></div>
             <div class="col-md-2"><label class="form-label form-label-sm mb-1"><i class="bi bi-calendar3"></i> Fecha hasta</label><input class="form-control form-control-sm" type="date" name="fecha_hasta" value="{{ selected.get('fecha_hasta','') }}"></div>
             <div class="col-md-2 d-flex gap-2 align-items-end"><button class="btn btn-outline-primary btn-sm" type="submit">Aplicar</button><a class="btn btn-outline-secondary btn-sm" href="{{ url_for('oficios_judiciales.manual_mapa') }}">Limpiar</a></div>
@@ -50,6 +50,7 @@
     var points = {{ points_json|safe }};
     function markerColor(p) {
         var estado = String(p.estado || '').toLowerCase();
+        if (estado === 'sin_tramite') return '#ffc107';
         if (estado === 'finalizada') return '#6c757d'; // gris para no opacar activas
         var t = String(p.tipo_slug || p.tipo_consigna || '').toLowerCase();
         if (t.indexOf('ambulator') >= 0) return '#fd7e14';
