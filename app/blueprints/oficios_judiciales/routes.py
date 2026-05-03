@@ -2470,7 +2470,7 @@ def manual_export_xlsx():
 @bp.route("/manual/export-ficha-victimologica.xlsx")
 def manual_export_ficha_victimologica_xlsx():
     """
-    Export tipo planilla victimológica (1 fila por consigna con víctima/acusado).
+    Export en formato vertical, ficha individual por víctima.
     Respeta filtros activos del listado manual.
     """
     if not (_can_export() or _can_view()):
@@ -2485,41 +2485,26 @@ def manual_export_ficha_victimologica_xlsx():
         for r in rows
         if _manual_estado_operativo(r, cat_row=cat_estado_map.get(r.estado_expediente_id)) in est_set
     ]
-    if not rows:
-        bio = io.BytesIO()
-        pd.DataFrame(
-            [
-                {
-                    "ID": None,
-                    "FECHA DE CARGA": "",
-                    "N° AP O EXPEDIENTE": "",
-                    "EXPTE CT": "",
-                    "DEPENDENCIA ORIGEN": "",
-                    "TIPO DE ORIGEN": "",
-                    "FECHA DE INICIO": "",
-                    "CONSIGNA FIJA": "",
-                    "DIAS DE FIJA": 0,
-                    "CONSIGNA PERSONALIZADA": "",
-                    "DIAS PERSONALIZADA": 0,
-                    "CONSIGNA AMBULATORIA": "",
-                    "DIAS AMBULATORIA": 0,
-                    "VICTIMA APELLIDO Y NOMBRE": "",
-                    "VICTIMA DNI": "",
-                    "VICTIMA DOMICILIO": "",
-                    "VICTIMA MENOR": "",
-                    "ACUSADO APELLIDO Y NOMBRE": "",
-                    "ACUSADO DNI": "",
-                    "ACUSADO DOMICILIO": "",
-                    "LATITUD-LONGITUD": "",
-                }
-            ]
-        ).iloc[0:0].to_excel(bio, index=False)
-        bio.seek(0)
-        return Response(
-            bio.read(),
-            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={"Content-Disposition": f"attachment; filename=ficha_victimologica_{datetime.utcnow().strftime('%Y%m%d_%H%M')}.xlsx"},
-        )
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Fichas"
+
+    ws.column_dimensions["A"].width = 28
+    ws.column_dimensions["B"].width = 28
+    ws.column_dimensions["C"].width = 14
+    ws.column_dimensions["D"].width = 28
+    ws.column_dimensions["E"].width = 14
+    ws.column_dimensions["F"].width = 14
+    ws.column_dimensions["G"].width = 28
+    ws.column_dimensions["H"].width = 28
+
+    thin = Side(style="thin", color="CCCCCC")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    title_fill = PatternFill("solid", fgColor="D9E1F2")
+    section_fill = PatternFill("solid", fgColor="F2F2F2")
 
     row_ids = [r.id for r in rows]
     personas = (
@@ -2552,6 +2537,10 @@ def manual_export_ficha_victimologica_xlsx():
         plist = pers_map.get(con_id, [])
         return next((x for x in plist if _clean(x.tipo).lower() == tipo), None)
 
+    def _pick_personas(con_id: int, tipo: str):
+        plist = pers_map.get(con_id, [])
+        return [x for x in plist if _clean(x.tipo).lower() == tipo]
+
     def _pick_domicilio(con_id: int, tipo: str):
         dlist = dom_map.get(con_id, [])
         first_match = next((x for x in dlist if _clean(x.tipo).lower() == tipo), None)
@@ -2572,51 +2561,120 @@ def manual_export_ficha_victimologica_xlsx():
                 amb += d
         return fija, pers, amb
 
+    def _fmt_date(v):
+        if not v:
+            return ""
+        if hasattr(v, "strftime"):
+            return v.strftime("%d/%m/%Y")
+        return str(v)
+
+    def _set_pair(rr: int, c_label: str, c_value: str):
+        ws.cell(rr, 1, c_label).font = Font(bold=True)
+        ws.cell(rr, 2, c_value)
+        ws.cell(rr, 1).border = border
+        ws.cell(rr, 2).border = border
+        ws.cell(rr, 1).fill = section_fill
+        ws.cell(rr, 1).alignment = Alignment(vertical="center")
+        ws.cell(rr, 2).alignment = Alignment(vertical="center", wrap_text=True)
+
     dep_origen = _clean(getattr(current_user, "unidad_nombre", "")) or _clean(getattr(getattr(current_user, "unidad", None), "nombre", ""))
-    out_rows = []
+    cur = 1
+    fichas_n = 0
+
+    if not rows:
+        ws.cell(cur, 1, "Sin datos para los filtros aplicados.").font = Font(bold=True)
+        cur += 1
+
     for r in rows:
-        vict = _pick_persona(r.id, "victima")
+        victimas = _pick_personas(r.id, "victima")
+        if not victimas:
+            victimas = [None]
         acus = _pick_persona(r.id, "denunciado")
-        d_vict = _pick_domicilio(r.id, "victima")
         d_acus = _pick_domicilio(r.id, "denunciado")
         fija_d, pers_d, amb_d = _dias_tipo(r.id)
-        latlng = ""
-        dxy = d_vict or d_acus
-        if dxy and dxy.latitud is not None and dxy.longitud is not None:
-            latlng = f"{dxy.latitud}, {dxy.longitud}"
         ee = cat_estado_map.get(r.estado_expediente_id) if r.estado_expediente_id else None
-        out_rows.append(
-            {
-                "ID": r.id,
-                "FECHA DE CARGA": r.created_at,
-                "N° AP O EXPEDIENTE": r.expediente or "",
-                "EXPTE CT": r.seps_ingreso or r.seps_salida or "",
-                "DEPENDENCIA ORIGEN": dep_origen or "",
-                "TIPO DE ORIGEN": (ee.nombre if ee else "Manual"),
-                "FECHA DE INICIO": r.fecha_notificacion,
-                "CONSIGNA FIJA": "FIJA" if fija_d > 0 else "",
-                "DIAS DE FIJA": fija_d,
-                "CONSIGNA PERSONALIZADA": "PERSONALIZADA" if pers_d > 0 else "",
-                "DIAS PERSONALIZADA": pers_d,
-                "CONSIGNA AMBULATORIA": "AMBULATORIA" if amb_d > 0 else "",
-                "DIAS AMBULATORIA": amb_d,
-                "VICTIMA APELLIDO Y NOMBRE": (vict.nombre if vict else ""),
-                "VICTIMA DNI": (vict.dni if vict else ""),
-                "VICTIMA DOMICILIO": (d_vict.direccion if d_vict else ""),
-                "VICTIMA MENOR": ("SI" if (vict and vict.es_menor) else "NO"),
-                "ACUSADO APELLIDO Y NOMBRE": (acus.nombre if acus else ""),
-                "ACUSADO DNI": (acus.dni if acus else ""),
-                "ACUSADO DOMICILIO": (d_acus.direccion if d_acus else ""),
-                "LATITUD-LONGITUD": latlng,
-            }
-        )
+        for vict in victimas:
+            fichas_n += 1
+            d_vict = _pick_domicilio(r.id, "victima")
+            dxy = d_vict or d_acus
+            latlng = ""
+            if dxy and dxy.latitud is not None and dxy.longitud is not None:
+                latlng = f"{dxy.latitud}, {dxy.longitud}"
+
+            ws.merge_cells(start_row=cur, start_column=1, end_row=cur, end_column=8)
+            ws.cell(cur, 1, f"REGISTRO VICTIMOLOGICO - VICTIMA VIF (Ficha {fichas_n})").font = Font(bold=True, size=12)
+            ws.cell(cur, 1).fill = title_fill
+            ws.cell(cur, 1).alignment = Alignment(horizontal="center", vertical="center")
+            ws.cell(cur, 1).border = border
+            cur += 1
+
+            ws.merge_cells(start_row=cur, start_column=1, end_row=cur, end_column=8)
+            ws.cell(cur, 1, dep_origen or "DEPENDENCIA").font = Font(bold=True)
+            ws.cell(cur, 1).alignment = Alignment(horizontal="center")
+            ws.cell(cur, 1).border = border
+            cur += 1
+
+            _set_pair(cur, "ID", str(r.id))
+            _set_pair(cur, "Fecha de carga", _fmt_date(r.created_at))
+            cur += 1
+            _set_pair(cur, "N° AP o expediente", r.expediente or "")
+            _set_pair(cur, "EXPTE CT", r.seps_ingreso or r.seps_salida or "")
+            cur += 1
+            _set_pair(cur, "Tipo de origen", ee.nombre if ee else "Manual")
+            _set_pair(cur, "Fecha de inicio", _fmt_date(r.fecha_notificacion))
+            cur += 1
+
+            ws.merge_cells(start_row=cur, start_column=1, end_row=cur, end_column=8)
+            ws.cell(cur, 1, "DATOS VICTIMA").font = Font(bold=True)
+            ws.cell(cur, 1).fill = section_fill
+            ws.cell(cur, 1).border = border
+            cur += 1
+
+            _set_pair(cur, "Apellido y nombre", vict.nombre if vict else "")
+            _set_pair(cur, "DNI", vict.dni if vict else "")
+            cur += 1
+            _set_pair(cur, "Domicilio", d_vict.direccion if d_vict else "")
+            _set_pair(cur, "Menor", "SI" if (vict and vict.es_menor) else "NO")
+            cur += 1
+
+            ws.merge_cells(start_row=cur, start_column=1, end_row=cur, end_column=8)
+            ws.cell(cur, 1, "DATOS ACUSADO/AGRESOR").font = Font(bold=True)
+            ws.cell(cur, 1).fill = section_fill
+            ws.cell(cur, 1).border = border
+            cur += 1
+
+            _set_pair(cur, "Apellido y nombre", acus.nombre if acus else "")
+            _set_pair(cur, "DNI", acus.dni if acus else "")
+            cur += 1
+            _set_pair(cur, "Domicilio", d_acus.direccion if d_acus else "")
+            _set_pair(cur, "Latitud/Longitud", latlng)
+            cur += 1
+
+            ws.merge_cells(start_row=cur, start_column=1, end_row=cur, end_column=8)
+            ws.cell(cur, 1, "CONSIGNA / MEDIDA").font = Font(bold=True)
+            ws.cell(cur, 1).fill = section_fill
+            ws.cell(cur, 1).border = border
+            cur += 1
+
+            _set_pair(cur, "Consigna fija (días)", str(fija_d))
+            _set_pair(cur, "Consigna personalizada (días)", str(pers_d))
+            cur += 1
+            _set_pair(cur, "Consigna ambulatoria (días)", str(amb_d))
+            _set_pair(cur, "Estado expediente", ee.nombre if ee else "")
+            cur += 1
+            _set_pair(cur, "Carátula", r.caratula or "")
+            ws.merge_cells(start_row=cur, start_column=2, end_row=cur, end_column=8)
+            ws.cell(cur, 2).alignment = Alignment(wrap_text=True, vertical="top")
+            ws.row_dimensions[cur].height = 36
+            cur += 2
+
     bio = io.BytesIO()
-    pd.DataFrame(out_rows).to_excel(bio, index=False)
+    wb.save(bio)
     bio.seek(0)
     return Response(
         bio.read(),
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename=ficha_victimologica_{datetime.utcnow().strftime('%Y%m%d_%H%M')}.xlsx"},
+        headers={"Content-Disposition": f"attachment; filename=fichas_victimologicas_{datetime.utcnow().strftime('%Y%m%d_%H%M')}.xlsx"},
     )
 
 
