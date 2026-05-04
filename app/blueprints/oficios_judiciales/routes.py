@@ -193,6 +193,13 @@ def _ensure_schema():
         except Exception:
             current_app.logger.exception("No se pudo agregar tipo_base_indeterminada en oficios_consignas")
             db.session.rollback()
+    if "fecha_finalizacion" not in cols:
+        try:
+            db.session.execute(text("ALTER TABLE oficios_consignas ADD COLUMN fecha_finalizacion DATE NULL"))
+            db.session.commit()
+        except Exception:
+            current_app.logger.exception("No se pudo agregar fecha_finalizacion en oficios_consignas")
+            db.session.rollback()
     # Ajustes de longitudes/texto para campos extensos.
     # Nota: 191 evita errores de índice en MySQL/MariaDB con utf8mb4.
     try:
@@ -1356,12 +1363,18 @@ def _catalogo_estado_map(rows: list) -> dict[int, CatalogoEstadoExpediente]:
 
 
 def _manual_compute_trans_dias(row: ConsignaJudicial, today: date | None = None) -> int:
-    tdy = today or datetime.utcnow().date()
-    total = int(row.cantidad_dias or 0)
-    if not row.fecha_notificacion or total <= 0:
+    if not row.fecha_notificacion:
         return 0
-    trans = max(0, (tdy - row.fecha_notificacion).days)
-    return min(trans, total)
+    tdy = today or datetime.utcnow().date()
+    cut = tdy
+    ff = getattr(row, "fecha_finalizacion", None)
+    if _clean(getattr(row, "estado", "")).lower() == "finalizada" and ff:
+        cut = min(cut, ff)
+    trans = max(0, (cut - row.fecha_notificacion).days)
+    total = int(row.cantidad_dias or 0)
+    if total > 0:
+        return min(trans, total)
+    return trans
 
 
 def _manual_etapa_slug_desde_pares(r: ConsignaJudicial, pares_raw: list, trans: int) -> str:
@@ -2141,9 +2154,7 @@ def manual_listado():
             estado_operativo_map[r.id] = _manual_estado_operativo(
                 r, cat_row=cat_estado_map.get(r.estado_expediente_id)
             )
-            trans_real = 0
-            if r.fecha_notificacion:
-                trans_real = max(0, (today - r.fecha_notificacion).days)
+            trans_real = _manual_compute_trans_dias(r, today)
             trans = trans_real
             if total > 0 and trans > total:
                 trans = total
@@ -2308,6 +2319,34 @@ def manual_eliminar(consigna_id: int):
     return redirect(url_for("oficios_judiciales.manual_listado"))
 
 
+@bp.route("/manual/<int:consigna_id>/finalizar-indeterminada", methods=["POST"])
+def manual_finalizar_indeterminada(consigna_id: int):
+    if not _can_view():
+        abort(403)
+    _ensure_schema()
+    row = (
+        ConsignaJudicial.query.filter(
+            ConsignaJudicial.id == consigna_id,
+            ConsignaJudicial.unidad_id == current_user.unidad_id,
+            ConsignaJudicial.fuente_principal == "manual",
+        ).first()
+    )
+    if not row:
+        flash("No se encontró la consigna.", "warning")
+        return redirect(url_for("oficios_judiciales.manual_listado"))
+    if _clean(row.tipo_consigna).lower() != "indeterminada":
+        flash("Solo se puede finalizar manualmente una consigna indeterminada.", "warning")
+        return redirect(url_for("oficios_judiciales.manual_listado"))
+    if _clean(row.estado).lower() == "finalizada":
+        flash("La consigna ya estaba finalizada.", "info")
+        return redirect(url_for("oficios_judiciales.manual_listado"))
+    row.estado = "finalizada"
+    row.fecha_finalizacion = datetime.utcnow().date()
+    db.session.commit()
+    flash("Consigna indeterminada finalizada. Se detuvo el conteo de días.", "success")
+    return redirect(url_for("oficios_judiciales.manual_listado"))
+
+
 @bp.route("/manual/export.xlsx")
 def manual_export_xlsx():
     if not (_can_export() or _can_view()):
@@ -2382,16 +2421,11 @@ def manual_export_xlsx():
     dias_map: dict[int, list[tuple[ConsignaDiasPorTipo, CatalogoTipoConsigna]]] = {}
     for dp, cat in dias_pairs:
         dias_map.setdefault(dp.consigna_id, []).append((dp, cat))
-
     out_rows = []
     today = datetime.utcnow().date()
     for r in rows:
         total = int(r.cantidad_dias or 0)
-        trans = 0
-        if r.fecha_notificacion and total > 0:
-            trans = max(0, (today - r.fecha_notificacion).days)
-            if trans > total:
-                trans = total
+        trans = _manual_compute_trans_dias(r, today)
         etapa_nombre = "Indeterminada"
         pares = list(dias_map.get(r.id, []))
         pares.sort(key=lambda p: _orden_cronologia_tipo_consigna(p[1]))
@@ -2539,6 +2573,14 @@ def manual_export_ficha_victimologica_xlsx():
     dias_map: dict[int, list[tuple[ConsignaDiasPorTipo, CatalogoTipoConsigna]]] = {}
     for dp, cat in dias_pairs:
         dias_map.setdefault(dp.consigna_id, []).append((dp, cat))
+    medidas = (
+        ConsignaMedidaDetalle.query.filter(ConsignaMedidaDetalle.consigna_id.in_(row_ids))
+        .order_by(ConsignaMedidaDetalle.consigna_id.asc(), ConsignaMedidaDetalle.id.asc())
+        .all()
+    )
+    medidas_map: dict[int, list[ConsignaMedidaDetalle]] = {}
+    for md in medidas:
+        medidas_map.setdefault(md.consigna_id, []).append(md)
 
     row_map = {r.id: r for r in rows}
 
@@ -2607,6 +2649,13 @@ def manual_export_ficha_victimologica_xlsx():
             return ""
         if hasattr(v, "strftime"):
             return v.strftime("%d/%m/%Y")
+        return str(v)
+
+    def _fmt_dt(v):
+        if not v:
+            return ""
+        if hasattr(v, "strftime"):
+            return v.strftime("%d/%m/%Y %H:%M")
         return str(v)
 
     def _set_pair(ws, rr: int, c_label: str, c_value: str):
@@ -2716,32 +2765,112 @@ def manual_export_ficha_victimologica_xlsx():
                 cur += 1
 
                 _set_pair(ws, cur, "ID", str(r.id))
-                _set_pair(ws, cur, "Fecha de carga", _fmt_date(r.created_at))
+                _set_pair(ws, cur, "Fecha de carga", _fmt_dt(r.created_at))
                 cur += 1
                 _set_pair(ws, cur, "N° AP o expediente", r.expediente or "")
-                _set_pair(ws, cur, "EXPTE CT", r.seps_ingreso or r.seps_salida or "")
+                _set_pair(ws, cur, "SEPS ingreso", r.seps_ingreso or "")
                 cur += 1
-                _set_pair(ws, cur, "Tipo de origen", ee.nombre if ee else "Manual")
-                _set_pair(ws, cur, "Fecha de inicio", _fmt_date(r.fecha_notificacion))
+                _set_pair(ws, cur, "SEPS salida", r.seps_salida or "")
+                _set_pair(ws, cur, "Fecha oficio", _fmt_date(r.fecha_oficio))
                 cur += 1
-                _set_pair(ws, cur, "Domicilio víctima", d_vict.direccion if d_vict else "")
-                _set_pair(ws, cur, "Domicilio acusado", d_acus.direccion if d_acus else "")
+                _set_pair(ws, cur, "Fecha notificación (inicio)", _fmt_date(r.fecha_notificacion))
+                _set_pair(ws, cur, "Estado operativo", _manual_estado_operativo(r, cat_row=ee).replace("_", " ").title())
+                cur += 1
+                _set_pair(ws, cur, "Estado expediente", ee.nombre if ee else "")
+                _set_pair(ws, cur, "Bloquea cumplimiento", "SI" if (ee and ee.bloquea_cumplimiento) else "NO")
+                cur += 1
+                _set_pair(ws, cur, "Tipo medida", r.tipo_medida or "")
+                _set_pair(
+                    ws,
+                    cur,
+                    "Tipo consigna",
+                    _label_indeterminada_con_base(r) if _clean(r.tipo_consigna).lower() == "indeterminada" else (r.tipo_consigna or ""),
+                )
+                cur += 1
+                _set_pair(ws, cur, "Motivo indeterminada", (r.motivo_indeterminada.nombre if getattr(r, "motivo_indeterminada", None) else ""))
+                _set_pair(ws, cur, "Tipo base indeterminada", (r.tipo_base_indeterminada or ""))
+                cur += 1
+                _set_pair(ws, cur, "Consigna fija (días)", str(fija_d))
+                _set_pair(ws, cur, "Consigna ambulatoria (días)", str(amb_d))
+                cur += 1
+                _set_pair(ws, cur, "Consigna personalizada (días)", str(pers_d))
+                _set_pair(ws, cur, "Días total", str(max(0, fija_d + amb_d + pers_d)))
                 cur += 1
                 _set_pair(ws, cur, "Apellido y nombre acusado", acus_nombres or (acus.nombre if acus else ""))
                 _set_pair(ws, cur, "DNI acusado", acus_dnis or (acus.dni if acus else ""))
                 cur += 1
-                _set_pair(ws, cur, "Consigna fija (días)", str(fija_d))
-                _set_pair(ws, cur, "Consigna personalizada (días)", str(pers_d))
+                _set_pair(ws, cur, "Domicilio víctima", d_vict.direccion if d_vict else "")
+                _set_pair(ws, cur, "Domicilio acusado", d_acus.direccion if d_acus else "")
                 cur += 1
-                _set_pair(ws, cur, "Consigna ambulatoria (días)", str(amb_d))
+                _set_pair(ws, cur, "Barrio víctima", (d_vict.barrio_nombre if d_vict else ""))
+                _set_pair(ws, cur, "Barrio acusado", (d_acus.barrio_nombre if d_acus else ""))
+                cur += 1
                 _set_pair(ws, cur, "Latitud/Longitud", latlng)
+                _set_pair(ws, cur, "Notificar", (_clean(getattr(acus, "notificar", "")) or _clean(r.acusado_notificar)).upper())
                 cur += 1
-                _set_pair(ws, cur, "Estado expediente", ee.nombre if ee else "")
+                _set_pair(ws, cur, "Fiscalía", r.fiscalia or "")
+                _set_pair(ws, cur, "Juzgado", r.juzgado or "")
+                cur += 1
                 _set_pair(ws, cur, "Carátula", r.caratula or "")
                 ws.merge_cells(start_row=cur, start_column=2, end_row=cur, end_column=8)
                 ws.cell(cur, 2).alignment = Alignment(wrap_text=True, vertical="top")
                 ws.row_dimensions[cur].height = 32
-                cur += 2
+                cur += 1
+                _set_pair(ws, cur, "Observaciones", r.observaciones or "")
+                ws.merge_cells(start_row=cur, start_column=2, end_row=cur, end_column=8)
+                ws.cell(cur, 2).alignment = Alignment(wrap_text=True, vertical="top")
+                ws.row_dimensions[cur].height = 32
+                cur += 1
+
+                ws.merge_cells(start_row=cur, start_column=1, end_row=cur, end_column=8)
+                ws.cell(cur, 1, "MEDIDAS DISPUESTAS").font = Font(bold=True)
+                ws.cell(cur, 1).fill = section_fill
+                ws.cell(cur, 1).border = border
+                cur += 1
+                headers = ["MEDIDA", "INICIO", "FINALIZACIÓN", "OBSERVACIÓN"]
+                for c, h in enumerate(headers, start=1):
+                    ws.cell(cur, c, h).font = Font(bold=True)
+                    ws.cell(cur, c).fill = title_fill
+                    ws.cell(cur, c).border = border
+                    ws.cell(cur, c).alignment = Alignment(horizontal="center")
+                cur += 1
+
+                medidas_rows = []
+                base_date = r.fecha_notificacion
+                if fija_d > 0:
+                    fin = (base_date + timedelta(days=fija_d)) if base_date else None
+                    medidas_rows.append(("CONSIGNA FIJA", _fmt_date(base_date), _fmt_date(fin), f"{fija_d} días"))
+                    base_date = fin
+                if amb_d > 0:
+                    fin = (base_date + timedelta(days=amb_d)) if base_date else None
+                    medidas_rows.append(("CONSIGNA AMBULATORIA", _fmt_date(base_date), _fmt_date(fin), f"{amb_d} días"))
+                    base_date = fin
+                if pers_d > 0:
+                    fin = (base_date + timedelta(days=pers_d)) if base_date else None
+                    medidas_rows.append(("CONSIGNA PERSONALIZADA", _fmt_date(base_date), _fmt_date(fin), f"{pers_d} días"))
+                    base_date = fin
+                if _clean(r.tipo_consigna).lower() == "indeterminada":
+                    medidas_rows.append(
+                        (
+                            "CONSIGNA INDETERMINADA",
+                            _fmt_date(r.fecha_notificacion),
+                            "",
+                            (r.motivo_indeterminada.nombre if getattr(r, "motivo_indeterminada", None) else ""),
+                        )
+                    )
+                for md in medidas_map.get(r.id, []):
+                    desc = _clean(md.descripcion)
+                    if desc:
+                        medidas_rows.append((desc.upper(), "", "", "SI"))
+                if not medidas_rows:
+                    medidas_rows.append(("SIN MEDIDAS REGISTRADAS", "", "", ""))
+                for rr in medidas_rows:
+                    for c, v in enumerate(rr, start=1):
+                        ws.cell(cur, c, v)
+                        ws.cell(cur, c).border = border
+                        ws.cell(cur, c).alignment = Alignment(vertical="center", wrap_text=True)
+                    cur += 1
+                cur += 1
 
     bio = io.BytesIO()
     wb.save(bio)
@@ -2919,10 +3048,7 @@ def manual_dashboard():
         today = datetime.utcnow().date()
         total = int(r.cantidad_dias or 0)
         trans = 0
-        if r.fecha_notificacion and total > 0:
-            trans = max(0, (today - r.fecha_notificacion).days)
-            if trans > total:
-                trans = total
+        trans = _manual_compute_trans_dias(r, today)
         has_indet = False
         tramos = []
         for dp, cat in pares:
@@ -3578,6 +3704,7 @@ def manual_nuevo():
                 tipo_base_indeterminada=tipo_base_indeterminada if has_indeterminada else None,
                 fecha_oficio=None,
                 fecha_notificacion=_parse_date(_clean(request.form.get("fecha_notificacion"))),
+                fecha_finalizacion=None,
                 cantidad_dias=cantidad_dias if cantidad_dias else None,
                 dias_fija=d_fija if d_fija else None,
                 dias_ambulatoria=d_amb if d_amb else None,
@@ -3608,6 +3735,7 @@ def manual_nuevo():
             row.dias_personalizada = d_pers or None
             row.fecha_notificacion = _parse_date(_clean(request.form.get("fecha_notificacion"))) or row.fecha_notificacion
             row.estado = "activa"
+            row.fecha_finalizacion = None
 
         def _add_person_manual(nombre, dni, tipo, notificar, es_menor):
             nom = _clean(nombre)
@@ -4168,12 +4296,7 @@ def detalle(consigna_id: int):
             }
     today = datetime.utcnow().date()
     total = int(row.cantidad_dias or 0)
-    if row.fecha_notificacion and total > 0:
-        trans = max(0, (today - row.fecha_notificacion).days)
-        if trans > total:
-            trans = total
-    else:
-        trans = 0
+    trans = _manual_compute_trans_dias(row, today)
     progreso_detalle = {"transcurridos": trans, "total": total}
 
     estado_operativo = _manual_estado_operativo(row, cat_row=row.estado_expediente)

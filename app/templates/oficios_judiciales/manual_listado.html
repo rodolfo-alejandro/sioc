@@ -250,6 +250,12 @@
                     {% endif %}
                     <a class="btn btn-sm btn-outline-warning mb-1" href="{{ url_for('oficios_judiciales.manual_nuevo', edit_id=r.id) }}" title="Editar"><i class="bi bi-pencil"></i></a>
                     <a class="btn btn-sm btn-outline-primary mb-1" href="{{ url_for('oficios_judiciales.detalle', consigna_id=r.id) }}"><i class="bi bi-eye"></i></a>
+                    {% if r.tipo_consigna == 'indeterminada' and est_op == 'activa' %}
+                    <form method="POST" action="{{ url_for('oficios_judiciales.manual_finalizar_indeterminada', consigna_id=r.id) }}" class="d-inline" onsubmit="return confirm('¿Finalizar esta consigna indeterminada? Se detendrá el conteo de días.');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="btn btn-sm btn-outline-secondary mb-1" type="submit" title="Finalizar indeterminada"><i class="bi bi-stop-circle"></i></button>
+                    </form>
+                    {% endif %}
                     {% if can_delete_superadmin %}
                     <form method="POST" action="{{ url_for('oficios_judiciales.manual_eliminar', consigna_id=r.id) }}" class="d-inline" onsubmit="return confirm('¿Eliminar esta consigna manual? Esta acción no se puede deshacer.');">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

@@ -29,6 +29,7 @@ class ConsignaJudicial(db.Model):
     seps_salida = db.Column(db.String(128), nullable=True, index=True)
     fecha_oficio = db.Column(db.Date, nullable=True, index=True)
     fecha_notificacion = db.Column(db.Date, nullable=True, index=True)  # inicio real
+    fecha_finalizacion = db.Column(db.Date, nullable=True, index=True)
     cantidad_dias = db.Column(db.Integer, nullable=True)
     dias_fija = db.Column(db.Integer, nullable=True)
     dias_ambulatoria = db.Column(db.Integer, nullable=True)
