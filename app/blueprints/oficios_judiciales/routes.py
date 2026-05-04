@@ -3167,15 +3167,18 @@ def manual_reincidencias():
     if not _can_view():
         abort(403)
     base, estados, opts = _manual_apply_filters_query()
-    estados_efectivos = estados or ["activa"]
+    # En reincidencias, si hay búsqueda global (DNI/nombre), priorizamos trazabilidad
+    # y buscamos sobre todo el histórico sin restringir por estado operativo.
+    estados_efectivos = [] if _clean(request.args.get("q")) else (estados or ["activa"])
     base_rows = base.all()
     cat_estado_map = _catalogo_estado_map(base_rows)
-    est_set = set(estados_efectivos)
-    base_rows = [
-        r
-        for r in base_rows
-        if _manual_estado_operativo(r, cat_row=cat_estado_map.get(r.estado_expediente_id)) in est_set
-    ]
+    if estados_efectivos:
+        est_set = set(estados_efectivos)
+        base_rows = [
+            r
+            for r in base_rows
+            if _manual_estado_operativo(r, cat_row=cat_estado_map.get(r.estado_expediente_id)) in est_set
+        ]
     allowed_ids = [r.id for r in base_rows] or [-1]
     qtxt = _clean(request.args.get("q"))
     persona_sel = _clean(request.args.get("persona_key"))
