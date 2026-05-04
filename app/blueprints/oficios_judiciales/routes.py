@@ -1569,7 +1569,18 @@ def _manual_apply_filters_query():
     if qtxt:
         pat = f"%{qtxt}%"
         eq = _expediente_key(qtxt)
-        sq_per = db.session.query(ConsignaPersona.consigna_id).filter(or_(ConsignaPersona.nombre.ilike(pat), ConsignaPersona.dni.ilike(pat))).subquery()
+        dni_q = _digits_only(qtxt)
+        sq_per = (
+            db.session.query(ConsignaPersona.consigna_id)
+            .filter(
+                or_(
+                    ConsignaPersona.nombre.ilike(pat),
+                    ConsignaPersona.dni.ilike(pat),
+                    ConsignaPersona.dni_key == dni_q if dni_q else false(),
+                )
+            )
+            .subquery()
+        )
         sq_dom = db.session.query(ConsignaDomicilio.consigna_id).filter(or_(ConsignaDomicilio.direccion.ilike(pat), ConsignaDomicilio.barrio_nombre.ilike(pat))).subquery()
         q = q.filter(
             or_(
