@@ -256,6 +256,12 @@
                         <button class="btn btn-sm btn-outline-secondary mb-1" type="submit" title="Finalizar indeterminada"><i class="bi bi-stop-circle"></i></button>
                     </form>
                     {% endif %}
+                    {% if r.tipo_consigna == 'indeterminada' and est_op == 'finalizada' %}
+                    <form method="POST" action="{{ url_for('oficios_judiciales.manual_reactivar_indeterminada', consigna_id=r.id) }}" class="d-inline" onsubmit="return confirm('¿Reactivar esta consigna indeterminada? Volverá a estado activa.');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="btn btn-sm btn-outline-success mb-1" type="submit" title="Reactivar indeterminada"><i class="bi bi-arrow-counterclockwise"></i></button>
+                    </form>
+                    {% endif %}
                     {% if can_delete_superadmin %}
                     <form method="POST" action="{{ url_for('oficios_judiciales.manual_eliminar', consigna_id=r.id) }}" class="d-inline" onsubmit="return confirm('¿Eliminar esta consigna manual? Esta acción no se puede deshacer.');">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

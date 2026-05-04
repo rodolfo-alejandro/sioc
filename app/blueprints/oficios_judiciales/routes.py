@@ -2347,6 +2347,34 @@ def manual_finalizar_indeterminada(consigna_id: int):
     return redirect(url_for("oficios_judiciales.manual_listado"))
 
 
+@bp.route("/manual/<int:consigna_id>/reactivar-indeterminada", methods=["POST"])
+def manual_reactivar_indeterminada(consigna_id: int):
+    if not _can_view():
+        abort(403)
+    _ensure_schema()
+    row = (
+        ConsignaJudicial.query.filter(
+            ConsignaJudicial.id == consigna_id,
+            ConsignaJudicial.unidad_id == current_user.unidad_id,
+            ConsignaJudicial.fuente_principal == "manual",
+        ).first()
+    )
+    if not row:
+        flash("No se encontró la consigna.", "warning")
+        return redirect(url_for("oficios_judiciales.manual_listado"))
+    if _clean(row.tipo_consigna).lower() != "indeterminada":
+        flash("Solo se puede reactivar una consigna indeterminada.", "warning")
+        return redirect(url_for("oficios_judiciales.manual_listado"))
+    if _clean(row.estado).lower() == "activa":
+        flash("La consigna ya está activa.", "info")
+        return redirect(url_for("oficios_judiciales.manual_listado"))
+    row.estado = "activa"
+    row.fecha_finalizacion = None
+    db.session.commit()
+    flash("Consigna indeterminada reactivada correctamente.", "success")
+    return redirect(url_for("oficios_judiciales.manual_listado"))
+
+
 @bp.route("/manual/export.xlsx")
 def manual_export_xlsx():
     if not (_can_export() or _can_view()):
