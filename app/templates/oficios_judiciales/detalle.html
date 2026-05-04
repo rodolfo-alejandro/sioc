@@ -154,11 +154,7 @@
                                     {% if etapa_actual.get('cumplidas') and (cat.nombre in etapa_actual.get('cumplidas')) %}
                                     <span class="text-muted" style="text-decoration: line-through;">cumplida</span>
                                     {% elif etapa_actual.total and etapa_actual.pos and (cat.nombre|lower == etapa_actual.nombre|lower) %}
-                                    {% if etapa_actual.pos >= etapa_actual.total %}
-                                    <span class="text-muted" style="text-decoration: line-through;">cumplida</span>
-                                    {% else %}
                                     <span class="badge text-bg-light border">{{ etapa_actual.pos }}/{{ etapa_actual.total }}</span>
-                                    {% endif %}
                                     {% else %}
                                     <span class="text-muted">—</span>
                                     {% endif %}

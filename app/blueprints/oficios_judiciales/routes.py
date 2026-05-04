@@ -2130,13 +2130,17 @@ def manual_listado():
             estado_operativo_map[r.id] = _manual_estado_operativo(
                 r, cat_row=cat_estado_map.get(r.estado_expediente_id)
             )
-            if r.fecha_notificacion and total > 0:
-                trans = max(0, (today - r.fecha_notificacion).days)
-                if trans > total:
-                    trans = total
-                progreso_map[r.id] = {"transcurridos": trans, "total": total}
-            else:
-                progreso_map[r.id] = {"transcurridos": 0, "total": total}
+            trans_real = 0
+            if r.fecha_notificacion:
+                trans_real = max(0, (today - r.fecha_notificacion).days)
+            trans = trans_real
+            if total > 0 and trans > total:
+                trans = total
+            progreso_map[r.id] = {
+                "transcurridos": trans,
+                "total": total,
+                "transcurridos_real": trans_real,
+            }
 
         dias_pairs = (
             db.session.query(ConsignaDiasPorTipo, CatalogoTipoConsigna)
@@ -3241,17 +3245,25 @@ def manual_reincidencias():
         if not g["dni"] and dni:
             g["dni"] = dni
 
-    coincidencias = [g for g in grupos.values() if g["n"] > 1]
+    grupos_list = list(grupos.values())
     if qtxt:
         qn = _ascii_lower_no_accent(qtxt)
         qd = _digits_only(qtxt)
-        coincidencias = [
+        grupos_filtrados = [
             g
-            for g in coincidencias
+            for g in grupos_list
             if qn in _ascii_lower_no_accent(g.get("nombre", ""))
             or qn in _ascii_lower_no_accent(g.get("dni", ""))
             or (qd and qd in _digits_only(g.get("dni", "")))
         ]
+    else:
+        grupos_filtrados = grupos_list
+
+    coincidencias = [g for g in grupos_filtrados if g["n"] > 1]
+    # Si hay búsqueda y no aparecen reincidencias (n>1), mostramos igualmente
+    # las personas encontradas para facilitar trazabilidad por DNI/nombre.
+    if qtxt and not coincidencias:
+        coincidencias = grupos_filtrados
     coincidencias.sort(
         key=lambda g: (
             int(g.get("n", 0)),

@@ -220,6 +220,9 @@
                     <div class="progress" style="height: 6px;">
                         <div class="progress-bar" role="progressbar" style="width: {{ ((pr.transcurridos * 100 / pr.total) if pr.total > 0 else 0)|round(0, 'floor') }}%"></div>
                     </div>
+                    {% elif pr.transcurridos_real > 0 %}
+                    <div class="small"><strong>{{ pr.transcurridos_real }}</strong> días transcurridos</div>
+                    <div class="small text-muted">Desde fecha de inicio</div>
                     {% else %}
                     <span class="text-muted small">Sin plazo en días</span>
                     {% endif %}
