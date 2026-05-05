@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
+
 from app.models.capacitaciones import EventoCapacitacion, MomentoAsistencia
 from app.services.capacitaciones import (
     ensure_capacitaciones_db,
+    qr_png_response_for_url,
     qr_svg_response_for_url,
     registrar_asistencia,
 )
@@ -20,6 +22,41 @@ bp_public = Blueprint(
 @bp_public.before_request
 def _ensure_db():
     ensure_capacitaciones_db()
+
+
+def _marcar_abs_url(token: str) -> str:
+    """URL absoluta del formulario público (HTTPS detrás de nginx / proxy)."""
+    path = url_for("capacitaciones_public.marcar_asistencia", token=token)
+    proto = (request.headers.get("X-Forwarded-Proto") or request.scheme or "https").split(",")[0].strip()
+    host = (request.headers.get("X-Forwarded-Host") or request.host or "").split(",")[0].strip()
+    if not host:
+        host = request.environ.get("HTTP_HOST", "")
+    return f"{proto}://{host.rstrip('/')}{path}"
+
+
+# Rutas más específicas primero (qr.* antes que /<token>).
+
+
+@bp_public.route("/p/asistencia/<string:token>/qr.png")
+def marcar_asistencia_qr_png(token: str):
+    if not token or len(token) > 64:
+        abort(404)
+    mo = MomentoAsistencia.query.filter_by(token_publico=token.strip()).first()
+    if not mo:
+        abort(404)
+    full = _marcar_abs_url(token)
+    return qr_png_response_for_url(full)
+
+
+@bp_public.route("/p/asistencia/<string:token>/qr.svg")
+def marcar_asistencia_qr(token: str):
+    if not token or len(token) > 64:
+        abort(404)
+    mo = MomentoAsistencia.query.filter_by(token_publico=token.strip()).first()
+    if not mo:
+        abort(404)
+    full = _marcar_abs_url(token)
+    return qr_svg_response_for_url(full)
 
 
 @bp_public.route("/p/asistencia/<string:token>", methods=["GET", "POST"])
@@ -53,18 +90,3 @@ def marcar_asistencia(token: str):
         ev=ev,
         mo=mo,
     )
-
-
-@bp_public.route("/p/asistencia/<string:token>/qr.svg")
-def marcar_asistencia_qr(token: str):
-    if not token or len(token) > 64:
-        abort(404)
-    mo = MomentoAsistencia.query.filter_by(token_publico=token.strip()).first()
-    if not mo:
-        abort(404)
-    full = _abs_url_for_marcar(token)
-    return qr_svg_response_for_url(full)
-
-
-def _abs_url_for_marcar(token: str) -> str:
-    return request.url_root.rstrip("/") + url_for("capacitaciones_public.marcar_asistencia", token=token)

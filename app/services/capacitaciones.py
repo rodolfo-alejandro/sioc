@@ -127,6 +127,23 @@ def qr_svg_response_for_url(url: str) -> Response:
     return Response(out.getvalue(), mimetype="image/svg+xml; charset=utf-8")
 
 
+def qr_png_response_for_url(url: str) -> Response:
+    """PNG para <img> y compatibilidad (segno + Pillow)."""
+    import io
+
+    import segno
+
+    q = segno.make(url, error="m")
+    out = io.BytesIO()
+    q.save(out, kind="png", scale=5, border=2)
+    out.seek(0)
+    return Response(
+        out.getvalue(),
+        mimetype="image/png",
+        headers={"Cache-Control": "public, max-age=300"},
+    )
+
+
 def _read_upload_to_dataframe(file_storage) -> pd.DataFrame:
     name = (file_storage.filename or "").lower()
     raw = file_storage.read()

@@ -69,7 +69,7 @@
                         <th>Código</th>
                         <th>Vigencia</th>
                         <th>Activo</th>
-                        <th class="small">Asistencia pública</th>
+                        <th class="small">Asistencia pública <span class="text-muted fw-normal">(un enlace por momento)</span></th>
                         {% if can_admin %}<th></th>{% endif %}
                     </tr>
                 </thead>
@@ -84,11 +84,9 @@
                         <td>{% if m.activo %}<span class="badge text-bg-success">Sí</span>{% else %}<span class="badge text-bg-secondary">No</span>{% endif %}</td>
                         <td class="small cap-public-cell">
                             {% if m.token_publico %}
-                            <img src="{{ url_for('capacitaciones_public.marcar_asistencia_qr', token=m.token_publico) }}" width="96" height="96" alt="" class="d-block border rounded mb-1">
-                            <div class="input-group input-group-sm">
-                                <input type="text" readonly class="form-control cap-public-link" id="cap-link-{{ m.id }}" value="{{ url_for('capacitaciones_public.marcar_asistencia', token=m.token_publico, _external=True) }}">
-                                <button type="button" class="btn btn-outline-secondary" data-cap-copy-target="#cap-link-{{ m.id }}" title="Copiar enlace"><i class="bi bi-clipboard"></i></button>
-                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-primary d-flex align-items-center gap-1" data-bs-toggle="modal" data-bs-target="#capPublicModal{{ m.id }}">
+                                <i class="bi bi-qr-code"></i> Ver QR y enlace
+                            </button>
                             {% else %}—{% endif %}
                         </td>
                         {% if can_admin %}
@@ -103,6 +101,33 @@
         </div>
     </div>
 </div>
+
+{% for m in momentos %}
+{% if m.token_publico %}
+<div class="modal fade" id="capPublicModal{{ m.id }}" tabindex="-1" aria-labelledby="capPublicModalLabel{{ m.id }}" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title h6" id="capPublicModalLabel{{ m.id }}">Asistencia pública — {{ m.nombre }}</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted mb-2">Este QR y enlace corresponden <strong>solo a este momento</strong>. Otros controles del mismo evento tienen otro enlace.</p>
+                <div class="text-center mb-3 p-2 bg-light rounded border">
+                    <img src="{{ url_for('capacitaciones_public.marcar_asistencia_qr_png', token=m.token_publico) }}" width="220" height="220" alt="Código QR del enlace de asistencia" class="img-fluid">
+                </div>
+                <label class="form-label small mb-1">Enlace para compartir</label>
+                <div class="input-group input-group-sm mb-2">
+                    <input type="text" readonly class="form-control cap-public-link" id="cap-link-{{ m.id }}" value="{{ url_for('capacitaciones_public.marcar_asistencia', token=m.token_publico, _external=True) }}">
+                    <button type="button" class="btn btn-outline-secondary" data-cap-copy-target="#cap-link-{{ m.id }}" title="Copiar"><i class="bi bi-clipboard"></i></button>
+                </div>
+                <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener" href="{{ url_for('capacitaciones_public.marcar_asistencia', token=m.token_publico, _external=True) }}">Abrir página de asistencia</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endfor %}
 {% endblock %}
 {% block extra_scripts %}
 <script src="{{ url_for('static', filename='js/capacitaciones.js') }}"></script>
