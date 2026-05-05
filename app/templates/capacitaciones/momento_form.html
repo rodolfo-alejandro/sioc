@@ -44,10 +44,20 @@
                     <input class="form-control" type="datetime-local" name="fecha_cierre" value="{{ momento.fecha_cierre.strftime('%Y-%m-%dT%H:%M') if momento and momento.fecha_cierre else '' }}">
                 </div>
                 <div class="col-12">
+                    {% if not momento %}
+                    <p class="text-muted small">Al guardar se genera un <strong>enlace y QR públicos</strong> para que quienes estén inscriptos marquen asistencia con su DNI, sin usuario de SIOC.</p>
+                    {% endif %}
                     <div class="form-check">
                         <input class="form-check-input" type="checkbox" name="activo" value="1" id="actMom" {% if not momento or momento.activo %}checked{% endif %}>
                         <label class="form-check-label" for="actMom">Momento activo</label>
                     </div>
+                    {% if momento %}
+                    <div class="form-check mt-2">
+                        <input class="form-check-input" type="checkbox" name="regenerar_token_publico" value="1" id="regTok">
+                        <label class="form-check-label" for="regTok">Regenerar enlace y QR públicos (invalida el código anterior)</label>
+                    </div>
+                    <p class="text-muted small mb-0">El enlace <code>/capacitaciones/p/asistencia/…</code> permite marcar asistencia sin login; compartilo solo con inscriptos del evento.</p>
+                    {% endif %}
                 </div>
             </div>
             <button type="submit" class="btn btn-primary mt-3">Guardar</button>

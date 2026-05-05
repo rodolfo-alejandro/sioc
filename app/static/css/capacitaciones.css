@@ -68,6 +68,11 @@
   font-size: 0.8rem;
 }
 
+.cap-table td.cap-public-cell {
+  min-width: 11rem;
+  vertical-align: top;
+}
+
 @media (max-width: 576px) {
   .cap-page-header {
     flex-direction: column;

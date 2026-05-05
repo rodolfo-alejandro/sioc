@@ -97,6 +97,7 @@ class MomentoAsistencia(db.Model):
     nombre = db.Column(db.String(120), nullable=False)
     tipo = db.Column(db.String(40), nullable=False, default="personalizado", index=True)
     codigo_validacion = db.Column(db.String(32), nullable=False, index=True)
+    token_publico = db.Column(db.String(64), nullable=True, unique=True, index=True)
     fecha_apertura = db.Column(db.DateTime, nullable=True)
     fecha_cierre = db.Column(db.DateTime, nullable=True)
     activo = db.Column(db.Boolean, nullable=False, default=True, index=True)

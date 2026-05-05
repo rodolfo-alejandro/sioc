@@ -85,6 +85,8 @@ def create_app(config_class=Config):
 
     from app.blueprints.capacitaciones import bp as capacitaciones_bp
     app.register_blueprint(capacitaciones_bp)
+    from app.blueprints.capacitaciones.public_routes import bp_public as capacitaciones_public_bp
+    app.register_blueprint(capacitaciones_public_bp)
 
     # Crear directorios necesarios
     upload_folder = app.config.get('UPLOAD_FOLDER', 'instance/uploads')

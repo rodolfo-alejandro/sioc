@@ -69,6 +69,7 @@
                         <th>Código</th>
                         <th>Vigencia</th>
                         <th>Activo</th>
+                        <th class="small">Asistencia pública</th>
                         {% if can_admin %}<th></th>{% endif %}
                     </tr>
                 </thead>
@@ -81,16 +82,28 @@
                         <td><code class="cap-code">{{ m.codigo_validacion }}</code></td>
                         <td class="small">{{ m.fecha_apertura.strftime('%d/%m %H:%M') if m.fecha_apertura else '—' }} → {{ m.fecha_cierre.strftime('%d/%m %H:%M') if m.fecha_cierre else '—' }}</td>
                         <td>{% if m.activo %}<span class="badge text-bg-success">Sí</span>{% else %}<span class="badge text-bg-secondary">No</span>{% endif %}</td>
+                        <td class="small cap-public-cell">
+                            {% if m.token_publico %}
+                            <img src="{{ url_for('capacitaciones_public.marcar_asistencia_qr', token=m.token_publico) }}" width="96" height="96" alt="" class="d-block border rounded mb-1">
+                            <div class="input-group input-group-sm">
+                                <input type="text" readonly class="form-control cap-public-link" id="cap-link-{{ m.id }}" value="{{ url_for('capacitaciones_public.marcar_asistencia', token=m.token_publico, _external=True) }}">
+                                <button type="button" class="btn btn-outline-secondary" data-cap-copy-target="#cap-link-{{ m.id }}" title="Copiar enlace"><i class="bi bi-clipboard"></i></button>
+                            </div>
+                            {% else %}—{% endif %}
+                        </td>
                         {% if can_admin %}
                         <td><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('capacitaciones.momento_editar', momento_id=m.id) }}">Editar</a></td>
                         {% endif %}
                     </tr>
                     {% else %}
-                    <tr><td colspan="7" class="text-muted">No hay momentos definidos.</td></tr>
+                    <tr><td colspan="{% if can_admin %}8{% else %}7{% endif %}" class="text-muted">No hay momentos definidos.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
     </div>
 </div>
+{% endblock %}
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/capacitaciones.js') }}"></script>
 {% endblock %}

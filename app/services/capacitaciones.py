@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Any
 
 import pandas as pd
-from flask import Request
+from flask import Request, Response
 
 from app.extensions import db
 from app.models.capacitaciones import (
@@ -52,6 +52,79 @@ def is_dni_plausible(dni_key: str) -> bool:
 def generate_codigo_momento() -> str:
     alphabet = string.ascii_uppercase + string.digits
     return "".join(secrets.choice(alphabet) for _ in range(6))
+
+
+def generate_token_publico_momento() -> str:
+    """Token opaco para URL/QR de asistencia pública (sin login)."""
+    return secrets.token_urlsafe(32)
+
+
+def generate_token_publico_unique(exclude_momento_id: int | None = None) -> str:
+    """Genera token único para cap_momentos_asistencia.token_publico."""
+    for _ in range(40):
+        t = generate_token_publico_momento()
+        q = MomentoAsistencia.query.filter_by(token_publico=t)
+        if exclude_momento_id is not None:
+            q = q.filter(MomentoAsistencia.id != exclude_momento_id)
+        if not q.first():
+            return t
+    raise RuntimeError("No se pudo generar token público único")
+
+
+def ensure_capacitaciones_db() -> None:
+    """
+    Crea tablas del módulo y completa columna token_publico en momentos (despliegues sin migrate).
+    """
+    from sqlalchemy import inspect, text
+
+    _ = (PadronDrogas, EventoCapacitacion, InscriptoEvento, MomentoAsistencia, RegistroAsistencia)
+    db.create_all()
+
+    insp = inspect(db.engine)
+    try:
+        cols = [c["name"] for c in insp.get_columns("cap_momentos_asistencia")]
+    except Exception:
+        return
+
+    if "token_publico" not in cols:
+        db.session.execute(
+            text(
+                "ALTER TABLE cap_momentos_asistencia ADD COLUMN token_publico VARCHAR(64) NULL"
+            )
+        )
+        db.session.commit()
+
+    q = MomentoAsistencia.query.filter(
+        (MomentoAsistencia.token_publico.is_(None)) | (MomentoAsistencia.token_publico == "")
+    )
+    for m in q.all():
+        m.token_publico = generate_token_publico_unique(exclude_momento_id=m.id)
+    db.session.commit()
+
+    insp2 = inspect(db.engine)
+    idx_names = {i.get("name") for i in insp2.get_indexes("cap_momentos_asistencia")}
+    if "uq_cap_momento_token_publico" not in idx_names:
+        try:
+            db.session.execute(
+                text(
+                    "CREATE UNIQUE INDEX uq_cap_momento_token_publico ON cap_momentos_asistencia (token_publico)"
+                )
+            )
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
+
+def qr_svg_response_for_url(url: str) -> Response:
+    """Devuelve Response SVG con QR (dependencia segno)."""
+    import io
+
+    import segno
+
+    q = segno.make(url, error="m")
+    out = io.StringIO()
+    q.save(out, kind="svg", scale=3, border=2)
+    return Response(out.getvalue(), mimetype="image/svg+xml; charset=utf-8")
 
 
 def _read_upload_to_dataframe(file_storage) -> pd.DataFrame:

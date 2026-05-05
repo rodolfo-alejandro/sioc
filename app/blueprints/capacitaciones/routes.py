@@ -29,8 +29,10 @@ from app.models.capacitaciones import (
 )
 from app.services.capacitaciones import (
     build_reporte_dataframe,
+    ensure_capacitaciones_db,
     export_dataframe_inscriptos,
     generate_codigo_momento,
+    generate_token_publico_unique,
     importar_inscriptos_evento,
     importar_padron_drogas,
     normalize_dni,
@@ -59,17 +61,8 @@ def _can_asistencia() -> bool:
 
 
 def _ensure_cap_tables():
-    """Crea tablas del módulo si aún no existen (desarrollo / despliegue sin migrate)."""
-    from app.models.capacitaciones import (  # noqa: WPS433,F401
-        EventoCapacitacion,
-        InscriptoEvento,
-        MomentoAsistencia,
-        PadronDrogas,
-        RegistroAsistencia,
-    )
-
-    _ = (PadronDrogas, EventoCapacitacion, InscriptoEvento, MomentoAsistencia, RegistroAsistencia)
-    db.create_all()
+    """Crea tablas del módulo y columnas auxiliares (token público por momento)."""
+    ensure_capacitaciones_db()
 
 
 @bp.before_request
@@ -339,6 +332,7 @@ def momento_nuevo(evento_id: int):
             nombre=(request.form.get("nombre") or "Momento").strip(),
             tipo=(request.form.get("tipo") or "personalizado").strip(),
             codigo_validacion=(request.form.get("codigo") or "").strip().upper() or generate_codigo_momento(),
+            token_publico=generate_token_publico_unique(),
             fecha_apertura=_parse_dt(request.form.get("fecha_apertura")),
             fecha_cierre=_parse_dt(request.form.get("fecha_cierre")),
             activo=request.form.get("activo") == "1",
@@ -365,6 +359,10 @@ def momento_editar(momento_id: int):
         mo.fecha_cierre = _parse_dt(request.form.get("fecha_cierre"))
         mo.activo = request.form.get("activo") == "1"
         mo.orden = int(request.form.get("orden") or mo.orden)
+        if request.form.get("regenerar_token_publico") == "1":
+            mo.token_publico = generate_token_publico_unique(exclude_momento_id=mo.id)
+        elif not (mo.token_publico or "").strip():
+            mo.token_publico = generate_token_publico_unique(exclude_momento_id=mo.id)
         db.session.commit()
         flash("Momento actualizado.", "success")
         return redirect(url_for("capacitaciones.evento_detalle", evento_id=ev.id))
