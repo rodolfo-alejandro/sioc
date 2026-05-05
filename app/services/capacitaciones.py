@@ -4,11 +4,13 @@ Lógica de negocio: importaciones padrón/inscriptos, validación y asistencia.
 from __future__ import annotations
 
 import io
+import os
 import re
 import secrets
 import string
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 from flask import Request, Response
@@ -452,6 +454,23 @@ def _compose_nombre_padron(p: PadronDrogas) -> str:
     return " ".join(x for x in parts if x) or ""
 
 
+def _cap_event_tz() -> ZoneInfo:
+    """Zona horaria para vigencia de momentos (formulario guarda hora local sin TZ)."""
+    name = (os.environ.get("CAPACITACIONES_TZ") or os.environ.get("APP_TIMEZONE") or "America/Argentina/Salta").strip()
+    try:
+        return ZoneInfo(name)
+    except Exception:
+        return ZoneInfo("America/Argentina/Buenos_Aires")
+
+
+def _moment_dt_in_event_tz(dt: datetime | None, tz: ZoneInfo) -> datetime | None:
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        return dt.astimezone(tz)
+    return dt.replace(tzinfo=tz)
+
+
 def registrar_asistencia(
     evento: EventoCapacitacion,
     momento: MomentoAsistencia,
@@ -463,7 +482,12 @@ def registrar_asistencia(
     Registra intento de asistencia. Siempre persiste registro; valido indica éxito.
     Retorna (exito, mensaje_codigo).
     """
-    now = datetime.utcnow()
+    tz = _cap_event_tz()
+    now_local = datetime.now(tz)
+    apertura = _moment_dt_in_event_tz(momento.fecha_apertura, tz)
+    cierre = _moment_dt_in_event_tz(momento.fecha_cierre, tz)
+    stamp_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+
     dni_key, _ = normalize_dni(dni_raw)
     codigo = (codigo_raw or "").strip().upper()
     ip = (request.headers.get("X-Forwarded-For") or request.remote_addr or "")[:64]
@@ -477,7 +501,7 @@ def registrar_asistencia(
         dni_ingresado=dni_raw,
         dni_key=dni_key or None,
         codigo_ingresado=codigo,
-        fecha_hora=now,
+        fecha_hora=stamp_utc,
         ip=ip,
         user_agent=ua,
         valido=False,
@@ -489,12 +513,12 @@ def registrar_asistencia(
         db.session.commit()
         return False, "momento_inactivo"
 
-    if momento.fecha_apertura and now < momento.fecha_apertura:
+    if apertura and now_local < apertura:
         r = RegistroAsistencia(**base_kw, motivo="fuera_horario")
         db.session.add(r)
         db.session.commit()
         return False, "fuera_horario"
-    if momento.fecha_cierre and now > momento.fecha_cierre:
+    if cierre and now_local > cierre:
         r = RegistroAsistencia(**base_kw, motivo="fuera_horario")
         db.session.add(r)
         db.session.commit()
@@ -540,7 +564,7 @@ def registrar_asistencia(
         dni_ingresado=dni_raw,
         dni_key=dni_key,
         codigo_ingresado=codigo,
-        fecha_hora=now,
+        fecha_hora=stamp_utc,
         ip=ip,
         user_agent=ua,
         valido=True,
