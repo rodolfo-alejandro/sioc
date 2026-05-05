@@ -12,7 +12,6 @@ from typing import Any
 
 import pandas as pd
 from flask import Request
-from sqlalchemy import or_
 
 from app.extensions import db
 from app.models.capacitaciones import (
@@ -28,7 +27,20 @@ def normalize_dni(raw: str | None) -> tuple[str, str]:
     """Devuelve (dni_key solo dígitos, dni display limpio)."""
     if raw is None:
         return "", ""
+    if isinstance(raw, float):
+        if pd.isna(raw):
+            return "", ""
+        try:
+            if raw == int(raw):
+                raw = int(raw)
+        except Exception:
+            pass
+    if isinstance(raw, int):
+        raw = str(raw)
     s = str(raw).strip()
+    # Excel/pandas suele devolver "24338994.0"
+    if re.fullmatch(r"\d+\.0+", s):
+        s = s.split(".")[0]
     digits = "".join(re.findall(r"\d", s))
     return digits, s
 
@@ -46,7 +58,23 @@ def _read_upload_to_dataframe(file_storage) -> pd.DataFrame:
     name = (file_storage.filename or "").lower()
     raw = file_storage.read()
     if name.endswith(".csv"):
-        for enc in ("utf-8", "utf-8-sig", "latin-1"):
+        best_df = None
+        best_ncols = 0
+        for sep in (";", ",", "\t"):
+            for enc in ("utf-8-sig", "utf-8", "latin-1"):
+                try:
+                    df_try = pd.read_csv(io.BytesIO(raw), encoding=enc, sep=sep)
+                    n = len(df_try.columns)
+                    if n > best_ncols:
+                        best_df = df_try
+                        best_ncols = n
+                except Exception:
+                    continue
+        if best_df is not None and best_ncols > 1:
+            return best_df
+        if best_df is not None:
+            return best_df
+        for enc in ("utf-8-sig", "utf-8", "latin-1"):
             try:
                 return pd.read_csv(io.BytesIO(raw), encoding=enc)
             except Exception:
@@ -58,7 +86,8 @@ def _read_upload_to_dataframe(file_storage) -> pd.DataFrame:
 
 
 def _norm_col(c: str) -> str:
-    return re.sub(r"\s+", " ", str(c).strip().lower())
+    s = str(c).strip().lower().replace("_", " ").replace("-", " ")
+    return re.sub(r"\s+", " ", s)
 
 
 def _map_row_columns(df: pd.DataFrame, synonym_map: dict[str, list[str]]) -> list[dict[str, Any]]:
@@ -84,14 +113,36 @@ def _map_row_columns(df: pd.DataFrame, synonym_map: dict[str, list[str]]) -> lis
 
 
 PADRON_SYNONYMS = {
-    "legajo": ["legajo", "nro legajo", "n° legajo", "nro_legajo"],
+    "legajo": ["legajo", "nro legajo", "n° legajo", "nro_legajo", "datospers legajo", "datos pers legajo"],
     "apellido": ["apellido", "apellidos"],
     "nombre": ["nombre", "nombres"],
-    "dni": ["dni", "documento", "d.n.i.", "dni n°", "nro documento"],
-    "grado": ["grado", "jerarquía", "jerarquia", "rango"],
+    "dni": [
+        "dni",
+        "documento",
+        "d.n.i.",
+        "dni n°",
+        "nro documento",
+        "rrhh datospers nrodoc",
+        "datospers nrodoc",
+        "nrodoc",
+        "nro doc",
+        "documento nacional",
+    ],
+    "grado": ["grado", "jerarquía", "jerarquia", "rango", "tipogrados desc", "tipo grados desc", "tipo grado"],
     "sexo": ["sexo", "genero", "género"],
-    "dependencia": ["dependencia", "reparticion", "repartición", "unidad", "destino"],
-    "organismo": ["organismo", "fuerza", "institución", "institucion"],
+    "dependencia": [
+        "dependencia",
+        "reparticion",
+        "repartición",
+        "unidad",
+        "destino",
+        "organismos descripcion",
+        "organismo descripcion",
+        "descripcion organismo",
+        "organismos derecho",
+        "organismos izquierdo",
+    ],
+    "organismo": ["organismo", "fuerza", "institución", "institucion", "organismos derecho"],
 }
 
 INSCRIPTO_SYNONYMS = {
