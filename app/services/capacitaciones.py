@@ -153,14 +153,59 @@ INSCRIPTO_SYNONYMS = {
         "nombre completo",
         "nombre",
     ],
-    "dni": ["dni", "documento", "d.n.i."],
-    "telefono": ["telefono", "teléfono", "celular", "whatsapp", "phone"],
-    "correo": ["correo", "email", "e-mail", "mail"],
+    "dni": [
+        "dni",
+        "documento",
+        "d.n.i.",
+        "d.n.i",
+        "d. n. i",
+        "d. n. i.",
+        "documento nacional",
+        "nro documento",
+        "nro doc",
+        "numero de documento",
+        "número de documento",
+        "cédula",
+        "cedula",
+        "n° documento",
+    ],
+    "telefono": ["telefono", "teléfono", "celular", "whatsapp", "phone", "tel"],
+    "correo": ["correo", "email", "e-mail", "mail", "correo electronico", "correo electrónico", "e mail"],
     "dependencia_declarada": ["dependencia", "reparticion", "repartición", "unidad", "comisaría", "comisaria"],
     "cargo": ["cargo", "puesto", "función", "funcion"],
     "modalidad_declarada": ["modalidad", "asistencia", "virtual/presencial"],
     "comentarios": ["comentarios", "observaciones", "nota", "notas"],
 }
+
+
+def _header_compact(s: str) -> str:
+    """Quita puntuación/espacios para comparar encabezados (ej. d.n.i → dni)."""
+    return re.sub(r"[.\s_\-]", "", str(s).strip().lower())
+
+
+def _heuristic_rename_dni_column(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Si ningún encabezado matchea la clave canónica «dni», intenta detectar la columna
+    por nombre (UCASAL, Google Forms: «D.N.I», «Documento», etc.).
+    """
+    syn_dni = INSCRIPTO_SYNONYMS.get("dni", [])
+    for col in df.columns:
+        n = _norm_col(col)
+        if n in [_norm_col(s) for s in syn_dni] or n == _norm_col("dni"):
+            return df
+        hc = _header_compact(col)
+        if hc in ("dni", "dn", "documento", "nrodoc", "documentonacional", "cedula", "cédula", "numerodocumento"):
+            return df.rename(columns={col: "dni"})
+    for col in list(df.columns):
+        hc = _header_compact(col)
+        if "dni" in hc or hc.endswith("doc") or "documento" in hc:
+            return df.rename(columns={col: "dni"})
+    return df
+
+
+def _map_inscripto_rows(df: pd.DataFrame) -> list[dict[str, Any]]:
+    df2 = _heuristic_rename_dni_column(df.copy())
+    return _map_row_columns(df2, INSCRIPTO_SYNONYMS)
 
 
 def importar_padron_drogas(
@@ -233,7 +278,7 @@ def _clean_str(v: Any) -> str | None:
 
 def importar_inscriptos_evento(evento_id: int, file_storage, origen: str) -> dict[str, Any]:
     df = _read_upload_to_dataframe(file_storage)
-    rows = _map_row_columns(df, INSCRIPTO_SYNONYMS)
+    rows = _map_inscripto_rows(df)
     stats = {
         "total": len(rows),
         "validado_drogas": 0,
