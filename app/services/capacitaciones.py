@@ -469,6 +469,8 @@ def registrar_asistencia(
     ip = (request.headers.get("X-Forwarded-For") or request.remote_addr or "")[:64]
     ua = (request.headers.get("User-Agent") or "")[:500]
 
+    # No incluir motivo ni inscripto_id aquí: al hacer RegistroAsistencia(**base_kw, motivo=…)
+    # Python 3 falla con "got multiple values" si la clave ya venía en el dict.
     base_kw = dict(
         evento_id=evento.id,
         momento_id=momento.id,
@@ -479,8 +481,6 @@ def registrar_asistencia(
         ip=ip,
         user_agent=ua,
         valido=False,
-        motivo=None,
-        inscripto_id=None,
     )
 
     if not momento.activo:
