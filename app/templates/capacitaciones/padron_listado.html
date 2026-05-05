@@ -1,0 +1,74 @@
+{% extends "layouts/base.html" %}
+{% block title %}Padrón Drogas — SIOC{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/capacitaciones.css') }}">
+{% endblock %}
+{% block content %}
+<div class="page-header cap-page-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <h1 class="h3 mb-0"><i class="bi bi-people"></i> Padrón global Drogas</h1>
+    {% if can_import %}
+    <a class="btn btn-primary btn-sm" href="{{ url_for('capacitaciones.padron_importar') }}">Importar</a>
+    {% endif %}
+</div>
+
+<form method="get" class="card cap-card mb-3">
+    <div class="card-body row g-2">
+        <div class="col-md-3">
+            <label class="form-label small">Búsqueda</label>
+            <input class="form-control form-control-sm" name="q" value="{{ request.args.get('q','') }}" placeholder="DNI, nombre, legajo…">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small">Dependencia</label>
+            <input class="form-control form-control-sm" name="dependencia" value="{{ request.args.get('dependencia','') }}">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small">Grado</label>
+            <input class="form-control form-control-sm" name="grado" value="{{ request.args.get('grado','') }}">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small">Activo</label>
+            <select class="form-select form-select-sm" name="activo">
+                <option value="">Todos</option>
+                <option value="1" {% if request.args.get('activo')=='1' %}selected{% endif %}>Sí</option>
+                <option value="0" {% if request.args.get('activo')=='0' %}selected{% endif %}>No</option>
+            </select>
+        </div>
+        <div class="col-md-2 d-flex align-items-end">
+            <button type="submit" class="btn btn-outline-primary btn-sm">Filtrar</button>
+        </div>
+    </div>
+</form>
+
+<div class="table-responsive cap-table-wrap">
+    <table class="table table-sm table-striped cap-table">
+        <thead>
+            <tr>
+                <th>DNI</th>
+                <th>Apellido</th>
+                <th>Nombre</th>
+                <th>Legajo</th>
+                <th>Grado</th>
+                <th>Dependencia</th>
+                <th>Activo</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in rows %}
+            <tr>
+                <td>{{ r.dni }}</td>
+                <td>{{ r.apellido }}</td>
+                <td>{{ r.nombre }}</td>
+                <td>{{ r.legajo }}</td>
+                <td>{{ r.grado }}</td>
+                <td>{{ r.dependencia }}</td>
+                <td>{% if r.activo %}<span class="badge text-bg-success">Sí</span>{% else %}<span class="badge text-bg-secondary">No</span>{% endif %}</td>
+                <td><a href="{{ url_for('capacitaciones.padron_detalle', persona_id=r.id) }}" class="btn btn-sm btn-outline-secondary">Detalle</a></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="8" class="text-muted">Sin resultados (máx. 500 filas).</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

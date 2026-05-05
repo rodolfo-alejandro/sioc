@@ -1,0 +1,96 @@
+{% extends "layouts/base.html" %}
+{% block title %}{{ ev.titulo }} — Capacitaciones{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/capacitaciones.css') }}">
+{% endblock %}
+{% block content %}
+<div class="page-header cap-page-header flex-wrap gap-2">
+    <div>
+        <h1 class="h4 mb-0">{{ ev.titulo }}</h1>
+        <p class="text-muted small mb-0">{{ ev.tipo_evento or '' }} · {{ ev.modalidad or '' }}</p>
+    </div>
+    <div class="btn-group btn-group-sm">
+        <a class="btn btn-outline-secondary" href="{{ url_for('capacitaciones.index') }}">Inicio</a>
+        {% if can_admin %}
+        <a class="btn btn-outline-primary" href="{{ url_for('capacitaciones.evento_editar', evento_id=ev.id) }}">Editar</a>
+        {% endif %}
+        {% if can_asistencia %}
+        <a class="btn btn-success" href="{{ url_for('capacitaciones.asistencia', evento_id=ev.id) }}">Registrar asistencia</a>
+        {% endif %}
+        <a class="btn btn-outline-dark" href="{{ url_for('capacitaciones.reporte', evento_id=ev.id) }}">Reporte</a>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-6">
+        <div class="card cap-card h-100">
+            <div class="card-body">
+                <h2 class="h6">Datos generales</h2>
+                <dl class="row cap-dl small mb-0">
+                    <dt class="col-4">Fecha</dt><dd class="col-8">{{ ev.fecha.strftime('%d/%m/%Y') if ev.fecha else '—' }}</dd>
+                    <dt class="col-4">Horario</dt><dd class="col-8">{{ ev.hora_inicio.strftime('%H:%M') if ev.hora_inicio else '—' }} — {{ ev.hora_fin.strftime('%H:%M') if ev.hora_fin else '—' }}</dd>
+                    <dt class="col-4">Lugar</dt><dd class="col-8">{{ ev.lugar or '—' }}</dd>
+                    <dt class="col-4">Estado</dt><dd class="col-8"><span class="badge cap-badge-estado">{{ ev.estado }}</span></dd>
+                    <dt class="col-4">Enlace</dt><dd class="col-8">{% if ev.enlace_virtual %}<a href="{{ ev.enlace_virtual }}" target="_blank" rel="noopener">Abrir</a>{% else %}—{% endif %}</dd>
+                </dl>
+                {% if ev.descripcion %}<p class="small mt-2">{{ ev.descripcion }}</p>{% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card cap-card h-100">
+            <div class="card-body">
+                <h2 class="h6">Inscriptos</h2>
+                <p class="mb-2">Total cargados: <strong>{{ n_ins }}</strong></p>
+                {% if can_admin %}
+                <a class="btn btn-sm btn-outline-primary" href="{{ url_for('capacitaciones.inscriptos_listado', evento_id=ev.id) }}">Ver listado</a>
+                <a class="btn btn-sm btn-primary" href="{{ url_for('capacitaciones.inscriptos_importar', evento_id=ev.id) }}">Importar CSV/XLSX</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card cap-card mt-3">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h2 class="h6 mb-0">Momentos de asistencia</h2>
+            {% if can_admin %}
+            <a class="btn btn-sm btn-success" href="{{ url_for('capacitaciones.momento_nuevo', evento_id=ev.id) }}">Agregar momento</a>
+            {% endif %}
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm cap-table">
+                <thead>
+                    <tr>
+                        <th>Orden</th>
+                        <th>Nombre</th>
+                        <th>Tipo</th>
+                        <th>Código</th>
+                        <th>Vigencia</th>
+                        <th>Activo</th>
+                        {% if can_admin %}<th></th>{% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for m in momentos %}
+                    <tr>
+                        <td>{{ m.orden }}</td>
+                        <td>{{ m.nombre }}</td>
+                        <td>{{ m.tipo }}</td>
+                        <td><code class="cap-code">{{ m.codigo_validacion }}</code></td>
+                        <td class="small">{{ m.fecha_apertura.strftime('%d/%m %H:%M') if m.fecha_apertura else '—' }} → {{ m.fecha_cierre.strftime('%d/%m %H:%M') if m.fecha_cierre else '—' }}</td>
+                        <td>{% if m.activo %}<span class="badge text-bg-success">Sí</span>{% else %}<span class="badge text-bg-secondary">No</span>{% endif %}</td>
+                        {% if can_admin %}
+                        <td><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('capacitaciones.momento_editar', momento_id=m.id) }}">Editar</a></td>
+                        {% endif %}
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="7" class="text-muted">No hay momentos definidos.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

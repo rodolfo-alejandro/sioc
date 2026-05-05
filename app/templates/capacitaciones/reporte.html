@@ -1,0 +1,70 @@
+{% extends "layouts/base.html" %}
+{% block title %}Reporte asistencia — {{ ev.titulo }}{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/capacitaciones.css') }}">
+{% endblock %}
+{% block content %}
+<div class="page-header cap-page-header flex-wrap gap-2">
+    <h1 class="h4">Reporte final — {{ ev.titulo }}</h1>
+    <div class="btn-group btn-group-sm">
+        <a class="btn btn-outline-secondary" href="{{ url_for('capacitaciones.evento_detalle', evento_id=ev.id) }}">Evento</a>
+        {% if can_export %}
+        <a class="btn btn-outline-success" href="{{ url_for('capacitaciones.export_inscriptos', evento_id=ev.id) }}">Export inscriptos</a>
+        <a class="btn btn-outline-success" href="{{ url_for('capacitaciones.export_reporte', evento_id=ev.id) }}">Export reporte Excel</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="row g-2 mb-3 cap-kpis">
+    <div class="col-6 col-md-2"><div class="card cap-kpi"><div class="card-body py-2"><div class="small text-muted">Inscriptos</div><strong>{{ total }}</strong></div></div></div>
+    <div class="col-6 col-md-2"><div class="card cap-kpi"><div class="card-body py-2"><div class="small text-muted">Drogas</div><strong>{{ n_drogas }}</strong></div></div></div>
+    <div class="col-6 col-md-2"><div class="card cap-kpi"><div class="card-body py-2"><div class="small text-muted">Externos</div><strong>{{ n_ext }}</strong></div></div></div>
+    <div class="col-6 col-md-2"><div class="card cap-kpi"><div class="card-body py-2"><div class="small text-muted">Presente total</div><strong>{{ n_pres }}</strong></div></div></div>
+    <div class="col-6 col-md-2"><div class="card cap-kpi"><div class="card-body py-2"><div class="small text-muted">Ausente total</div><strong>{{ n_aus }}</strong></div></div></div>
+</div>
+
+<div class="table-responsive cap-table-wrap">
+    <table class="table table-sm table-bordered cap-table cap-reporte-table">
+        <thead>
+            <tr>
+                <th>DNI</th>
+                <th>Nombre</th>
+                <th>Dependencia</th>
+                <th>Drogas</th>
+                <th>Validación</th>
+                {% for m in momentos %}
+                <th class="text-center small">{{ m.nombre }}</th>
+                {% endfor %}
+                <th>Resultado</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for f in filas %}
+            <tr>
+                <td>{{ f.ins.dni }}</td>
+                <td>{{ f.ins.apellido_nombre }}</td>
+                <td>{{ f.ins.dependencia_declarada or '—' }}</td>
+                <td>{% if f.ins.pertenece_drogas %}Sí{% else %}No{% endif %}</td>
+                <td><span class="badge cap-badge-val">{{ f.ins.estado_validacion }}</span></td>
+                {% for m in momentos %}
+                <td class="text-center">{% if f.checks[m.id] %}✔️{% else %}❌{% endif %}</td>
+                {% endfor %}
+                <td>
+                    {% if f.resultado == 'PRESENTE' %}
+                    <span class="badge text-bg-success">PRESENTE</span>
+                    {% elif f.resultado == 'AUSENTE' %}
+                    <span class="badge text-bg-secondary">AUSENTE</span>
+                    {% elif f.resultado == 'N/A' %}
+                    <span class="badge text-bg-light text-dark border">Sin momentos</span>
+                    {% else %}
+                    <span class="badge text-bg-warning text-dark">INCOMPLETO</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="20" class="text-muted">No hay inscriptos.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

@@ -1,0 +1,45 @@
+{% extends "layouts/base.html" %}
+{% block title %}Asistencia — {{ ev.titulo }}{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/capacitaciones.css') }}">
+{% endblock %}
+{% block content %}
+<div class="page-header cap-page-header">
+    <h1 class="h4"><i class="bi bi-check2-square"></i> Registrar asistencia</h1>
+    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('capacitaciones.evento_detalle', evento_id=ev.id) }}">Evento</a>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card cap-card cap-asistencia-card">
+            <div class="card-body">
+                <h2 class="h6 text-muted">{{ ev.titulo }}</h2>
+                <form method="post" class="cap-asistencia-form" id="capAsistenciaForm">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        <label class="form-label">Momento</label>
+                        <select class="form-select" name="momento_id" required>
+                            <option value="">Elegir…</option>
+                            {% for m in momentos %}
+                            <option value="{{ m.id }}">{{ m.nombre }} ({{ m.tipo }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">DNI</label>
+                        <input class="form-control form-control-lg" name="dni" inputmode="numeric" autocomplete="off" required placeholder="Sin puntos o con puntos">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Código de validación</label>
+                        <input class="form-control form-control-lg text-uppercase" name="codigo" autocomplete="off" required maxlength="12">
+                    </div>
+                    <button type="submit" class="btn btn-success w-100">Confirmar asistencia</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/capacitaciones.js') }}"></script>
+{% endblock %}

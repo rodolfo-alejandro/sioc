@@ -120,6 +120,10 @@ def create_seed_data():
             ('LLAMADAS_SE_EXPORT', 'Exportar llamadas SE filtradas'),
             ('LLAMADAS_SE_DASHBOARD', 'Ver dashboard de llamadas SE'),
             ('LLAMADAS_SE_MAPA', 'Ver mapa de llamadas SE'),
+            # Capacitaciones / seminarios
+            ('CAPACITACIONES_VIEW', 'Ver módulo de capacitaciones, padrón e informes'),
+            ('CAPACITACIONES_ADMIN', 'Gestionar padrón, eventos, inscriptos y momentos de asistencia'),
+            ('CAPACITACIONES_ASISTENCIA', 'Registrar asistencia en eventos'),
         ]
         
         permisos_creados = {}
@@ -135,6 +139,15 @@ def create_seed_data():
         
         db.session.commit()
         print(f"✓ {len(permisos_creados)} permisos creados/verificados")
+
+        # Sincronizar permisos nuevos con rol SUPERADMIN (entornos ya existentes)
+        _sa = Role.query.filter_by(name="SUPERADMIN").first()
+        if _sa:
+            for _p in Permission.query.all():
+                if _p not in _sa.permissions:
+                    _sa.permissions.append(_p)
+            db.session.commit()
+            print("✓ SUPERADMIN actualizado con permisos recientes")
         
         # Crear roles
         print("\n[4/6] Creando roles...")
@@ -169,7 +182,8 @@ def create_seed_data():
                           'DENUNCIAS_WEB_DASHBOARD', 'DENUNCIAS_WEB_MAPA',
                           'OFICIOS_JUDICIALES_VIEW', 'OFICIOS_JUDICIALES_UPLOAD', 'OFICIOS_JUDICIALES_EXPORT',
                           'LLAMADAS_SE_VIEW', 'LLAMADAS_SE_IMPORT', 'LLAMADAS_SE_EXPORT',
-                          'LLAMADAS_SE_DASHBOARD', 'LLAMADAS_SE_MAPA']
+                          'LLAMADAS_SE_DASHBOARD', 'LLAMADAS_SE_MAPA',
+                          'CAPACITACIONES_VIEW', 'CAPACITACIONES_ADMIN', 'CAPACITACIONES_ASISTENCIA']
             for perm_code in admin_perms:
                 if perm_code in permisos_creados:
                     admin_role.permissions.append(permisos_creados[perm_code])

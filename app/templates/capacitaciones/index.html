@@ -1,0 +1,66 @@
+{% extends "layouts/base.html" %}
+{% block title %}Capacitaciones — SIOC{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/capacitaciones.css') }}">
+{% endblock %}
+{% block content %}
+<div class="page-header cap-page-header">
+    <h1><i class="bi bi-mortarboard"></i> Capacitaciones y asistencia</h1>
+</div>
+
+<div class="row g-3 mb-3">
+    {% if can_view or can_admin %}
+    <div class="col-md-4">
+        <div class="card cap-card h-100">
+            <div class="card-body">
+                <h2 class="h6 card-title">Padrón Drogas</h2>
+                <p class="card-text text-muted small">Registros activos en padrón: <strong>{{ n_padron }}</strong></p>
+                {% if can_admin %}
+                <a class="btn btn-sm btn-primary" href="{{ url_for('capacitaciones.padron_importar') }}">Importar padrón</a>
+                {% endif %}
+                <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('capacitaciones.padron_listado') }}">Ver listado</a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    <div class="col-md-8">
+        <div class="card cap-card h-100">
+            <div class="card-body">
+                <h2 class="h6 card-title">Eventos recientes</h2>
+                {% if can_admin %}
+                <a class="btn btn-sm btn-success mb-2" href="{{ url_for('capacitaciones.evento_nuevo') }}">Nuevo evento</a>
+                {% endif %}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover cap-table">
+                        <thead>
+                            <tr>
+                                <th>Título</th>
+                                <th>Fecha</th>
+                                <th>Estado</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for e in eventos %}
+                            <tr>
+                                <td>{{ e.titulo }}</td>
+                                <td>{{ e.fecha.strftime('%d/%m/%Y') if e.fecha else '—' }}</td>
+                                <td><span class="badge cap-badge-estado">{{ e.estado }}</span></td>
+                                <td class="text-end">
+                                    <a class="btn btn-sm btn-outline-primary" href="{{ url_for('capacitaciones.evento_detalle', evento_id=e.id) }}">Ver</a>
+                                    {% if can_asistencia %}
+                                    <a class="btn btn-sm btn-outline-success" href="{{ url_for('capacitaciones.asistencia', evento_id=e.id) }}">Asistencia</a>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="4" class="text-muted">No hay eventos en tu dependencia.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

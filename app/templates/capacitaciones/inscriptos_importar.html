@@ -1,0 +1,25 @@
+{% extends "layouts/base.html" %}
+{% block title %}Importar inscriptos — {{ ev.titulo }}{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/capacitaciones.css') }}">
+{% endblock %}
+{% block content %}
+<div class="page-header cap-page-header">
+    <h1 class="h4">Importar inscriptos</h1>
+    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('capacitaciones.inscriptos_listado', evento_id=ev.id) }}">Volver</a>
+</div>
+
+<div class="card cap-card cap-import-card">
+    <div class="card-body">
+        <p class="small text-muted">Se cruzan DNI con el padrón global. Duplicados en el archivo se omiten (solo cuenta el primero).</p>
+        <form method="post" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="mb-3">
+                <label class="form-label">Archivo CSV o XLSX (export típico Google Forms)</label>
+                <input class="form-control" type="file" name="archivo" accept=".csv,.xlsx,.xls" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Importar</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

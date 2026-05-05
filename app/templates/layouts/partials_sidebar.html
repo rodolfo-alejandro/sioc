@@ -175,6 +175,22 @@
                 </li>
                 {% endif %}
 
+                <!-- Capacitaciones -->
+                {% if current_user.has_permission('CAPACITACIONES_VIEW') or current_user.has_permission('CAPACITACIONES_ADMIN') or current_user.has_permission('CAPACITACIONES_ASISTENCIA') %}
+                <li class="nav-item">
+                    <a class="nav-link" href="#" data-bs-toggle="collapse" data-bs-target="#submenuCapacitaciones">
+                        <i class="bi bi-mortarboard"></i> Capacitaciones
+                        <i class="bi bi-chevron-down ms-auto"></i>
+                    </a>
+                    <ul class="nav flex-column collapse" id="submenuCapacitaciones">
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('capacitaciones.index') }}"><i class="bi bi-house"></i> Inicio</a></li>
+                        {% if current_user.has_permission('CAPACITACIONES_VIEW') or current_user.has_permission('CAPACITACIONES_ADMIN') %}
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('capacitaciones.padron_listado') }}"><i class="bi bi-people"></i> Padrón Drogas</a></li>
+                        {% endif %}
+                    </ul>
+                </li>
+                {% endif %}
+
                 <!-- DataLab -->
                 <li class="nav-item">
                     <a class="nav-link" href="#" data-bs-toggle="collapse" data-bs-target="#submenuDataLab">

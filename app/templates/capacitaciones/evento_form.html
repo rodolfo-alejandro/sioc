@@ -1,0 +1,74 @@
+{% extends "layouts/base.html" %}
+{% block title %}{% if evento %}Editar evento{% else %}Nuevo evento{% endif %} — SIOC{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/capacitaciones.css') }}">
+{% endblock %}
+{% block content %}
+<div class="page-header cap-page-header">
+    <h1 class="h4">{% if evento %}Editar evento{% else %}Nuevo evento{% endif %}</h1>
+    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('capacitaciones.index') }}">Volver</a>
+</div>
+
+<div class="card cap-card">
+    <div class="card-body">
+        <form method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="row g-2">
+                <div class="col-md-8">
+                    <label class="form-label">Título</label>
+                    <input class="form-control" name="titulo" required value="{{ evento.titulo if evento else '' }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Tipo</label>
+                    <input class="form-control" name="tipo_evento" placeholder="seminario, curso…" value="{{ evento.tipo_evento if evento else '' }}">
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Descripción</label>
+                    <textarea class="form-control" name="descripcion" rows="3">{{ evento.descripcion if evento else '' }}</textarea>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Modalidad</label>
+                    <select class="form-select" name="modalidad">
+                        {% set mod = evento.modalidad if evento else '' %}
+                        <option value="">—</option>
+                        <option value="presencial" {% if mod=='presencial' %}selected{% endif %}>Presencial</option>
+                        <option value="virtual" {% if mod=='virtual' %}selected{% endif %}>Virtual</option>
+                        <option value="hibrida" {% if mod=='hibrida' %}selected{% endif %}>Híbrida</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Fecha</label>
+                    <input class="form-control" type="date" name="fecha" value="{{ evento.fecha.strftime('%Y-%m-%d') if evento and evento.fecha else '' }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Hora inicio</label>
+                    <input class="form-control" type="time" name="hora_inicio" value="{{ evento.hora_inicio.strftime('%H:%M') if evento and evento.hora_inicio else '' }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Hora fin</label>
+                    <input class="form-control" type="time" name="hora_fin" value="{{ evento.hora_fin.strftime('%H:%M') if evento and evento.hora_fin else '' }}">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Lugar</label>
+                    <input class="form-control" name="lugar" value="{{ evento.lugar if evento else '' }}">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Enlace virtual</label>
+                    <input class="form-control" name="enlace_virtual" value="{{ evento.enlace_virtual if evento else '' }}">
+                </div>
+                {% if evento %}
+                <div class="col-md-4">
+                    <label class="form-label">Estado evento</label>
+                    <select class="form-select" name="estado">
+                        {% for st in ['planificado','en_curso','finalizado'] %}
+                        <option value="{{ st }}" {% if evento.estado==st %}selected{% endif %}>{{ st }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+            </div>
+            <button type="submit" class="btn btn-primary mt-3">Guardar</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

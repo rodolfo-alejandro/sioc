@@ -1,0 +1,53 @@
+{% extends "layouts/base.html" %}
+{% block title %}Inscriptos — {{ ev.titulo }}{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/capacitaciones.css') }}">
+{% endblock %}
+{% block content %}
+<div class="page-header cap-page-header flex-wrap gap-2">
+    <h1 class="h4">Inscriptos — {{ ev.titulo }}</h1>
+    <div class="btn-group btn-group-sm">
+        <a class="btn btn-outline-secondary" href="{{ url_for('capacitaciones.evento_detalle', evento_id=ev.id) }}">Evento</a>
+        {% if can_admin %}
+        <a class="btn btn-primary" href="{{ url_for('capacitaciones.inscriptos_importar', evento_id=ev.id) }}">Importar</a>
+        {% endif %}
+    </div>
+</div>
+
+<form method="get" class="mb-3">
+    <label class="form-label small">Filtrar validación</label>
+    <select class="form-select form-select-sm d-inline-block w-auto" name="estado_validacion" onchange="this.form.submit()">
+        <option value="">Todos</option>
+        {% for v in ['validado_drogas','externo','dni_invalido','duplicado'] %}
+        <option value="{{ v }}" {% if request.args.get('estado_validacion')==v %}selected{% endif %}>{{ v }}</option>
+        {% endfor %}
+    </select>
+</form>
+
+<div class="table-responsive cap-table-wrap">
+    <table class="table table-sm table-striped cap-table">
+        <thead>
+            <tr>
+                <th>Apellido y nombre</th>
+                <th>DNI</th>
+                <th>Drogas</th>
+                <th>Validación</th>
+                <th>Teléfono</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in rows %}
+            <tr>
+                <td>{{ r.apellido_nombre }}</td>
+                <td>{{ r.dni }}</td>
+                <td>{% if r.pertenece_drogas %}<span class="badge text-bg-primary">Sí</span>{% else %}<span class="badge text-bg-secondary">No</span>{% endif %}</td>
+                <td><span class="badge cap-badge-val">{{ r.estado_validacion }}</span></td>
+                <td>{{ r.telefono or '—' }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" class="text-muted">Sin inscriptos.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

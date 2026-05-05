@@ -1,0 +1,25 @@
+{% extends "layouts/base.html" %}
+{% block title %}Padrón — {{ p.apellido }} {{ p.nombre }}{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/capacitaciones.css') }}">
+{% endblock %}
+{% block content %}
+<div class="page-header cap-page-header">
+    <h1 class="h4"><i class="bi bi-person-badge"></i> Ficha padrón</h1>
+    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('capacitaciones.padron_listado') }}">Volver</a>
+</div>
+
+<dl class="row cap-dl">
+    <dt class="col-sm-3">DNI</dt><dd class="col-sm-9">{{ p.dni }} <span class="text-muted">({{ p.dni_key }})</span></dd>
+    <dt class="col-sm-3">Apellido</dt><dd class="col-sm-9">{{ p.apellido }}</dd>
+    <dt class="col-sm-3">Nombre</dt><dd class="col-sm-9">{{ p.nombre }}</dd>
+    <dt class="col-sm-3">Legajo</dt><dd class="col-sm-9">{{ p.legajo }}</dd>
+    <dt class="col-sm-3">Grado</dt><dd class="col-sm-9">{{ p.grado }}</dd>
+    <dt class="col-sm-3">Sexo</dt><dd class="col-sm-9">{{ p.sexo }}</dd>
+    <dt class="col-sm-3">Dependencia</dt><dd class="col-sm-9">{{ p.dependencia }}</dd>
+    <dt class="col-sm-3">Organismo</dt><dd class="col-sm-9">{{ p.organismo }}</dd>
+    <dt class="col-sm-3">Activo</dt><dd class="col-sm-9">{% if p.activo %}Sí{% else %}No{% endif %}</dd>
+    <dt class="col-sm-3">Origen archivo</dt><dd class="col-sm-9">{{ p.origen_archivo or '—' }}</dd>
+    <dt class="col-sm-3">Actualización</dt><dd class="col-sm-9">{{ p.fecha_actualizacion.strftime('%d/%m/%Y %H:%M') if p.fecha_actualizacion else '—' }}</dd>
+</dl>
+{% endblock %}

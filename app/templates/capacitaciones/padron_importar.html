@@ -1,0 +1,29 @@
+{% extends "layouts/base.html" %}
+{% block title %}Importar padrón — SIOC{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/capacitaciones.css') }}">
+{% endblock %}
+{% block content %}
+<div class="page-header cap-page-header">
+    <h1 class="h4"><i class="bi bi-upload"></i> Importar padrón Drogas</h1>
+    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('capacitaciones.padron_listado') }}">Volver</a>
+</div>
+
+<div class="card cap-card cap-import-card">
+    <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="mb-3">
+                <label class="form-label">Archivo CSV o XLSX</label>
+                <input class="form-control" type="file" name="archivo" accept=".csv,.xlsx,.xls" required>
+            </div>
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" name="es_padron_completo" value="1" id="fullPad">
+                <label class="form-check-label" for="fullPad">Es padrón completo (desactiva en BD los DNI que no vengan en este archivo)</label>
+            </div>
+            <button type="submit" class="btn btn-primary">Importar</button>
+        </form>
+        <p class="small text-muted mt-3 mb-0">Columnas reconocidas: legajo, apellido, nombre, DNI, grado, sexo, dependencia, organismo (sinónimos automáticos).</p>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,57 @@
+{% extends "layouts/base.html" %}
+{% block title %}{% if momento %}Editar momento{% else %}Nuevo momento{% endif %}{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/capacitaciones.css') }}">
+{% endblock %}
+{% block content %}
+<div class="page-header cap-page-header">
+    <h1 class="h4">{% if momento %}Editar momento{% else %}Nuevo momento{% endif %}</h1>
+    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('capacitaciones.evento_detalle', evento_id=ev.id) }}">Volver al evento</a>
+</div>
+
+<div class="card cap-card">
+    <div class="card-body">
+        <form method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="row g-2">
+                <div class="col-md-6">
+                    <label class="form-label">Nombre</label>
+                    <input class="form-control" name="nombre" required value="{{ momento.nombre if momento else '' }}" placeholder="Ej. Control parcial mañana">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Tipo</label>
+                    <select class="form-select" name="tipo">
+                        {% set t = momento.tipo if momento else 'personalizado' %}
+                        {% for opt in [('inicio','inicio'),('intermedio','intermedio'),('final','final'),('personalizado','personalizado')] %}
+                        <option value="{{ opt[0] }}" {% if t==opt[0] %}selected{% endif %}>{{ opt[1] }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Orden</label>
+                    <input class="form-control" type="number" name="orden" min="0" value="{{ momento.orden if momento else 1 }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Código de validación</label>
+                    <input class="form-control text-uppercase" name="codigo" value="{{ momento.codigo_validacion if momento else '' }}" placeholder="Se genera si vacío">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Apertura (fecha y hora)</label>
+                    <input class="form-control" type="datetime-local" name="fecha_apertura" value="{{ momento.fecha_apertura.strftime('%Y-%m-%dT%H:%M') if momento and momento.fecha_apertura else '' }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Cierre</label>
+                    <input class="form-control" type="datetime-local" name="fecha_cierre" value="{{ momento.fecha_cierre.strftime('%Y-%m-%dT%H:%M') if momento and momento.fecha_cierre else '' }}">
+                </div>
+                <div class="col-12">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="activo" value="1" id="actMom" {% if not momento or momento.activo %}checked{% endif %}>
+                        <label class="form-check-label" for="actMom">Momento activo</label>
+                    </div>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary mt-3">Guardar</button>
+        </form>
+    </div>
+</div>
+{% endblock %}
