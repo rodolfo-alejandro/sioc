@@ -9,8 +9,13 @@
   }
   const publicForm = document.getElementById("capAsistenciaPublicaForm");
   if (publicForm) {
+    const codigo = publicForm.querySelector('input[name="codigo"]');
     const dni = publicForm.querySelector('input[name="dni"]');
-    if (dni) dni.focus();
+    if (codigo && codigo.value.trim() === "") {
+      codigo.focus();
+    } else if (dni) {
+      dni.focus();
+    }
   }
 })();
 

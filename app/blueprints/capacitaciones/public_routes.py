@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 
+from app.extensions import csrf, db
 from app.models.capacitaciones import EventoCapacitacion, MomentoAsistencia
 from app.services.capacitaciones import (
     ensure_capacitaciones_db,
@@ -60,23 +61,26 @@ def marcar_asistencia_qr(token: str):
 
 
 @bp_public.route("/p/asistencia/<string:token>", methods=["GET", "POST"])
+@csrf.exempt
 def marcar_asistencia(token: str):
+    """CSRF exempt: el token largo en la URL identifica el momento (capacidad secreta compartida)."""
     if not token or len(token) > 64:
         abort(404)
     mo = MomentoAsistencia.query.filter_by(token_publico=token.strip()).first()
     if not mo:
         abort(404)
-    ev = EventoCapacitacion.query.get(mo.evento_id)
+    ev = db.session.get(EventoCapacitacion, mo.evento_id)
     if not ev:
         abort(404)
 
     if request.method == "POST":
         dni = (request.form.get("dni") or "").strip()
-        _, msg_code = registrar_asistencia(ev, mo, dni, (mo.codigo_validacion or "").strip(), request)
+        codigo = (request.form.get("codigo") or "").strip()
+        _, msg_code = registrar_asistencia(ev, mo, dni, codigo, request)
         msgs = {
             "ok": ("Asistencia registrada correctamente.", "success"),
             "dni_no_inscripto": ("DNI no figura entre los inscriptos de este evento.", "warning"),
-            "codigo_incorrecto": ("No se pudo validar el acceso. Contactá a la organización.", "danger"),
+            "codigo_incorrecto": ("Código de validación incorrecto.", "danger"),
             "fuera_horario": ("Fuera del horario permitido para este momento.", "warning"),
             "ya_registrado": ("Ya estaba registrada tu asistencia para este momento.", "info"),
             "momento_inactivo": ("Este momento de asistencia no está activo.", "warning"),

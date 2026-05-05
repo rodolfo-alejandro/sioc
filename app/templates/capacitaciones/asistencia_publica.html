@@ -10,9 +10,12 @@
             <div class="card-body">
                 <h1 class="h5 mb-1">{{ ev.titulo }}</h1>
                 <p class="text-muted small mb-3">{{ mo.nombre }} · {{ mo.tipo }}</p>
-                <p class="small mb-3">Ingresá tu DNI si figurás entre los inscriptos de este evento. No hace falta iniciar sesión en SIOC.</p>
-                <form method="post" id="capAsistenciaPublicaForm">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <p class="small mb-3">Ingresá el <strong>código de validación</strong> que te indique el encargado (pantalla o pizarrón) y tu <strong>DNI</strong> si figurás entre los inscriptos. No hace falta usuario de SIOC.</p>
+                <form method="post" id="capAsistenciaPublicaForm" action="">
+                    <div class="mb-3">
+                        <label class="form-label">Código de validación</label>
+                        <input class="form-control form-control-lg text-uppercase" name="codigo" inputmode="text" autocomplete="off" required maxlength="12" placeholder="Código del momento" autocapitalize="characters">
+                    </div>
                     <div class="mb-3">
                         <label class="form-label">DNI</label>
                         <input class="form-control form-control-lg" name="dni" inputmode="numeric" autocomplete="off" required placeholder="Solo números">
