@@ -85,6 +85,17 @@ class InscriptoEvento(db.Model):
     padron_ref = db.relationship("PadronDrogas", back_populates="inscriptos_match")
     registros = db.relationship("RegistroAsistencia", back_populates="inscripto", lazy="dynamic")
 
+    @property
+    def dependencia_para_reporte(self) -> str | None:
+        """Inscripción (import) o, si calza padrón Drogas, dependencia del padrón."""
+        d = (self.dependencia_declarada or "").strip()
+        if d:
+            return d
+        p = self.padron_ref
+        if p is not None and (p.dependencia or "").strip():
+            return (p.dependencia or "").strip()
+        return None
+
 
 class MomentoAsistencia(db.Model):
     """Momento de control (inicio, intermedio, final, etc.)."""

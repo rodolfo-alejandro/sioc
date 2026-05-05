@@ -14,6 +14,7 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 from flask import Request, Response
+from sqlalchemy.orm import joinedload
 
 from app.extensions import db
 from app.models.capacitaciones import (
@@ -626,7 +627,10 @@ def export_dataframe_inscriptos(evento_id: int, solo: str | None) -> pd.DataFram
 
 def build_reporte_dataframe(evento: EventoCapacitacion, momentos: list[MomentoAsistencia]) -> pd.DataFrame:
     ins_list = (
-        InscriptoEvento.query.filter_by(evento_id=evento.id).order_by(InscriptoEvento.apellido_nombre.asc(), InscriptoEvento.id.asc()).all()
+        InscriptoEvento.query.options(joinedload(InscriptoEvento.padron_ref))
+        .filter_by(evento_id=evento.id)
+        .order_by(InscriptoEvento.apellido_nombre.asc(), InscriptoEvento.id.asc())
+        .all()
     )
     regs = {
         (r.inscripto_id, r.momento_id)
@@ -641,7 +645,7 @@ def build_reporte_dataframe(evento: EventoCapacitacion, momentos: list[MomentoAs
         row: dict[str, Any] = {
             "dni": ins.dni,
             "nombre": ins.apellido_nombre,
-            "dependencia": ins.dependencia_declarada,
+            "dependencia": ins.dependencia_para_reporte,
             "pertenece_drogas": "SI" if ins.pertenece_drogas else "NO",
             "estado_validacion": ins.estado_validacion,
         }

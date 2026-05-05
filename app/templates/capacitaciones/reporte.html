@@ -43,7 +43,7 @@
             <tr>
                 <td>{{ f.ins.dni }}</td>
                 <td>{{ f.ins.apellido_nombre }}</td>
-                <td>{{ f.ins.dependencia_declarada or '—' }}</td>
+                <td>{{ f.ins.dependencia_para_reporte or '—' }}</td>
                 <td>{% if f.ins.pertenece_drogas %}Sí{% else %}No{% endif %}</td>
                 <td><span class="badge cap-badge-val">{{ f.ins.estado_validacion }}</span></td>
                 {% for m in momentos %}

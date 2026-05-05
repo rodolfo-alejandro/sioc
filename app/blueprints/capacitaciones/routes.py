@@ -17,6 +17,7 @@ from flask import (
 )
 from flask_login import current_user, login_required
 from sqlalchemy import or_
+from sqlalchemy.orm import joinedload
 
 from app.blueprints.capacitaciones import bp
 from app.extensions import db
@@ -432,7 +433,11 @@ def reporte(evento_id: int):
     momentos = (
         MomentoAsistencia.query.filter_by(evento_id=ev.id).order_by(MomentoAsistencia.orden.asc(), MomentoAsistencia.id.asc()).all()
     )
-    ins_list = InscriptoEvento.query.filter_by(evento_id=ev.id).all()
+    ins_list = (
+        InscriptoEvento.query.options(joinedload(InscriptoEvento.padron_ref))
+        .filter_by(evento_id=ev.id)
+        .all()
+    )
     regs = {
         (r.inscripto_id, r.momento_id)
         for r in RegistroAsistencia.query.filter(
