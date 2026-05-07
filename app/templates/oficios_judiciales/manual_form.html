@@ -53,7 +53,7 @@
         <label class="form-label">Tipo denuncia</label>
         <select id="manual-tipo-denuncia" class="form-select ts-manual" name="tipo_denuncia" autocomplete="off">
             {% set td = form_data.get('tipo_denuncia','') %}
-            <option value="" {{ 'selected' if td == '' else '' }}>— No especificar —</option>
+            <option value="" {{ 'selected' if td == '' else '' }}></option>
             {% for t in (tipos_denuncia or []) %}
             <option value="{{ t.nombre }}" {{ 'selected' if td == t.nombre else '' }}>{{ t.nombre }}</option>
             {% endfor %}
@@ -79,8 +79,8 @@
     <div class="col-md-3">
         <label class="form-label">Consigna aplicada a</label>
         {% set ca = form_data.get('consigna_aplica_a','') %}
-        <select class="form-select" name="consigna_aplica_a">
-            <option value="" {{ 'selected' if ca == '' else '' }}>— No especificar —</option>
+        <select id="manual-consigna-aplica-a" class="form-select ts-manual" name="consigna_aplica_a" autocomplete="off">
+            <option value="" {{ 'selected' if ca == '' else '' }}></option>
             <option value="victima" {{ 'selected' if ca == 'victima' else '' }}>Víctima</option>
             <option value="acusado" {{ 'selected' if ca == 'acusado' else '' }}>Acusado</option>
             <option value="ambos" {{ 'selected' if ca == 'ambos' else '' }}>Ambos</option>
@@ -195,6 +195,15 @@
     }
     if (document.getElementById('manual-tipo-denuncia')) {
         new TomSelect('#manual-tipo-denuncia', {
+            placeholder: 'Escribí para buscar...',
+            maxOptions: null,
+            allowEmptyOption: true,
+            hideSelected: false,
+            searchField: ['text'],
+        });
+    }
+    if (document.getElementById('manual-consigna-aplica-a')) {
+        new TomSelect('#manual-consigna-aplica-a', {
             placeholder: 'Escribí para buscar...',
             maxOptions: null,
             allowEmptyOption: true,
