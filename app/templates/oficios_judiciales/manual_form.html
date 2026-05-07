@@ -115,24 +115,24 @@
     {% else %}
     <div class="col-12"><p class="text-warning small mb-0">No hay tipos en el catálogo. Cargalos en <a href="{{ url_for('oficios_judiciales.catalogos') }}">Oficios → Catálogos</a> (pestaña Tipos de consigna).</p></div>
     {% endif %}
-    <div class="col-md-5 d-none" id="wrap-motivo-indeterminada">
-        <label class="form-label">Motivo de indeterminada (si corresponde)</label>
-        <select class="form-select" name="motivo_indeterminada_id" id="motivo-indeterminada-id">
-            <option value="">Seleccionar…</option>
-            {% for m in motivos_indeterminada %}
-            <option value="{{ m.id }}" {{ 'selected' if (form_data.get('motivo_indeterminada_id')|int) == m.id else '' }}>{{ m.nombre }}</option>
-            {% endfor %}
-        </select>
-    </div>
     <div class="col-md-4 d-none" id="wrap-tipo-base-indeterminada">
         <label class="form-label">Tipo base de indeterminada</label>
-        <select class="form-select" name="tipo_base_indeterminada" id="tipo-base-indeterminada">
+        <select class="form-select ts-manual" name="tipo_base_indeterminada" id="tipo-base-indeterminada" autocomplete="off">
             <option value="">Seleccionar…</option>
             <option value="fija" {{ 'selected' if form_data.get('tipo_base_indeterminada') == 'fija' else '' }}>Fija</option>
             <option value="ambulatoria" {{ 'selected' if form_data.get('tipo_base_indeterminada') == 'ambulatoria' else '' }}>Ambulatoria</option>
             <option value="personalizada" {{ 'selected' if form_data.get('tipo_base_indeterminada') == 'personalizada' else '' }}>Personalizada</option>
         </select>
         <div class="form-text">Sirve para clasificar la indeterminada según su naturaleza (sin fijar plazo).</div>
+    </div>
+    <div class="col-md-5 d-none" id="wrap-motivo-indeterminada">
+        <label class="form-label">Motivo de indeterminada (si corresponde)</label>
+        <select class="form-select ts-manual" name="motivo_indeterminada_id" id="motivo-indeterminada-id" autocomplete="off">
+            <option value="">Seleccionar…</option>
+            {% for m in motivos_indeterminada %}
+            <option value="{{ m.id }}" {{ 'selected' if (form_data.get('motivo_indeterminada_id')|int) == m.id else '' }}>{{ m.nombre }}</option>
+            {% endfor %}
+        </select>
     </div>
     <div class="col-6 col-md-2"><label class="form-label">Días total</label><input class="form-control bg-light" type="text" id="manual-dias-total" value="0" readonly autocomplete="off" title="Suma solo de días numéricos (no incluye indeterminada Sí/No)"></div>
     <div class="col-md-3"><label class="form-label">Teléfono contacto</label><input class="form-control" name="telefono_contacto" value="{{ form_data.get('telefono_contacto','') }}"></div>
@@ -215,6 +215,24 @@
     }
     if (document.getElementById('manual-estado-expediente')) {
         new TomSelect('#manual-estado-expediente', {
+            placeholder: 'Escribí para buscar...',
+            maxOptions: null,
+            allowEmptyOption: true,
+            hideSelected: false,
+            searchField: ['text'],
+        });
+    }
+    if (document.getElementById('tipo-base-indeterminada')) {
+        new TomSelect('#tipo-base-indeterminada', {
+            placeholder: 'Escribí para buscar...',
+            maxOptions: null,
+            allowEmptyOption: true,
+            hideSelected: false,
+            searchField: ['text'],
+        });
+    }
+    if (document.getElementById('motivo-indeterminada-id')) {
+        new TomSelect('#motivo-indeterminada-id', {
             placeholder: 'Escribí para buscar...',
             maxOptions: null,
             allowEmptyOption: true,
