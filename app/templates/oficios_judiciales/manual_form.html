@@ -86,6 +86,7 @@
             {% endfor %}
         </select>
     </div>
+    <div class="col-12"></div>
     <div class="col-md-3">
         <label class="form-label">Consigna aplicada a</label>
         {% set ca = form_data.get('consigna_aplica_a','') %}
@@ -99,7 +100,7 @@
 
     {% if tipos_consigna_catalogo %}
     {% for tc in tipos_consigna_catalogo %}
-    <div class="col-md-4 col-lg-3">
+    <div class="col-6 col-md-2">
         <label class="form-label">{{ tc.nombre }}</label>
         {% if 'indeterm' in tc.nombre|lower %}
         <select class="form-select js-indet-si-no" name="dias_por_tipo_{{ tc.id }}" id="dias-pt-{{ tc.id }}" title="Medida indeterminada (sin plazo en días)">
@@ -133,7 +134,7 @@
         </select>
         <div class="form-text">Sirve para clasificar la indeterminada según su naturaleza (sin fijar plazo).</div>
     </div>
-    <div class="col-md-2"><label class="form-label">Días total</label><input class="form-control bg-light" type="text" id="manual-dias-total" value="0" readonly autocomplete="off" title="Suma solo de días numéricos (no incluye indeterminada Sí/No)"></div>
+    <div class="col-6 col-md-2"><label class="form-label">Días total</label><input class="form-control bg-light" type="text" id="manual-dias-total" value="0" readonly autocomplete="off" title="Suma solo de días numéricos (no incluye indeterminada Sí/No)"></div>
     <div class="col-md-3"><label class="form-label">Teléfono contacto</label><input class="form-control" name="telefono_contacto" value="{{ form_data.get('telefono_contacto','') }}"></div>
     <div class="col-md-3"><label class="form-label">SEPS ingreso</label><input class="form-control" name="seps_ingreso" placeholder="Nº expediente interno SEPS" autocomplete="off" title="Seguimiento en sistema policial (ingreso)" value="{{ form_data.get('seps_ingreso','') }}"></div>
     <div class="col-md-3"><label class="form-label">SEPS salida</label><input class="form-control" name="seps_salida" placeholder="Nº expediente interno SEPS" autocomplete="off" title="Seguimiento en sistema policial (salida)" value="{{ form_data.get('seps_salida','') }}"></div>
