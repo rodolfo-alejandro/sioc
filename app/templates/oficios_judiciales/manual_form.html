@@ -51,7 +51,7 @@
 
     <div class="col-md-3">
         <label class="form-label">Tipo denuncia</label>
-        <select class="form-select" name="tipo_denuncia">
+        <select id="manual-tipo-denuncia" class="form-select ts-manual" name="tipo_denuncia" autocomplete="off">
             {% set td = form_data.get('tipo_denuncia','') %}
             <option value="" {{ 'selected' if td == '' else '' }}>— No especificar —</option>
             {% for t in (tipos_denuncia or []) %}
@@ -78,7 +78,7 @@
     <div class="col-md-3"><label class="form-label">Fecha notificación</label><input class="form-control" type="date" name="fecha_notificacion" value="{{ form_data.get('fecha_notificacion','') }}"></div>
     <div class="col-md-6">
         <label class="form-label">Estado del expediente (judicial)</label>
-        <select class="form-select" name="estado_expediente_id">
+        <select id="manual-estado-expediente" class="form-select ts-manual" name="estado_expediente_id" autocomplete="off">
             <option value="">— Cumplimiento operativo en curso —</option>
             {% set ee_sel = form_data.get('estado_expediente_id') %}
             {% for e in estados_expediente %}
@@ -183,8 +183,24 @@
     if (document.getElementById('manual-tipo-medida')) {
         new TomSelect('#manual-tipo-medida', tsOpts);
     }
+    if (document.getElementById('manual-tipo-denuncia')) {
+        new TomSelect('#manual-tipo-denuncia', {
+            placeholder: 'Buscar...',
+            maxOptions: null,
+            allowEmptyOption: true,
+            hideSelected: false,
+        });
+    }
     if (document.getElementById('manual-fiscalia')) {
         new TomSelect('#manual-fiscalia', tsOpts);
+    }
+    if (document.getElementById('manual-estado-expediente')) {
+        new TomSelect('#manual-estado-expediente', {
+            placeholder: 'Buscar...',
+            maxOptions: null,
+            allowEmptyOption: true,
+            hideSelected: false,
+        });
     }
 
     function parseDia(v) {
