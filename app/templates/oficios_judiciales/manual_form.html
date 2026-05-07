@@ -50,19 +50,20 @@
     </div>
 
     <div class="col-md-3">
-        <label class="form-label">Tipo medida</label>
-        <select id="manual-tipo-medida" class="form-select ts-manual" name="tipo_medida_id" multiple autocomplete="off">
-            {% for t in tipos_medida %}
-            <option value="{{ t.id }}" {{ 'selected' if t.id in (selected_tipo_medida_ids or []) else '' }}>{{ t.nombre }}</option>
+        <label class="form-label">Tipo denuncia</label>
+        <select class="form-select" name="tipo_denuncia">
+            {% set td = form_data.get('tipo_denuncia','') %}
+            <option value="" {{ 'selected' if td == '' else '' }}>— No especificar —</option>
+            {% for t in (tipos_denuncia or []) %}
+            <option value="{{ t.nombre }}" {{ 'selected' if td == t.nombre else '' }}>{{ t.nombre }}</option>
             {% endfor %}
         </select>
     </div>
     <div class="col-md-3">
-        <label class="form-label">Tipo denuncia</label>
-        <select class="form-select" name="tipo_denuncia">
-            {% set td = form_data.get('tipo_denuncia','') %}
-            {% for val, label in (tipo_denuncia_choices or []) %}
-            <option value="{{ val }}" {{ 'selected' if td == val else '' }}>{{ label }}</option>
+        <label class="form-label">Tipo medida</label>
+        <select id="manual-tipo-medida" class="form-select ts-manual" name="tipo_medida_id" multiple autocomplete="off">
+            {% for t in tipos_medida %}
+            <option value="{{ t.id }}" {{ 'selected' if t.id in (selected_tipo_medida_ids or []) else '' }}>{{ t.nombre }}</option>
             {% endfor %}
         </select>
     </div>

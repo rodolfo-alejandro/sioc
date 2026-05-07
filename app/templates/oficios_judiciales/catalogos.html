@@ -103,6 +103,9 @@
         <button class="nav-link px-3" id="tab-med-btn" data-bs-toggle="tab" data-bs-target="#tab-med" type="button" role="tab">Tipos de medida</button>
     </li>
     <li class="nav-item" role="presentation">
+        <button class="nav-link px-3" id="tab-den-btn" data-bs-toggle="tab" data-bs-target="#tab-den" type="button" role="tab">Tipos de denuncia</button>
+    </li>
+    <li class="nav-item" role="presentation">
         <button class="nav-link px-3" id="tab-cons-btn" data-bs-toggle="tab" data-bs-target="#tab-cons" type="button" role="tab">Tipos de consigna</button>
     </li>
     <li class="nav-item" role="presentation">
@@ -217,6 +220,63 @@
                                 <form method="POST" class="d-inline m-0" onsubmit="return confirm('¿Eliminar este tipo de medida?');">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <input type="hidden" name="catalog_action" value="delete_tipo_medida">
+                                    <input type="hidden" name="item_id" value="{{ t.id }}">
+                                    <button class="btn btn-sm btn-outline-danger d-inline-flex align-items-center justify-content-center gap-1" type="submit" title="Eliminar" aria-label="Eliminar">
+                                        <i class="bi bi-trash d-md-none" aria-hidden="true"></i>
+                                        <span class="d-none d-md-inline">Eliminar</span>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="3" class="text-muted text-center py-3">Sin datos.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {# —— Tipos de denuncia —— #}
+    <div class="tab-pane fade" id="tab-den" role="tabpanel">
+        <div class="catalog-add-block p-3 mb-3">
+            <form method="POST" class="row g-2 align-items-end">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="catalog_action" value="add_tipo_denuncia">
+                <div class="col-12 col-lg-9">
+                    <label class="form-label small text-muted mb-0">Agregar tipo de denuncia</label>
+                    <input class="form-control" name="nombre" placeholder="Ej: Denuncia penal VIF" autocomplete="off">
+                </div>
+                <div class="col-12 col-lg-3">
+                    <label class="form-label small text-muted mb-0 d-none d-lg-block">&nbsp;</label>
+                    <button class="btn btn-primary w-100" type="submit">Agregar</button>
+                </div>
+            </form>
+        </div>
+        <div class="table-responsive catalog-table-responsive">
+            <table class="table table-sm table-hover catalog-table catalog-table--stack mb-0">
+                <thead class="table-light"><tr><th style="width:3.25rem;">#</th><th>Nombre</th><th class="catalog-actions text-end">Acciones</th></tr></thead>
+                <tbody>
+                    {% for t in tipos_denuncia %}
+                    <tr>
+                        <td class="text-muted small catalog-td-id">
+                            <form id="form-td-edit-{{ t.id }}" method="POST" class="d-none">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="catalog_action" value="edit_tipo_denuncia">
+                                <input type="hidden" name="item_id" value="{{ t.id }}">
+                            </form>
+                            {{ t.id }}
+                        </td>
+                        <td class="catalog-td-name"><input class="form-control form-control-sm" form="form-td-edit-{{ t.id }}" name="nombre" value="{{ t.nombre }}" required aria-label="Tipo denuncia {{ t.id }}"></td>
+                        <td class="catalog-actions text-end">
+                            <div class="d-flex flex-wrap gap-1 justify-content-end align-items-center catalog-action-row">
+                                <button type="submit" form="form-td-edit-{{ t.id }}" class="btn btn-sm btn-primary d-inline-flex align-items-center justify-content-center gap-1" title="Guardar" aria-label="Guardar cambios">
+                                    <i class="bi bi-check-lg d-md-none" aria-hidden="true"></i>
+                                    <span class="d-none d-md-inline">Guardar</span>
+                                </button>
+                                <form method="POST" class="d-inline m-0" onsubmit="return confirm('¿Eliminar este tipo de denuncia?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <input type="hidden" name="catalog_action" value="delete_tipo_denuncia">
                                     <input type="hidden" name="item_id" value="{{ t.id }}">
                                     <button class="btn btn-sm btn-outline-danger d-inline-flex align-items-center justify-content-center gap-1" type="submit" title="Eliminar" aria-label="Eliminar">
                                         <i class="bi bi-trash d-md-none" aria-hidden="true"></i>

@@ -182,6 +182,14 @@ class CatalogoTipoMedida(db.Model):
     activo = db.Column(db.Boolean, nullable=False, default=True, index=True)
 
 
+class CatalogoTipoDenuncia(db.Model):
+    __tablename__ = "oficios_catalogo_tipos_denuncia"
+
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(191), nullable=False, unique=True, index=True)
+    activo = db.Column(db.Boolean, nullable=False, default=True, index=True)
+
+
 class CatalogoTipoConsigna(db.Model):
     __tablename__ = "oficios_catalogo_tipos_consigna"
 

@@ -23,6 +23,7 @@ from app.models.oficios_judiciales import (
     CatalogoJuzgado,
     CatalogoMotivoIndeterminada,
     CatalogoTipoConsigna,
+    CatalogoTipoDenuncia,
     CatalogoTipoMedida,
     ConsignaDiasPorTipo,
     ConsignaDomicilio,
@@ -73,13 +74,6 @@ except Exception:
 
 
 _schema_checked = False
-TIPO_DENUNCIA_CHOICES = (
-    ("", "— No especificar —"),
-    ("penal_vif", "Denuncia penal VIF"),
-    ("penal_vg", "Denuncia penal VG"),
-    ("no_penal_vif_vg", "Denuncia no penal VIF-VG"),
-    ("femicidio", "Femicidio registrado"),
-)
 
 
 def _import_barrios_desde_geojson(payload: dict) -> int:
@@ -137,6 +131,7 @@ def _ensure_schema():
         ConsignaMedidaDetalle,
         CatalogoJuzgado,
         CatalogoTipoMedida,
+        CatalogoTipoDenuncia,
         CatalogoTipoConsigna,
         CatalogoFiscalia,
         CatalogoMotivoIndeterminada,
@@ -313,6 +308,19 @@ def _ensure_schema():
             db.session.commit()
     except Exception:
         current_app.logger.exception("Seed CatalogoEstadoExpediente")
+        db.session.rollback()
+    try:
+        if CatalogoTipoDenuncia.query.count() == 0:
+            for nombre in (
+                "Denuncia penal VIF",
+                "Denuncia penal VG",
+                "Denuncia no penal VIF-VG",
+                "Femicidio registrado",
+            ):
+                db.session.add(CatalogoTipoDenuncia(nombre=nombre, activo=True))
+            db.session.commit()
+    except Exception:
+        current_app.logger.exception("Seed CatalogoTipoDenuncia")
         db.session.rollback()
     _schema_checked = True
 
@@ -1429,9 +1437,29 @@ def _manual_etapa_slug_desde_pares(r: ConsignaJudicial, pares_raw: list, trans: 
 
 
 def _norm_tipo_denuncia(v: str | None) -> str:
-    t = _clean(v).lower().strip()
-    allowed = {"penal_vif", "penal_vg", "no_penal_vif_vg", "femicidio"}
-    return t if t in allowed else ""
+    return _clean(v)
+
+
+def _tipo_denuncia_slug(v: str | None) -> str:
+    """
+    Normaliza tipos (catálogo editable) a rubros fijos del cuadro.
+    Acepta también códigos legacy ya guardados.
+    """
+    raw = _clean(v).lower().strip()
+    if not raw:
+        return ""
+    if raw in {"penal_vif", "penal_vg", "no_penal_vif_vg", "femicidio"}:
+        return raw
+    n = _ascii_lower_no_accent(raw)
+    if "femicid" in n:
+        return "femicidio"
+    if "no penal" in n and "vif" in n and "vg" in n:
+        return "no_penal_vif_vg"
+    if "penal" in n and "vif" in n:
+        return "penal_vif"
+    if "penal" in n and re.search(r"\bvg\b", n):
+        return "penal_vg"
+    return ""
 
 
 def _label_indeterminada_con_base(row: ConsignaJudicial) -> str:
@@ -3003,7 +3031,7 @@ def manual_export_estadistico_anual():
             expedientes_por_mes[m].add(expk)
         op = _manual_estado_operativo(r, cat_row=cats.get(r.estado_expediente_id))
         bump("Total cargadas (por mes de fecha notificación)", m)
-        td = _norm_tipo_denuncia(getattr(r, "tipo_denuncia", ""))
+        td = _tipo_denuncia_slug(getattr(r, "tipo_denuncia", ""))
         if td == "penal_vif":
             bump("DENUNCIAS PENAL VIF", m)
         elif td == "penal_vg":
@@ -3718,6 +3746,7 @@ def manual_nuevo():
         abort(403)
     _ensure_schema()
     juzgados = CatalogoJuzgado.query.filter_by(activo=True).order_by(CatalogoJuzgado.nombre.asc()).all()
+    tipos_denuncia = CatalogoTipoDenuncia.query.filter_by(activo=True).order_by(CatalogoTipoDenuncia.nombre.asc()).all()
     tipos_medida = CatalogoTipoMedida.query.filter_by(activo=True).order_by(CatalogoTipoMedida.nombre.asc()).all()
     fiscalias = CatalogoFiscalia.query.filter_by(activo=True).order_by(CatalogoFiscalia.nombre.asc()).all()
     motivos_indeterminada = (
@@ -3755,6 +3784,9 @@ def manual_nuevo():
         juz = " · ".join(juz_n) if juz_n else ""
         tipo_medida = " · ".join(tm_n) if tm_n else ""
         tipo_denuncia = _norm_tipo_denuncia(request.form.get("tipo_denuncia"))
+        td_allowed = {_clean(x.nombre) for x in tipos_denuncia}
+        if tipo_denuncia and tipo_denuncia not in td_allowed:
+            tipo_denuncia = ""
         fiscalia = " · ".join(fis_n) if fis_n else ""
         cat_by_id = {c.id: c for c in tipos_consigna_catalogo}
         motivo_indeterminada_id = _to_int_or_none(request.form.get("motivo_indeterminada_id"))
@@ -4028,7 +4060,7 @@ def manual_nuevo():
         dias_por_tipo_prefill=dias_por_tipo_prefill,
         personas_prefill=personas_prefill,
         estados_expediente=estados_expediente,
-        tipo_denuncia_choices=TIPO_DENUNCIA_CHOICES,
+        tipos_denuncia=tipos_denuncia,
     )
 
 
@@ -4049,6 +4081,11 @@ def catalogos():
             nombre = _clean(request.form.get("nombre"))
             if nombre and not CatalogoTipoMedida.query.filter_by(nombre=nombre).first():
                 db.session.add(CatalogoTipoMedida(nombre=nombre, activo=True))
+                db.session.commit()
+        elif action == "add_tipo_denuncia":
+            nombre = _clean(request.form.get("nombre"))
+            if nombre and not CatalogoTipoDenuncia.query.filter_by(nombre=nombre).first():
+                db.session.add(CatalogoTipoDenuncia(nombre=nombre, activo=True))
                 db.session.commit()
         elif action == "add_tipo_consigna":
             nombre = _clean(request.form.get("nombre"))
@@ -4170,6 +4207,25 @@ def catalogos():
             if row:
                 db.session.delete(row)
                 db.session.commit()
+        elif action == "edit_tipo_denuncia":
+            rid = _to_int_or_none(request.form.get("item_id"))
+            nombre = _clean(request.form.get("nombre"))
+            row = CatalogoTipoDenuncia.query.get(rid) if rid else None
+            if row and nombre:
+                dup = CatalogoTipoDenuncia.query.filter(
+                    CatalogoTipoDenuncia.id != row.id, func.lower(CatalogoTipoDenuncia.nombre) == nombre.lower()
+                ).first()
+                if dup:
+                    flash("Ya existe ese tipo de denuncia.", "warning")
+                else:
+                    row.nombre = nombre
+                    db.session.commit()
+        elif action == "delete_tipo_denuncia":
+            rid = _to_int_or_none(request.form.get("item_id"))
+            row = CatalogoTipoDenuncia.query.get(rid) if rid else None
+            if row:
+                db.session.delete(row)
+                db.session.commit()
         elif action == "edit_tipo_consigna":
             rid = _to_int_or_none(request.form.get("item_id"))
             nombre = _clean(request.form.get("nombre"))
@@ -4286,6 +4342,7 @@ def catalogos():
         return redirect(url_for("oficios_judiciales.catalogos"))
     juzgados = CatalogoJuzgado.query.order_by(CatalogoJuzgado.nombre.asc()).all()
     tipos_medida = CatalogoTipoMedida.query.order_by(CatalogoTipoMedida.nombre.asc()).all()
+    tipos_denuncia = CatalogoTipoDenuncia.query.order_by(CatalogoTipoDenuncia.nombre.asc()).all()
     tipos_consigna = CatalogoTipoConsigna.query.order_by(CatalogoTipoConsigna.nombre.asc()).all()
     fiscalias = CatalogoFiscalia.query.order_by(CatalogoFiscalia.nombre.asc()).all()
     motivos_indeterminada = CatalogoMotivoIndeterminada.query.order_by(CatalogoMotivoIndeterminada.nombre.asc()).all()
@@ -4295,6 +4352,7 @@ def catalogos():
         "oficios_judiciales/catalogos.html",
         juzgados=juzgados,
         tipos_medida=tipos_medida,
+        tipos_denuncia=tipos_denuncia,
         tipos_consigna=tipos_consigna,
         fiscalias=fiscalias,
         motivos_indeterminada=motivos_indeterminada,
