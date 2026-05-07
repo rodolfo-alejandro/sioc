@@ -76,6 +76,16 @@
         </select>
     </div>
     <div class="col-md-3"><label class="form-label">Fecha notificación</label><input class="form-control" type="date" name="fecha_notificacion" value="{{ form_data.get('fecha_notificacion','') }}"></div>
+    <div class="col-md-6">
+        <label class="form-label">Estado del expediente (judicial)</label>
+        <select id="manual-estado-expediente" class="form-select ts-manual" name="estado_expediente_id" autocomplete="off">
+            <option value="">Cumplimiento operativo en curso</option>
+            {% set ee_sel = form_data.get('estado_expediente_id') %}
+            {% for e in estados_expediente %}
+            <option value="{{ e.id }}" {% if ee_sel != '' and ee_sel is not none and (ee_sel|int) == e.id %}selected{% endif %}>{{ e.nombre }}</option>
+            {% endfor %}
+        </select>
+    </div>
     <div class="col-md-3">
         <label class="form-label">Consigna aplicada a</label>
         {% set ca = form_data.get('consigna_aplica_a','') %}
@@ -86,19 +96,7 @@
             <option value="ambos" {{ 'selected' if ca == 'ambos' else '' }}>Ambos</option>
         </select>
     </div>
-    <div class="col-md-6">
-        <label class="form-label">Estado del expediente (judicial)</label>
-        <select id="manual-estado-expediente" class="form-select ts-manual" name="estado_expediente_id" autocomplete="off">
-            <option value="">— Cumplimiento operativo en curso —</option>
-            {% set ee_sel = form_data.get('estado_expediente_id') %}
-            {% for e in estados_expediente %}
-            <option value="{{ e.id }}" {% if ee_sel != '' and ee_sel is not none and (ee_sel|int) == e.id %}selected{% endif %}>{{ e.nombre }}</option>
-            {% endfor %}
-        </select>
-        <div class="form-text">Si el expediente quedó archivado, desestimado o con providencia sin medida, elegí el estado: no corre el plazo de consigna.</div>
-    </div>
 
-    <div class="col-12 mt-2"><small class="text-muted">Días por tipo (catálogo). “Indeterminada” u similares: Sí/No, no suma al total de días.</small></div>
     {% if tipos_consigna_catalogo %}
     {% for tc in tipos_consigna_catalogo %}
     <div class="col-md-4 col-lg-3">
@@ -237,7 +235,9 @@
         var el = document.getElementById('manual-dias-total');
         if (el) el.value = String(sum);
     }
-    function refreshIndeterminadaRules() {
+    function refreshConsignaRules() {
+        var estadoSelect = document.getElementById('manual-estado-expediente');
+        var estadoBloquea = !!(estadoSelect && (estadoSelect.value || '').trim() !== '');
         var hasIndet = false;
         document.querySelectorAll('.js-indet-si-no').forEach(function (sel) {
             if ((sel.value || '0') === '1') hasIndet = true;
@@ -247,7 +247,11 @@
         var tipoBaseWrap = document.getElementById('wrap-tipo-base-indeterminada');
         var tipoBaseSel = document.getElementById('tipo-base-indeterminada');
         document.querySelectorAll('.js-dia-parte').forEach(function (inp) {
-            if (hasIndet) {
+            if (estadoBloquea) {
+                inp.value = '';
+                inp.setAttribute('disabled', 'disabled');
+                inp.setAttribute('title', 'Con estado de expediente judicial, no corresponde cargar días.');
+            } else if (hasIndet) {
                 inp.value = '';
                 inp.setAttribute('disabled', 'disabled');
                 inp.setAttribute('title', 'Si la consigna es indeterminada, no se cargan días por tramo.');
@@ -256,10 +260,20 @@
                 inp.setAttribute('title', inp.getAttribute('title') || '');
             }
         });
-        if (motivoWrap) motivoWrap.classList.toggle('d-none', !hasIndet);
-        if (tipoBaseWrap) tipoBaseWrap.classList.toggle('d-none', !hasIndet);
-        if (!hasIndet && motivoSel) motivoSel.value = '';
-        if (!hasIndet && tipoBaseSel) tipoBaseSel.value = '';
+        document.querySelectorAll('.js-indet-si-no').forEach(function (sel) {
+            if (estadoBloquea) {
+                sel.value = '0';
+                sel.setAttribute('disabled', 'disabled');
+                sel.setAttribute('title', 'Con estado de expediente judicial, no corresponde cargar tramos de consigna.');
+            } else {
+                sel.removeAttribute('disabled');
+                sel.setAttribute('title', 'Medida indeterminada (sin plazo en días)');
+            }
+        });
+        if (motivoWrap) motivoWrap.classList.toggle('d-none', estadoBloquea || !hasIndet);
+        if (tipoBaseWrap) tipoBaseWrap.classList.toggle('d-none', estadoBloquea || !hasIndet);
+        if ((estadoBloquea || !hasIndet) && motivoSel) motivoSel.value = '';
+        if ((estadoBloquea || !hasIndet) && tipoBaseSel) tipoBaseSel.value = '';
         refreshTotal();
     }
     document.querySelectorAll('.js-dia-parte').forEach(function (inp) {
@@ -267,9 +281,13 @@
         inp.addEventListener('change', refreshTotal);
     });
     document.querySelectorAll('.js-indet-si-no').forEach(function (sel) {
-        sel.addEventListener('change', refreshIndeterminadaRules);
+        sel.addEventListener('change', refreshConsignaRules);
     });
-    refreshIndeterminadaRules();
+    var estadoExpSel = document.getElementById('manual-estado-expediente');
+    if (estadoExpSel) {
+        estadoExpSel.addEventListener('change', refreshConsignaRules);
+    }
+    refreshConsignaRules();
 })();
 
 (function () {
