@@ -49,7 +49,7 @@
         <textarea class="form-control" name="caratula" rows="2" placeholder="Detalle completo de carátula">{{ form_data.get('caratula','') }}</textarea>
     </div>
 
-    <div class="col-md-4">
+    <div class="col-md-3">
         <label class="form-label">Tipo medida</label>
         <select id="manual-tipo-medida" class="form-select ts-manual" name="tipo_medida_id" multiple autocomplete="off">
             {% for t in tipos_medida %}
@@ -57,7 +57,16 @@
             {% endfor %}
         </select>
     </div>
-    <div class="col-md-5">
+    <div class="col-md-3">
+        <label class="form-label">Tipo denuncia</label>
+        <select class="form-select" name="tipo_denuncia">
+            {% set td = form_data.get('tipo_denuncia','') %}
+            {% for val, label in (tipo_denuncia_choices or []) %}
+            <option value="{{ val }}" {{ 'selected' if td == val else '' }}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-3">
         <label class="form-label">Fiscalía</label>
         <select id="manual-fiscalia" class="form-select ts-manual" name="fiscalia_id" multiple autocomplete="off">
             {% for f in fiscalias %}

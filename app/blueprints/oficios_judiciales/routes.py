@@ -73,6 +73,13 @@ except Exception:
 
 
 _schema_checked = False
+TIPO_DENUNCIA_CHOICES = (
+    ("", "— No especificar —"),
+    ("penal_vif", "Denuncia penal VIF"),
+    ("penal_vg", "Denuncia penal VG"),
+    ("no_penal_vif_vg", "Denuncia no penal VIF-VG"),
+    ("femicidio", "Femicidio registrado"),
+)
 
 
 def _import_barrios_desde_geojson(payload: dict) -> int:
@@ -192,6 +199,13 @@ def _ensure_schema():
             db.session.commit()
         except Exception:
             current_app.logger.exception("No se pudo agregar tipo_base_indeterminada en oficios_consignas")
+            db.session.rollback()
+    if "tipo_denuncia" not in cols:
+        try:
+            db.session.execute(text("ALTER TABLE oficios_consignas ADD COLUMN tipo_denuncia VARCHAR(40) NULL"))
+            db.session.commit()
+        except Exception:
+            current_app.logger.exception("No se pudo agregar tipo_denuncia en oficios_consignas")
             db.session.rollback()
     if "fecha_finalizacion" not in cols:
         try:
@@ -1412,6 +1426,12 @@ def _manual_etapa_slug_desde_pares(r: ConsignaJudicial, pares_raw: list, trans: 
     if tc in {"fija", "ambulatoria", "personalizada", "indeterminada", "mixta"}:
         return tc
     return "indeterminada"
+
+
+def _norm_tipo_denuncia(v: str | None) -> str:
+    t = _clean(v).lower().strip()
+    allowed = {"penal_vif", "penal_vg", "no_penal_vif_vg", "femicidio"}
+    return t if t in allowed else ""
 
 
 def _label_indeterminada_con_base(row: ConsignaJudicial) -> str:
@@ -2941,6 +2961,16 @@ def manual_export_estadistico_anual():
     pers_map: dict[int, list] = {}
     for p in pers:
         pers_map.setdefault(p.consigna_id, []).append(p)
+    medidas = (
+        ConsignaMedidaDetalle.query.filter(ConsignaMedidaDetalle.consigna_id.in_(ids))
+        .order_by(ConsignaMedidaDetalle.consigna_id.asc(), ConsignaMedidaDetalle.id.asc())
+        .all()
+    )
+    medidas_map: dict[int, list[str]] = {}
+    for md in medidas:
+        txt = _clean(getattr(md, "descripcion", ""))
+        if txt:
+            medidas_map.setdefault(md.consigna_id, []).append(txt)
     dias_pairs = (
         db.session.query(ConsignaDiasPorTipo, CatalogoTipoConsigna)
         .join(CatalogoTipoConsigna, ConsignaDiasPorTipo.tipo_catalogo_id == CatalogoTipoConsigna.id)
@@ -2961,10 +2991,50 @@ def manual_export_estadistico_anual():
         rubros[label]["TOTAL"] += n
 
     today = datetime.utcnow().date()
+    expedientes_por_mes: dict[int, set[str]] = {mm: set() for mm in range(1, 13)}
     for r in rows_y:
         m = int(r.fecha_notificacion.month)
+        medida_blob = " | ".join(
+            [r.tipo_medida or "", r.caratula or "", " | ".join(medidas_map.get(r.id, []))]
+        )
+        medida_norm = _ascii_lower_no_accent(medida_blob)
+        expk = _expediente_key(r.expediente or "") or _clean(r.expediente)
+        if expk:
+            expedientes_por_mes[m].add(expk)
         op = _manual_estado_operativo(r, cat_row=cats.get(r.estado_expediente_id))
         bump("Total cargadas (por mes de fecha notificación)", m)
+        td = _norm_tipo_denuncia(getattr(r, "tipo_denuncia", ""))
+        if td == "penal_vif":
+            bump("DENUNCIAS PENAL VIF", m)
+        elif td == "penal_vg":
+            bump("DENUNCIAS PENAL VG", m)
+        elif td == "no_penal_vif_vg":
+            bump("DENUNCIAS NO PENAL VIF-VG", m)
+        elif td == "femicidio":
+            bump("FEMICIDIO REGISTRADO", m)
+        else:
+            # Compatibilidad hacia atrás para registros históricos sin tipo_denuncia.
+            if ("denuncia" in medida_norm and "penal" in medida_norm and "vif" in medida_norm):
+                bump("DENUNCIAS PENAL VIF", m)
+            if ("denuncia" in medida_norm and "penal" in medida_norm and re.search(r"\bvg\b", medida_norm)):
+                bump("DENUNCIAS PENAL VG", m)
+            if (
+                "denuncia" in medida_norm
+                and "no penal" in medida_norm
+                and ("vif" in medida_norm or re.search(r"\bvg\b", medida_norm))
+            ):
+                bump("DENUNCIAS NO PENAL VIF-VG", m)
+            if "femicid" in medida_norm:
+                bump("FEMICIDIO REGISTRADO", m)
+        if ("exclusion" in medida_norm and "hogar" in medida_norm):
+            bump("CANTIDAD DE MEDIDAS POR EXCLUSION DE HOGAR", m)
+        if (
+            "primera infancia" in medida_norm
+            or "ninez y familia" in medida_norm
+            or "niniez y familia" in medida_norm
+            or "ninez" in medida_norm
+        ):
+            bump("REQUERIMIENTOS DE LA SEC. DE PRIMERA INFANCIA NIÑEZ Y FAMILIA", m)
         if op == "sin_tramite":
             bump("Sin cumplimiento judicial (estado expediente)", m)
             continue
@@ -2993,7 +3063,19 @@ def manual_export_estadistico_anual():
             elif slug in ("indeterminada", "mixta"):
                 bump("Acusados — Indeterminada / mixta", m)
 
+    for mm in range(1, 13):
+        cant = len(expedientes_por_mes.get(mm) or set())
+        if cant > 0:
+            bump("EXPEDIENTES", mm, cant)
+
     order = [
+        "DENUNCIAS PENAL VIF",
+        "DENUNCIAS PENAL VG",
+        "DENUNCIAS NO PENAL VIF-VG",
+        "CANTIDAD DE MEDIDAS POR EXCLUSION DE HOGAR",
+        "REQUERIMIENTOS DE LA SEC. DE PRIMERA INFANCIA NIÑEZ Y FAMILIA",
+        "EXPEDIENTES",
+        "FEMICIDIO REGISTRADO",
         "Total cargadas (por mes de fecha notificación)",
         "Sin cumplimiento judicial (estado expediente)",
         "Con cumplimiento operativo",
@@ -3621,6 +3703,7 @@ def manual_autofill():
         "caratula": _clean(merged.get("caratula")),
         "juzgado": _clean(merged.get("juzgado")),
         "tipo_medida": _clean(merged.get("tipo_medida")),
+        "tipo_denuncia": "",
         "fiscalia": _clean(merged.get("fiscalia")),
         "fecha_notificacion": _to_input_date(merged.get("fecha_notificacion")),
         "personas": personas,
@@ -3671,6 +3754,7 @@ def manual_nuevo():
         fis_n = _names_from_catalog_ids(request.form.getlist("fiscalia_id"), CatalogoFiscalia)
         juz = " · ".join(juz_n) if juz_n else ""
         tipo_medida = " · ".join(tm_n) if tm_n else ""
+        tipo_denuncia = _norm_tipo_denuncia(request.form.get("tipo_denuncia"))
         fiscalia = " · ".join(fis_n) if fis_n else ""
         cat_by_id = {c.id: c for c in tipos_consigna_catalogo}
         motivo_indeterminada_id = _to_int_or_none(request.form.get("motivo_indeterminada_id"))
@@ -3721,6 +3805,7 @@ def manual_nuevo():
                 juzgado_key=juz_key,
                 caratula=caratula,
                 tipo_medida=tipo_medida,
+                tipo_denuncia=tipo_denuncia or None,
                 tipo_consigna=tipo_consigna,
                 fiscalia=fiscalia,
                 fiscalia_key=_fiscalia_key(fiscalia) if fiscalia else "",
@@ -3748,6 +3833,7 @@ def manual_nuevo():
             row.juzgado_key = juz_key or row.juzgado_key
             row.caratula = caratula or row.caratula
             row.tipo_medida = tipo_medida or row.tipo_medida
+            row.tipo_denuncia = tipo_denuncia or None
             row.tipo_consigna = tipo_consigna
             row.fiscalia = fiscalia or row.fiscalia
             row.fiscalia_key = _fiscalia_key(fiscalia) if fiscalia else (row.fiscalia_key or "")
@@ -3882,6 +3968,7 @@ def manual_nuevo():
             "expediente": row_edit.expediente or "",
             "caratula": row_edit.caratula or "",
             "fecha_notificacion": row_edit.fecha_notificacion.isoformat() if row_edit.fecha_notificacion else "",
+            "tipo_denuncia": row_edit.tipo_denuncia or "",
             "telefono_contacto": row_edit.telefono_contacto or "",
             "seps_ingreso": row_edit.seps_ingreso or "",
             "seps_salida": row_edit.seps_salida or "",
@@ -3941,6 +4028,7 @@ def manual_nuevo():
         dias_por_tipo_prefill=dias_por_tipo_prefill,
         personas_prefill=personas_prefill,
         estados_expediente=estados_expediente,
+        tipo_denuncia_choices=TIPO_DENUNCIA_CHOICES,
     )
 
 
