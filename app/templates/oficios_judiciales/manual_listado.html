@@ -251,10 +251,7 @@
                     <a class="btn btn-sm btn-outline-warning mb-1" href="{{ url_for('oficios_judiciales.manual_nuevo', edit_id=r.id) }}" title="Editar"><i class="bi bi-pencil"></i></a>
                     <a class="btn btn-sm btn-outline-primary mb-1" href="{{ url_for('oficios_judiciales.detalle', consigna_id=r.id) }}"><i class="bi bi-eye"></i></a>
                     {% if r.tipo_consigna == 'indeterminada' and est_op == 'activa' %}
-                    <form method="POST" action="{{ url_for('oficios_judiciales.manual_finalizar_indeterminada', consigna_id=r.id) }}" class="d-inline" onsubmit="return confirm('¿Finalizar esta consigna indeterminada? Se detendrá el conteo de días.');">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button class="btn btn-sm btn-outline-secondary mb-1" type="submit" title="Finalizar indeterminada"><i class="bi bi-stop-circle"></i></button>
-                    </form>
+                    <button class="btn btn-sm btn-outline-secondary mb-1" type="button" title="Finalizar indeterminada" data-bs-toggle="modal" data-bs-target="#modalStop{{ r.id }}"><i class="bi bi-stop-circle"></i></button>
                     {% endif %}
                     {% if r.tipo_consigna == 'indeterminada' and est_op == 'finalizada' %}
                     <form method="POST" action="{{ url_for('oficios_judiciales.manual_reactivar_indeterminada', consigna_id=r.id) }}" class="d-inline" onsubmit="return confirm('¿Reactivar esta consigna indeterminada? Volverá a estado activa.');">
@@ -270,6 +267,50 @@
                     {% endif %}
                 </td>
             </tr>
+            {% if r.tipo_consigna == 'indeterminada' and est_op == 'activa' %}
+            <tr class="d-none"><td colspan="7">
+            <div class="modal fade" id="modalStop{{ r.id }}" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <form method="POST" action="{{ url_for('oficios_judiciales.manual_finalizar_indeterminada', consigna_id=r.id) }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Detener indeterminada #{{ r.id }}</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="mb-2">
+                                    <label class="form-label">Acción</label>
+                                    <select class="form-select form-select-sm js-stop-tipo-cierre" name="tipo_cierre" data-target="#stop-entrega-wrap-{{ r.id }}">
+                                        <option value="finalizar">Finalizar sin entrega</option>
+                                        <option value="entrega">Registrar entrega de dispositivo</option>
+                                    </select>
+                                </div>
+                                <div id="stop-entrega-wrap-{{ r.id }}" class="d-none border rounded p-2 bg-light">
+                                    <div class="mb-2">
+                                        <label class="form-label">Dispositivo entregado</label>
+                                        <select class="form-select form-select-sm" name="dispositivo_tipo">
+                                            <option value="">Seleccionar…</option>
+                                            <option value="boton">Botón de pánico</option>
+                                            <option value="pulsera">Pulsera electrónica</option>
+                                            <option value="aplicativo">Aplicativo</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="form-label">Fecha de entrega</label>
+                                        <input class="form-control form-control-sm" type="date" name="fecha_entrega_dispositivo">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                                <button class="btn btn-primary btn-sm" type="submit">Confirmar</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div></td></tr>
+            {% endif %}
             {% else %}
             <tr><td colspan="7" class="text-center text-muted">Sin consignas manuales.</td></tr>
             {% endfor %}
@@ -310,6 +351,17 @@
         hideSelected: true,
         placeholder: 'Buscar...'
       });
+    });
+  })();
+  (function () {
+    document.querySelectorAll('.js-stop-tipo-cierre').forEach(function (sel) {
+      function refresh() {
+        var target = document.querySelector(sel.getAttribute('data-target'));
+        if (!target) return;
+        target.classList.toggle('d-none', sel.value !== 'entrega');
+      }
+      sel.addEventListener('change', refresh);
+      refresh();
     });
   })();
 </script>

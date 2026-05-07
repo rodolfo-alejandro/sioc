@@ -216,6 +216,20 @@ def _ensure_schema():
         except Exception:
             current_app.logger.exception("No se pudo agregar fecha_finalizacion en oficios_consignas")
             db.session.rollback()
+    if "fecha_entrega_dispositivo" not in cols:
+        try:
+            db.session.execute(text("ALTER TABLE oficios_consignas ADD COLUMN fecha_entrega_dispositivo DATE NULL"))
+            db.session.commit()
+        except Exception:
+            current_app.logger.exception("No se pudo agregar fecha_entrega_dispositivo en oficios_consignas")
+            db.session.rollback()
+    if "dispositivo_tipo_entrega" not in cols:
+        try:
+            db.session.execute(text("ALTER TABLE oficios_consignas ADD COLUMN dispositivo_tipo_entrega VARCHAR(30) NULL"))
+            db.session.commit()
+        except Exception:
+            current_app.logger.exception("No se pudo agregar dispositivo_tipo_entrega en oficios_consignas")
+            db.session.rollback()
     # Ajustes de longitudes/texto para campos extensos.
     # Nota: 191 evita errores de índice en MySQL/MariaDB con utf8mb4.
     try:
@@ -2406,10 +2420,29 @@ def manual_finalizar_indeterminada(consigna_id: int):
     if _clean(row.estado).lower() == "finalizada":
         flash("La consigna ya estaba finalizada.", "info")
         return redirect(url_for("oficios_judiciales.manual_listado"))
+    tipo_cierre = _clean(request.form.get("tipo_cierre")).lower()
+    if tipo_cierre not in {"finalizar", "entrega"}:
+        tipo_cierre = "finalizar"
+    if tipo_cierre == "entrega":
+        dispositivo = _clean(request.form.get("dispositivo_tipo")).lower()
+        if dispositivo not in {"boton", "pulsera", "aplicativo"}:
+            flash("Seleccioná el tipo de dispositivo entregado.", "warning")
+            return redirect(url_for("oficios_judiciales.manual_listado"))
+        f_ent = _parse_date(_clean(request.form.get("fecha_entrega_dispositivo")))
+        if not f_ent:
+            f_ent = datetime.utcnow().date()
+        row.dispositivo_tipo_entrega = dispositivo
+        row.fecha_entrega_dispositivo = f_ent
+    else:
+        row.dispositivo_tipo_entrega = None
+        row.fecha_entrega_dispositivo = None
     row.estado = "finalizada"
     row.fecha_finalizacion = datetime.utcnow().date()
     db.session.commit()
-    flash("Consigna indeterminada finalizada. Se detuvo el conteo de días.", "success")
+    if tipo_cierre == "entrega":
+        flash("Consigna finalizada por entrega de dispositivo.", "success")
+    else:
+        flash("Consigna indeterminada finalizada. Se detuvo el conteo de días.", "success")
     return redirect(url_for("oficios_judiciales.manual_listado"))
 
 
@@ -2436,6 +2469,8 @@ def manual_reactivar_indeterminada(consigna_id: int):
         return redirect(url_for("oficios_judiciales.manual_listado"))
     row.estado = "activa"
     row.fecha_finalizacion = None
+    row.dispositivo_tipo_entrega = None
+    row.fecha_entrega_dispositivo = None
     db.session.commit()
     flash("Consigna indeterminada reactivada correctamente.", "success")
     return redirect(url_for("oficios_judiciales.manual_listado"))
@@ -3081,6 +3116,26 @@ def manual_export_estadistico_anual():
             or "ninez" in medida_norm
         ):
             bump("REQUERIMIENTOS DE LA SEC. DE PRIMERA INFANCIA NIÑEZ Y FAMILIA", m)
+        motivo_indet = _ascii_lower_no_accent(
+            (r.motivo_indeterminada.nombre if getattr(r, "motivo_indeterminada", None) else "")
+        )
+        if _clean(r.tipo_consigna).lower() == "indeterminada" and _clean(r.estado).lower() == "activa":
+            if "boton" in motivo_indet:
+                bump("A LA ESPERA DE BOTÓN DE PÁNICO", m)
+            elif "pulsera" in motivo_indet:
+                bump("A LA ESPERA DE PULSERA ELECTRONICA", m)
+            elif "aplicativo" in motivo_indet or re.search(r"\bapp\b", motivo_indet):
+                bump("A LA ESPERA DEL APLICATIVO", m)
+        tipo_ent = _clean(getattr(r, "dispositivo_tipo_entrega", "")).lower()
+        f_ent = getattr(r, "fecha_entrega_dispositivo", None)
+        if tipo_ent in {"boton", "pulsera", "aplicativo"} and f_ent and f_ent.year == year:
+            mm_ent = int(f_ent.month)
+            if tipo_ent == "boton":
+                bump("BOTON DE PANICO", mm_ent)
+            elif tipo_ent == "pulsera":
+                bump("PULSERA ELECTRONICA", mm_ent)
+            elif tipo_ent == "aplicativo":
+                bump("APLICATIVO", mm_ent)
         if op == "sin_tramite":
             bump("Sin cumplimiento judicial (estado expediente)", m)
             continue
@@ -3119,6 +3174,22 @@ def manual_export_estadistico_anual():
         if cant > 0:
             bump("EXPEDIENTES", mm, cant)
 
+    # Dispositivos: fila SUMA (entregados + en espera).
+    dev_rows = [
+        "BOTON DE PANICO",
+        "A LA ESPERA DE BOTÓN DE PÁNICO",
+        "PULSERA ELECTRONICA",
+        "A LA ESPERA DE PULSERA ELECTRONICA",
+        "APLICATIVO",
+        "A LA ESPERA DEL APLICATIVO",
+    ]
+    if any(x in rubros for x in dev_rows):
+        rubros["SUMA"] = {m: 0 for m in meses}
+        rubros["SUMA"]["TOTAL"] = 0
+        for mm in meses:
+            rubros["SUMA"][mm] = int(sum(int(rubros.get(x, {}).get(mm, 0)) for x in dev_rows))
+        rubros["SUMA"]["TOTAL"] = int(sum(rubros["SUMA"][mm] for mm in meses))
+
     order = [
         "DENUNCIAS PENAL VIF",
         "DENUNCIAS PENAL VG",
@@ -3127,6 +3198,13 @@ def manual_export_estadistico_anual():
         "REQUERIMIENTOS DE LA SEC. DE PRIMERA INFANCIA NIÑEZ Y FAMILIA",
         "EXPEDIENTES",
         "FEMICIDIO REGISTRADO",
+        "BOTON DE PANICO",
+        "A LA ESPERA DE BOTÓN DE PÁNICO",
+        "PULSERA ELECTRONICA",
+        "A LA ESPERA DE PULSERA ELECTRONICA",
+        "SUMA",
+        "APLICATIVO",
+        "A LA ESPERA DEL APLICATIVO",
         "Total cargadas (por mes de fecha notificación)",
         "Sin cumplimiento judicial (estado expediente)",
         "Con cumplimiento operativo",
