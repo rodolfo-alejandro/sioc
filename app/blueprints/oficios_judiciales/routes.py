@@ -3257,17 +3257,201 @@ def manual_export_estadistico_anual():
             continue
         out_list.append({"Rubro / indicador": lab, **{mm: int(data[mm]) for mm in meses}, "TOTAL": int(data["TOTAL"])})
 
+    # Export estilo "Cuadro de Tabulación Mensual" (estructura fija, no tabla plana).
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Hoja1"
+
+    meses_cols = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGOS", "SET", "OCT", "NOV", "DIC"]
+    month_col_start = 4  # D
+    total_col = month_col_start + len(meses_cols)  # P
+
+    # Col widths
+    ws.column_dimensions["A"].width = 18
+    ws.column_dimensions["B"].width = 14
+    ws.column_dimensions["C"].width = 43
+    for c in range(month_col_start, total_col + 1):
+        ws.column_dimensions[chr(64 + c)].width = 7
+
+    thin = Side(style="thin", color="444444")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    left = Alignment(horizontal="left", vertical="center", wrap_text=True)
+    title_fill = PatternFill("solid", fgColor="1F4E78")
+    head_fill = PatternFill("solid", fgColor="2F5597")
+    hechos_fill = PatternFill("solid", fgColor="E6B8AF")
+    cons_fill = PatternFill("solid", fgColor="4F81BD")
+    vict_fill = PatternFill("solid", fgColor="D9D2E9")
+    acus_fill = PatternFill("solid", fgColor="CFE2F3")
+    disp_fill = PatternFill("solid", fgColor="C4BD97")
+    act_fill = PatternFill("solid", fgColor="D9D9D9")
+    arch_fill = PatternFill("solid", fgColor="D8E4BC")
+
+    # Header
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=total_col)
+    ws.cell(1, 1, "DIRECCION DE UNIDAD REGIONAL  N°:").fill = title_fill
+    ws.cell(1, 1).font = Font(color="FFFFFF", bold=True)
+    ws.cell(1, 1).alignment = center
+    ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=total_col)
+    ws.cell(2, 1, "DEPENDENCIA:").fill = title_fill
+    ws.cell(2, 1).font = Font(color="FFFFFF", bold=True)
+    ws.cell(2, 1).alignment = center
+    ws.merge_cells(start_row=3, start_column=1, end_row=3, end_column=total_col)
+    ws.cell(3, 1, f"AÑO {year}").fill = head_fill
+    ws.cell(3, 1).font = Font(color="FFFFFF", bold=True, size=12)
+    ws.cell(3, 1).alignment = center
+
+    # Column headers
+    ws.merge_cells(start_row=4, start_column=1, end_row=4, end_column=2)
+    ws.cell(4, 1, "TIPO").fill = head_fill
+    ws.cell(4, 1).font = Font(color="FFFFFF", bold=True)
+    ws.cell(4, 1).alignment = center
+    ws.cell(4, 3, "DETALLES").fill = head_fill
+    ws.cell(4, 3).font = Font(color="FFFFFF", bold=True)
+    ws.cell(4, 3).alignment = center
+    for i, mname in enumerate(meses_cols, start=0):
+        c = month_col_start + i
+        ws.cell(4, c, mname).fill = head_fill
+        ws.cell(4, c).font = Font(color="FFFFFF", bold=True)
+        ws.cell(4, c).alignment = center
+    ws.cell(4, total_col, "TOTAL").fill = head_fill
+    ws.cell(4, total_col).font = Font(color="FFFFFF", bold=True)
+    ws.cell(4, total_col).alignment = center
+
+    def get_month_value(label: str, month_name: str):
+        val = rubros.get(label, {}).get(month_name, 0)
+        return val if val not in (None, "") else 0
+
+    def write_row(rr: int, detalle: str, label: str, fill):
+        ws.cell(rr, 3, detalle).fill = fill
+        ws.cell(rr, 3).alignment = left
+        ws.cell(rr, 3).font = Font(bold=True if "TOTAL" in detalle else False)
+        for i, mname in enumerate(meses_cols, start=0):
+            c = month_col_start + i
+            v = get_month_value(label, mname)
+            ws.cell(rr, c, v)
+            ws.cell(rr, c).fill = fill
+            ws.cell(rr, c).alignment = center
+        tv = rubros.get(label, {}).get("TOTAL", 0)
+        ws.cell(rr, total_col, tv if tv not in (None, "") else "")
+        ws.cell(rr, total_col).fill = fill
+        ws.cell(rr, total_col).alignment = center
+
+    row = 5
+    # HECHOS VIF VG
+    ws.merge_cells(start_row=row, start_column=1, end_row=row + 6, end_column=2)
+    ws.cell(row, 1, "HECHOS VIF VG").fill = hechos_fill
+    ws.cell(row, 1).alignment = center
+    ws.cell(row, 1).font = Font(bold=True)
+    for det, lab in [
+        ("DENUNCIAS PENAL VIF", "DENUNCIAS PENAL VIF"),
+        ("DENUNCIAS PENAL VG", "DENUNCIAS PENAL VG"),
+        ("DENUNCIAS NO PENAL VIF-VG", "DENUNCIAS NO PENAL VIF-VG"),
+        ("CANTIDAD DE MEDIDAS POR EXCLUSION DE HOGAR", "CANTIDAD DE MEDIDAS POR EXCLUSION DE HOGAR"),
+        ("REQUERIMIENTOS DE LA SEC. DE PRIMERA INFANCIA NIÑEZ Y FAMILIA", "REQUERIMIENTOS DE LA SEC. DE PRIMERA INFANCIA NIÑEZ Y FAMILIA"),
+        ("EXPEDIENTES", "EXPEDIENTES"),
+        ("FEMICIDIO REGISTRADO", "FEMICIDIO REGISTRADO"),
+    ]:
+        write_row(row, det, lab, hechos_fill)
+        row += 1
+
+    # CONSIGNAS
+    ws.merge_cells(start_row=row, start_column=1, end_row=row + 5, end_column=1)
+    ws.cell(row, 1, "CONSIGNAS").fill = cons_fill
+    ws.cell(row, 1).alignment = center
+    ws.cell(row, 1).font = Font(color="FFFFFF", bold=True)
+    ws.merge_cells(start_row=row, start_column=2, end_row=row + 2, end_column=2)
+    ws.cell(row, 2, "VICTIMAS").fill = vict_fill
+    ws.cell(row, 2).alignment = center
+    ws.cell(row, 2).font = Font(bold=True)
+    for det, lab in [
+        ("CONSIGNAS FIJAS", "Víctimas — Fija"),
+        ("CONSIGNAS AMBULATORIAS", "Víctimas — Ambulatoria"),
+        ("CONSIGNAS PERSONALIZADAS", "Víctimas — Personalizada"),
+    ]:
+        write_row(row, det, lab, vict_fill)
+        row += 1
+    ws.merge_cells(start_row=row, start_column=2, end_row=row + 2, end_column=2)
+    ws.cell(row, 2, "ACUSADOS").fill = acus_fill
+    ws.cell(row, 2).alignment = center
+    ws.cell(row, 2).font = Font(bold=True)
+    for det, lab in [
+        ("CONSIGNAS FIJAS", "Acusados — Fija"),
+        ("CONSIGNAS AMBULATORIAS", "Acusados — Ambulatoria"),
+        ("CONSIGNAS PERSONALIZADAS", "Acusados — Personalizada"),
+    ]:
+        write_row(row, det, lab, acus_fill)
+        row += 1
+
+    # DISPOSITIVOS
+    ws.merge_cells(start_row=row, start_column=1, end_row=row + 6, end_column=2)
+    ws.cell(row, 1, "DISPOSITIVOS").fill = disp_fill
+    ws.cell(row, 1).alignment = center
+    ws.cell(row, 1).font = Font(bold=True)
+    for det, lab in [
+        ("BOTON DE PANICO", "BOTON DE PANICO"),
+        ("A LA ESPERA DE BOTÓN DE PÁNICO", "A LA ESPERA DE BOTÓN DE PÁNICO"),
+        ("PULSERA ELECTRONICA", "PULSERA ELECTRONICA"),
+        ("A LA ESPERA DE PULSERA ELECTRONICA", "A LA ESPERA DE PULSERA ELECTRONICA"),
+        ("SUMA", "SUMA"),
+        ("APLICATIVO", "APLICATIVO"),
+        ("A LA ESPERA DEL APLICATIVO", "A LA ESPERA DEL APLICATIVO"),
+    ]:
+        write_row(row, det, lab, disp_fill)
+        row += 1
+
+    # ACTIVIDADES
+    ws.merge_cells(start_row=row, start_column=1, end_row=row + 1, end_column=2)
+    ws.cell(row, 1, "ACTIVIDADES").fill = act_fill
+    ws.cell(row, 1).alignment = center
+    ws.cell(row, 1).font = Font(bold=True)
+    write_row(row, "CANTIDAD", "CANTIDAD", act_fill)
+    row += 1
+    write_row(row, "BENEFICIARIOS", "BENEFICIARIOS", act_fill)
+    row += 1
+
+    # ARCHIVADOS
+    ws.merge_cells(start_row=row, start_column=1, end_row=row + 1, end_column=2)
+    ws.cell(row, 1, "OFICIOS JUDICIALES QUE PASARON A ARCHIVOS").fill = arch_fill
+    ws.cell(row, 1).alignment = center
+    ws.cell(row, 1).font = Font(bold=True)
+    ws.cell(row, 3, "NUMERO DE EXPEDIENTE Y AÑO").fill = arch_fill
+    ws.cell(row, 3).font = Font(bold=True)
+    ws.cell(row, 3).alignment = center
+    for i, mname in enumerate(meses_cols, start=0):
+        c = month_col_start + i
+        txt = rubros.get("NUMERO DE EXPEDIENTE Y AÑO", {}).get(mname, "")
+        ws.cell(row, c, txt)
+        ws.cell(row, c).alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
+        ws.cell(row, c).fill = arch_fill
+    ws.cell(row, total_col, "").fill = arch_fill
+    ws.cell(row, total_col).alignment = center
+    row += 1
+    write_row(row, "TOTAL DE ARCHIVADOS POR MES EN CANTIDAD", "TOTAL DE ARCHIVADOS POR MES EN CANTIDAD", arch_fill)
+    row += 1
+
+    # Bordes a toda la grilla usada.
+    for rr in range(4, row + 1):
+        for cc in range(1, total_col + 1):
+            ws.cell(rr, cc).border = border
+
+    # Nota final.
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=total_col)
+    ws.cell(
+        row,
+        1,
+        "OBS.: Las cantidades registradas deben estar cargadas en los URL (Link) respectivos en caso de corresponder. "
+        "En relación a la carga de Oficios Judiciales que pasaron a archivos, se refiere únicamente a los archivados en el año actual.",
+    )
+    ws.cell(row, 1).alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+    ws.cell(row, 1).font = Font(size=9)
+    ws.row_dimensions[row].height = 32
+
     bio = io.BytesIO()
-    with pd.ExcelWriter(bio, engine="openpyxl") as writer:
-        pd.DataFrame(out_list).to_excel(writer, sheet_name=f"Consignas {year}", index=False)
-        pd.DataFrame(
-            [
-                {
-                    "Nota": "Los totales usan la fecha de notificación de cada consigna. "
-                    "«Sin cumplimiento judicial» corresponde a estados del expediente marcados en catálogo como que bloquean cumplimiento."
-                }
-            ]
-        ).to_excel(writer, sheet_name="Leyenda", index=False)
+    wb.save(bio)
     bio.seek(0)
     return Response(
         bio.read(),
