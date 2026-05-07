@@ -76,13 +76,23 @@
         </select>
     </div>
     <div class="col-md-3"><label class="form-label">Fecha notificación</label><input class="form-control" type="date" name="fecha_notificacion" value="{{ form_data.get('fecha_notificacion','') }}"></div>
+    <div class="col-md-3">
+        <label class="form-label">Consigna aplicada a</label>
+        {% set ca = form_data.get('consigna_aplica_a','') %}
+        <select class="form-select" name="consigna_aplica_a">
+            <option value="" {{ 'selected' if ca == '' else '' }}>— No especificar —</option>
+            <option value="victima" {{ 'selected' if ca == 'victima' else '' }}>Víctima</option>
+            <option value="acusado" {{ 'selected' if ca == 'acusado' else '' }}>Acusado</option>
+            <option value="ambos" {{ 'selected' if ca == 'ambos' else '' }}>Ambos</option>
+        </select>
+    </div>
     <div class="col-md-6">
         <label class="form-label">Estado del expediente (judicial)</label>
         <select id="manual-estado-expediente" class="form-select ts-manual" name="estado_expediente_id" autocomplete="off">
             <option value="">— Cumplimiento operativo en curso —</option>
             {% set ee_sel = form_data.get('estado_expediente_id') %}
             {% for e in estados_expediente %}
-            <option value="{{ e.id }}" {% if ee_sel != '' and ee_sel is not none and (ee_sel|int) == e.id %}selected{% endif %}>{{ e.nombre }}{% if e.bloquea_cumplimiento %} — sin cómputo de consigna{% endif %}</option>
+            <option value="{{ e.id }}" {% if ee_sel != '' and ee_sel is not none and (ee_sel|int) == e.id %}selected{% endif %}>{{ e.nombre }}</option>
             {% endfor %}
         </select>
         <div class="form-text">Si el expediente quedó archivado, desestimado o con providencia sin medida, elegí el estado: no corre el plazo de consigna.</div>
@@ -185,10 +195,11 @@
     }
     if (document.getElementById('manual-tipo-denuncia')) {
         new TomSelect('#manual-tipo-denuncia', {
-            placeholder: 'Buscar...',
+            placeholder: 'Escribí para buscar...',
             maxOptions: null,
             allowEmptyOption: true,
             hideSelected: false,
+            searchField: ['text'],
         });
     }
     if (document.getElementById('manual-fiscalia')) {
@@ -196,10 +207,11 @@
     }
     if (document.getElementById('manual-estado-expediente')) {
         new TomSelect('#manual-estado-expediente', {
-            placeholder: 'Buscar...',
+            placeholder: 'Escribí para buscar...',
             maxOptions: null,
             allowEmptyOption: true,
             hideSelected: false,
+            searchField: ['text'],
         });
     }
 

@@ -202,6 +202,13 @@ def _ensure_schema():
         except Exception:
             current_app.logger.exception("No se pudo agregar tipo_denuncia en oficios_consignas")
             db.session.rollback()
+    if "consigna_aplica_a" not in cols:
+        try:
+            db.session.execute(text("ALTER TABLE oficios_consignas ADD COLUMN consigna_aplica_a VARCHAR(20) NULL"))
+            db.session.commit()
+        except Exception:
+            current_app.logger.exception("No se pudo agregar consigna_aplica_a en oficios_consignas")
+            db.session.rollback()
     if "fecha_finalizacion" not in cols:
         try:
             db.session.execute(text("ALTER TABLE oficios_consignas ADD COLUMN fecha_finalizacion DATE NULL"))
@@ -1459,6 +1466,17 @@ def _tipo_denuncia_slug(v: str | None) -> str:
         return "penal_vif"
     if "penal" in n and re.search(r"\bvg\b", n):
         return "penal_vg"
+    return ""
+
+
+def _norm_aplica_a(v: str | None) -> str:
+    t = _clean(v).lower().strip()
+    if t in {"victima", "acusado", "ambos"}:
+        return t
+    if t in {"denunciado", "acusados"}:
+        return "acusado"
+    if t in {"victimas"}:
+        return "victima"
     return ""
 
 
@@ -3070,8 +3088,13 @@ def manual_export_estadistico_anual():
         trans = _manual_compute_trans_dias(r, today)
         slug = _manual_etapa_slug_desde_pares(r, dias_map.get(r.id, []), trans)
         plist = pers_map.get(r.id, [])
-        has_v = any(_clean(x.tipo).lower() == "victima" for x in plist)
-        has_a = any(_clean(x.tipo).lower() == "denunciado" for x in plist)
+        aplica = _norm_aplica_a(getattr(r, "consigna_aplica_a", ""))
+        if aplica:
+            has_v = aplica in {"victima", "ambos"}
+            has_a = aplica in {"acusado", "ambos"}
+        else:
+            has_v = any(_clean(x.tipo).lower() == "victima" for x in plist)
+            has_a = any(_clean(x.tipo).lower() == "denunciado" for x in plist)
         if has_v:
             if slug == "fija":
                 bump("Víctimas — Fija", m)
@@ -3787,6 +3810,7 @@ def manual_nuevo():
         td_allowed = {_clean(x.nombre) for x in tipos_denuncia}
         if tipo_denuncia and tipo_denuncia not in td_allowed:
             tipo_denuncia = ""
+        aplica_a = _norm_aplica_a(request.form.get("consigna_aplica_a"))
         fiscalia = " · ".join(fis_n) if fis_n else ""
         cat_by_id = {c.id: c for c in tipos_consigna_catalogo}
         motivo_indeterminada_id = _to_int_or_none(request.form.get("motivo_indeterminada_id"))
@@ -3839,6 +3863,7 @@ def manual_nuevo():
                 tipo_medida=tipo_medida,
                 tipo_denuncia=tipo_denuncia or None,
                 tipo_consigna=tipo_consigna,
+                consigna_aplica_a=aplica_a or None,
                 fiscalia=fiscalia,
                 fiscalia_key=_fiscalia_key(fiscalia) if fiscalia else "",
                 telefono_contacto=tel_contacto,
@@ -3867,6 +3892,7 @@ def manual_nuevo():
             row.tipo_medida = tipo_medida or row.tipo_medida
             row.tipo_denuncia = tipo_denuncia or None
             row.tipo_consigna = tipo_consigna
+            row.consigna_aplica_a = aplica_a or None
             row.fiscalia = fiscalia or row.fiscalia
             row.fiscalia_key = _fiscalia_key(fiscalia) if fiscalia else (row.fiscalia_key or "")
             row.telefono_contacto = tel_contacto or row.telefono_contacto
@@ -4001,6 +4027,7 @@ def manual_nuevo():
             "caratula": row_edit.caratula or "",
             "fecha_notificacion": row_edit.fecha_notificacion.isoformat() if row_edit.fecha_notificacion else "",
             "tipo_denuncia": row_edit.tipo_denuncia or "",
+            "consigna_aplica_a": row_edit.consigna_aplica_a or "",
             "telefono_contacto": row_edit.telefono_contacto or "",
             "seps_ingreso": row_edit.seps_ingreso or "",
             "seps_salida": row_edit.seps_salida or "",

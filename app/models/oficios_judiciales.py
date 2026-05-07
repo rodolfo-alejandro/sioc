@@ -23,6 +23,7 @@ class ConsignaJudicial(db.Model):
     tipo_medida = db.Column(db.String(191), nullable=True, index=True)
     tipo_denuncia = db.Column(db.String(40), nullable=True, index=True)  # penal_vif | penal_vg | no_penal_vif_vg | femicidio
     tipo_consigna = db.Column(db.String(30), nullable=True, index=True)  # fija | ambulatoria | personalizada | indeterminada
+    consigna_aplica_a = db.Column(db.String(20), nullable=True, index=True)  # victima | acusado | ambos
     fiscalia = db.Column(db.String(255), nullable=True, index=True)
     fiscalia_key = db.Column(db.String(255), nullable=True, index=True)
     telefono_contacto = db.Column(db.String(120), nullable=True, index=True)
