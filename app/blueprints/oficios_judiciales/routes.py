@@ -3063,6 +3063,7 @@ def manual_export_estadistico_anual():
         dias_map.setdefault(dp.consigna_id, []).append((dp, cat))
 
     rubros: dict[str, dict[str, int]] = {}
+    archivados_exp_por_mes: dict[int, list[str]] = {mm: [] for mm in range(1, 13)}
 
     def bump(label: str, month: int, n: int = 1):
         if label not in rubros:
@@ -3083,6 +3084,16 @@ def manual_export_estadistico_anual():
         if expk:
             expedientes_por_mes[m].add(expk)
         op = _manual_estado_operativo(r, cat_row=cats.get(r.estado_expediente_id))
+        estado_exp_nombre = _ascii_lower_no_accent(
+            cats.get(r.estado_expediente_id).nombre if cats.get(r.estado_expediente_id) else ""
+        )
+        if "archivo" in estado_exp_nombre:
+            m_arch = m
+            if getattr(r, "fecha_finalizacion", None) and r.fecha_finalizacion.year == year:
+                m_arch = int(r.fecha_finalizacion.month)
+            exp_txt = _clean(r.expediente)
+            if exp_txt and exp_txt not in archivados_exp_por_mes[m_arch]:
+                archivados_exp_por_mes[m_arch].append(exp_txt)
         bump("Total cargadas (por mes de fecha notificación)", m)
         td = _tipo_denuncia_slug(getattr(r, "tipo_denuncia", ""))
         if td == "penal_vif":
@@ -3174,6 +3185,18 @@ def manual_export_estadistico_anual():
         if cant > 0:
             bump("EXPEDIENTES", mm, cant)
 
+    # Bloque requerido por cuadro oficial: expedientes archivados y total mensual.
+    rubros["NUMERO DE EXPEDIENTE Y AÑO"] = {m: "" for m in meses}
+    rubros["NUMERO DE EXPEDIENTE Y AÑO"]["TOTAL"] = ""
+    rubros["TOTAL DE ARCHIVADOS POR MES EN CANTIDAD"] = {m: 0 for m in meses}
+    rubros["TOTAL DE ARCHIVADOS POR MES EN CANTIDAD"]["TOTAL"] = 0
+    for mm in range(1, 13):
+        label_m = meses[mm - 1]
+        exps = archivados_exp_por_mes.get(mm) or []
+        rubros["NUMERO DE EXPEDIENTE Y AÑO"][label_m] = ", ".join(exps)
+        rubros["TOTAL DE ARCHIVADOS POR MES EN CANTIDAD"][label_m] = len(exps)
+        rubros["TOTAL DE ARCHIVADOS POR MES EN CANTIDAD"]["TOTAL"] += len(exps)
+
     # Dispositivos: fila SUMA (entregados + en espera).
     dev_rows = [
         "BOTON DE PANICO",
@@ -3205,6 +3228,8 @@ def manual_export_estadistico_anual():
         "SUMA",
         "APLICATIVO",
         "A LA ESPERA DEL APLICATIVO",
+        "NUMERO DE EXPEDIENTE Y AÑO",
+        "TOTAL DE ARCHIVADOS POR MES EN CANTIDAD",
         "Total cargadas (por mes de fecha notificación)",
         "Sin cumplimiento judicial (estado expediente)",
         "Con cumplimiento operativo",
@@ -3221,7 +3246,11 @@ def manual_export_estadistico_anual():
     for lab in order:
         if lab not in rubros:
             continue
-        row = {"Rubro / indicador": lab, **{mm: int(rubros[lab][mm]) for mm in meses}, "TOTAL": int(rubros[lab]["TOTAL"])}
+        is_text_row = lab == "NUMERO DE EXPEDIENTE Y AÑO"
+        if is_text_row:
+            row = {"Rubro / indicador": lab, **{mm: (rubros[lab][mm] or "") for mm in meses}, "TOTAL": ""}
+        else:
+            row = {"Rubro / indicador": lab, **{mm: int(rubros[lab][mm]) for mm in meses}, "TOTAL": int(rubros[lab]["TOTAL"])}
         out_list.append(row)
     for lab, data in rubros.items():
         if lab in order:
