@@ -59,6 +59,11 @@
             {% endfor %}
         </select>
     </div>
+    <div class="col-md-2"><label class="form-label">N° denuncia</label><input class="form-control" name="numero_denuncia" value="{{ form_data.get('numero_denuncia','') }}"></div>
+    <div class="col-md-2"><label class="form-label">N° A.P.</label><input class="form-control" name="numero_ap" value="{{ form_data.get('numero_ap','') }}"></div>
+    <div class="col-md-2"><label class="form-label">Fecha denuncia</label><input class="form-control" type="date" name="fecha_denuncia" value="{{ form_data.get('fecha_denuncia','') }}"></div>
+    <div class="col-md-2"><label class="form-label">Hora denuncia</label><input class="form-control" type="time" name="hora_denuncia" value="{{ form_data.get('hora_denuncia','') }}"></div>
+    <div class="col-12"></div>
     <div class="col-md-3">
         <label class="form-label">Tipo medida</label>
         <select id="manual-tipo-medida" class="form-select ts-manual" name="tipo_medida_id" multiple autocomplete="off">
@@ -136,10 +141,6 @@
     </div>
     <div class="col-6 col-md-2"><label class="form-label">Días total</label><input class="form-control bg-light" type="text" id="manual-dias-total" value="0" readonly autocomplete="off" title="Suma solo de días numéricos (no incluye indeterminada Sí/No)"></div>
     <div class="col-md-3"><label class="form-label">Teléfono contacto</label><input class="form-control" name="telefono_contacto" value="{{ form_data.get('telefono_contacto','') }}"></div>
-    <div class="col-md-2"><label class="form-label">N° denuncia</label><input class="form-control" name="numero_denuncia" value="{{ form_data.get('numero_denuncia','') }}"></div>
-    <div class="col-md-2"><label class="form-label">N° A.P.</label><input class="form-control" name="numero_ap" value="{{ form_data.get('numero_ap','') }}"></div>
-    <div class="col-md-2"><label class="form-label">Fecha denuncia</label><input class="form-control" type="date" name="fecha_denuncia" value="{{ form_data.get('fecha_denuncia','') }}"></div>
-    <div class="col-md-2"><label class="form-label">Hora denuncia</label><input class="form-control" type="time" name="hora_denuncia" value="{{ form_data.get('hora_denuncia','') }}"></div>
     <div class="col-md-3"><label class="form-label">SEPS ingreso</label><input class="form-control" name="seps_ingreso" placeholder="Nº expediente interno SEPS" autocomplete="off" title="Seguimiento en sistema policial (ingreso)" value="{{ form_data.get('seps_ingreso','') }}"></div>
     <div class="col-md-3"><label class="form-label">SEPS salida</label><input class="form-control" name="seps_salida" placeholder="Nº expediente interno SEPS" autocomplete="off" title="Seguimiento en sistema policial (salida)" value="{{ form_data.get('seps_salida','') }}"></div>
     <div class="col-12">
