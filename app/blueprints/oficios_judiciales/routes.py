@@ -571,6 +571,14 @@ def _parse_time(s: str):
         return None
 
 
+def _excel_clean(v):
+    if v is None:
+        return ""
+    s = str(v)
+    # OpenPyXL no acepta caracteres de control ASCII en celdas.
+    return re.sub(r"[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]", "", s)
+
+
 def _normalize_spaces(text: str) -> str:
     text = text.replace("\r", "\n")
     text = re.sub(r"[ \t]+", " ", text)
@@ -3273,7 +3281,7 @@ def manual_export_estadistico_anual():
         return val if val not in (None, "") else 0
 
     def write_row(rr: int, detalle: str, label: str, fill):
-        ws.cell(rr, 3, detalle).fill = fill
+        ws.cell(rr, 3, _excel_clean(detalle)).fill = fill
         ws.cell(rr, 3).alignment = left
         ws.cell(rr, 3).font = Font(bold=True if "TOTAL" in detalle else False)
         for i, mname in enumerate(meses_cols, start=0):
@@ -3348,7 +3356,7 @@ def manual_export_estadistico_anual():
         ("A LA ESPERA DEL APLICATIVO", "A LA ESPERA DEL APLICATIVO"),
     ]:
         if lab == "SUMA":
-            ws.cell(row, 3, det).fill = disp_fill
+            ws.cell(row, 3, _excel_clean(det)).fill = disp_fill
             ws.cell(row, 3).alignment = left
             ws.cell(row, 3).font = Font(bold=True)
             for i, mname in enumerate(meses_cols, start=0):
@@ -3378,13 +3386,13 @@ def manual_export_estadistico_anual():
     ws.cell(row, 1, "OFICIOS JUDICIALES QUE PASARON A ARCHIVOS").fill = arch_fill
     ws.cell(row, 1).alignment = center
     ws.cell(row, 1).font = Font(bold=True)
-    ws.cell(row, 3, "NUMERO DE EXPEDIENTE Y AÑO").fill = arch_fill
+    ws.cell(row, 3, _excel_clean("NUMERO DE EXPEDIENTE Y AÑO")).fill = arch_fill
     ws.cell(row, 3).font = Font(bold=True)
     ws.cell(row, 3).alignment = center
     for i, mname in enumerate(meses_cols, start=0):
         c = month_col_start + i
         txt = rubros.get("NUMERO DE EXPEDIENTE Y AÑO", {}).get(mname, "")
-        ws.cell(row, c, txt)
+        ws.cell(row, c, _excel_clean(txt))
         ws.cell(row, c).alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
         ws.cell(row, c).fill = arch_fill
     ws.cell(row, total_col, "").fill = arch_fill
@@ -3403,8 +3411,10 @@ def manual_export_estadistico_anual():
     ws.cell(
         row,
         1,
-        "OBS.: Las cantidades registradas deben estar cargadas en los URL (Link) respectivos en caso de corresponder. "
+        _excel_clean(
+            "OBS.: Las cantidades registradas deben estar cargadas en los URL (Link) respectivos en caso de corresponder. "
         "En relación a la carga de Oficios Judiciales que pasaron a archivos, se refiere únicamente a los archivados en el año actual.",
+        ),
     )
     ws.cell(row, 1).alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
     ws.cell(row, 1).font = Font(size=9)
