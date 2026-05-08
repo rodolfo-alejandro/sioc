@@ -3197,21 +3197,9 @@ def manual_export_estadistico_anual():
         rubros["TOTAL DE ARCHIVADOS POR MES EN CANTIDAD"][label_m] = len(exps)
         rubros["TOTAL DE ARCHIVADOS POR MES EN CANTIDAD"]["TOTAL"] += len(exps)
 
-    # Dispositivos: fila SUMA (entregados + en espera).
-    dev_rows = [
-        "BOTON DE PANICO",
-        "A LA ESPERA DE BOTÓN DE PÁNICO",
-        "PULSERA ELECTRONICA",
-        "A LA ESPERA DE PULSERA ELECTRONICA",
-        "APLICATIVO",
-        "A LA ESPERA DEL APLICATIVO",
-    ]
-    if any(x in rubros for x in dev_rows):
-        rubros["SUMA"] = {m: 0 for m in meses}
-        rubros["SUMA"]["TOTAL"] = 0
-        for mm in meses:
-            rubros["SUMA"][mm] = int(sum(int(rubros.get(x, {}).get(mm, 0)) for x in dev_rows))
-        rubros["SUMA"]["TOTAL"] = int(sum(rubros["SUMA"][mm] for mm in meses))
+    # Dispositivos: SUMA queda intencionalmente sin cálculo hasta definición funcional.
+    rubros["SUMA"] = {m: "" for m in meses}
+    rubros["SUMA"]["TOTAL"] = ""
 
     order = [
         "DENUNCIAS PENAL VIF",
@@ -3400,7 +3388,20 @@ def manual_export_estadistico_anual():
         ("APLICATIVO", "APLICATIVO"),
         ("A LA ESPERA DEL APLICATIVO", "A LA ESPERA DEL APLICATIVO"),
     ]:
-        write_row(row, det, lab, disp_fill)
+        if lab == "SUMA":
+            ws.cell(row, 3, det).fill = disp_fill
+            ws.cell(row, 3).alignment = left
+            ws.cell(row, 3).font = Font(bold=True)
+            for i, mname in enumerate(meses_cols, start=0):
+                c = month_col_start + i
+                ws.cell(row, c, "")
+                ws.cell(row, c).fill = disp_fill
+                ws.cell(row, c).alignment = center
+            ws.cell(row, total_col, "")
+            ws.cell(row, total_col).fill = disp_fill
+            ws.cell(row, total_col).alignment = center
+        else:
+            write_row(row, det, lab, disp_fill)
         row += 1
 
     # ACTIVIDADES
