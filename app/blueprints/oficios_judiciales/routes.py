@@ -3202,6 +3202,13 @@ def manual_export_estadistico_anual():
         "Acusados — Indeterminada / mixta",
     ]
     out_list = []
+    def _safe_int(v):
+        try:
+            if v in (None, ""):
+                return 0
+            return int(v)
+        except Exception:
+            return 0
     for lab in order:
         if lab not in rubros:
             continue
@@ -3209,12 +3216,12 @@ def manual_export_estadistico_anual():
         if is_text_row:
             row = {"Rubro / indicador": lab, **{mm: (rubros[lab][mm] or "") for mm in meses}, "TOTAL": ""}
         else:
-            row = {"Rubro / indicador": lab, **{mm: int(rubros[lab][mm]) for mm in meses}, "TOTAL": int(rubros[lab]["TOTAL"])}
+            row = {"Rubro / indicador": lab, **{mm: _safe_int(rubros[lab][mm]) for mm in meses}, "TOTAL": _safe_int(rubros[lab]["TOTAL"])}
         out_list.append(row)
     for lab, data in rubros.items():
         if lab in order:
             continue
-        out_list.append({"Rubro / indicador": lab, **{mm: int(data[mm]) for mm in meses}, "TOTAL": int(data["TOTAL"])})
+        out_list.append({"Rubro / indicador": lab, **{mm: _safe_int(data[mm]) for mm in meses}, "TOTAL": _safe_int(data["TOTAL"])})
 
     # Export estilo "Cuadro de Tabulación Mensual" (estructura fija, no tabla plana).
     from openpyxl import Workbook
