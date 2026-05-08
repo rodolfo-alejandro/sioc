@@ -83,6 +83,14 @@
                 <div><strong>Fecha notificación:</strong> {{ row.fecha_notificacion|localtime('%d/%m/%Y') if row.fecha_notificacion else '—' }}</div>
                 <div><strong>Estado expediente:</strong> {{ estado_expediente_nombre or '—' }}</div>
                 <div><strong>Total días:</strong> {{ row.cantidad_dias or '—' }}</div>
+                <div><strong>Dispositivo entregado:</strong>
+                    {% if row.dispositivo_tipo_entrega %}
+                    {{ row.dispositivo_tipo_entrega|upper }}
+                    {% else %}
+                    —
+                    {% endif %}
+                </div>
+                <div><strong>Fecha entrega dispositivo:</strong> {{ row.fecha_entrega_dispositivo.strftime('%d/%m/%Y') if row.fecha_entrega_dispositivo else '—' }}</div>
                 {% if row.motivo_indeterminada %}
                 <div><strong>Motivo indeterminada:</strong> {{ row.motivo_indeterminada.nombre }}</div>
                 {% endif %}
@@ -111,6 +119,12 @@
                                     <span class="text-muted small">({{ x.persona.tipo if x.persona else '—' }})</span>
                                     {% if x.persona and x.persona.es_menor %}<span class="badge text-bg-warning text-dark ms-1">Menor</span>{% endif %}
                                     {% if x.persona and x.persona.dni %}<div class="small text-muted">DNI: {{ x.persona.dni }}</div>{% endif %}
+                                    {% if x.persona and x.persona.fecha_nacimiento %}
+                                    <div class="small text-muted">
+                                        F. nac.: {{ x.persona.fecha_nacimiento.strftime('%d/%m/%Y') }}
+                                        {% if x.edad is not none %}· Edad: {{ x.edad }}{% endif %}
+                                    </div>
+                                    {% endif %}
                                 </td>
                                 <td>{{ x.domicilio.direccion if x.domicilio else '—' }}</td>
                                 <td>{{ x.persona.notificar if x.persona and x.persona.notificar else '—' }}</td>

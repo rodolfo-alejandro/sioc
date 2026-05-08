@@ -305,6 +305,9 @@ def _ensure_schema():
     if "es_menor" not in pcols:
         db.session.execute(text("ALTER TABLE oficios_consigna_personas ADD COLUMN es_menor TINYINT(1) NOT NULL DEFAULT 0"))
         db.session.commit()
+    if "fecha_nacimiento" not in pcols:
+        db.session.execute(text("ALTER TABLE oficios_consigna_personas ADD COLUMN fecha_nacimiento DATE NULL"))
+        db.session.commit()
     dcols = {c.get("name") for c in insp.get_columns(ConsignaDomicilio.__tablename__)}
     if "latitud" not in dcols:
         db.session.execute(text("ALTER TABLE oficios_consigna_domicilios ADD COLUMN latitud DOUBLE NULL"))
@@ -859,6 +862,16 @@ def _extract_dni_by_context(full: str, person_name: str = "") -> str:
     if m2:
         return _normalize_dni(m2.group(1))
     return ""
+
+
+def _edad_desde_fecha_nacimiento(fecha_nac: date | None, ref: date | None = None) -> int | None:
+    if not fecha_nac:
+        return None
+    base = ref or datetime.utcnow().date()
+    years = base.year - fecha_nac.year
+    if (base.month, base.day) < (fecha_nac.month, fecha_nac.day):
+        years -= 1
+    return years if years >= 0 else None
 
 
 def _first_group(pattern: str, text: str) -> str:
@@ -2337,6 +2350,11 @@ def manual_listado():
     export_estad_url = url_for("oficios_judiciales.manual_export_estadistico_anual")
     if args_estad:
         export_estad_url = f"{export_estad_url}?{urlencode(args_estad, doseq=True)}"
+    args_boton = {k: list(v) for k, v in args_multi.items()}
+    args_boton["year"] = [str(datetime.utcnow().year)]
+    export_boton_url = url_for("oficios_judiciales.manual_export_boton_panico_xlsx")
+    if args_boton:
+        export_boton_url = f"{export_boton_url}?{urlencode(args_boton, doseq=True)}"
 
     def _page_url(n: int) -> str:
         data = {k: list(v) for k, v in args_multi.items()}
@@ -2375,6 +2393,7 @@ def manual_listado():
         export_url=export_url,
         export_ficha_url=export_ficha_url,
         export_estad_url=export_estad_url,
+        export_boton_url=export_boton_url,
         can_delete_superadmin=_is_superadmin(),
     )
 
@@ -3463,6 +3482,169 @@ def manual_export_estadistico_anual():
     )
 
 
+@bp.route("/manual/export-boton-panico.xlsx")
+def manual_export_boton_panico_xlsx():
+    if not (_can_export() or _can_view()):
+        abort(403)
+    _ensure_schema()
+    year = _to_int_or_none(request.args.get("year")) or datetime.utcnow().year
+    q, _, _ = _manual_apply_filters_query()
+    rows = [r for r in q.all() if r.fecha_notificacion and r.fecha_notificacion.year == year]
+    ids = [r.id for r in rows]
+    pers = ConsignaPersona.query.filter(ConsignaPersona.consigna_id.in_(ids)).all() if ids else []
+    doms = ConsignaDomicilio.query.filter(ConsignaDomicilio.consigna_id.in_(ids)).all() if ids else []
+    pers_map: dict[int, list[ConsignaPersona]] = {}
+    for p in pers:
+        pers_map.setdefault(p.consigna_id, []).append(p)
+    dom_map: dict[int, list[ConsignaDomicilio]] = {}
+    for d in doms:
+        dom_map.setdefault(d.consigna_id, []).append(d)
+
+    def _pick_persona(con_id: int, tipo: str):
+        plist = pers_map.get(con_id, [])
+        return next((x for x in plist if _clean(x.tipo).lower() == tipo), None)
+
+    def _pick_domicilio(con_id: int, tipo: str):
+        dlist = dom_map.get(con_id, [])
+        exact = next((x for x in dlist if _clean(x.tipo).lower() == tipo), None)
+        return exact or (dlist[0] if dlist else None)
+
+    def _fmt_date(v):
+        return v.strftime("%d/%m/%Y") if getattr(v, "strftime", None) else ""
+
+    data_duales = []
+    data_boton_app = []
+    data_espera = []
+    for r in rows:
+        vict = _pick_persona(r.id, "victima")
+        acus = _pick_persona(r.id, "denunciado")
+        d_v = _pick_domicilio(r.id, "victima")
+        d_a = _pick_domicilio(r.id, "denunciado")
+        tipo_ent = _clean(getattr(r, "dispositivo_tipo_entrega", "")).lower()
+        fecha_ent = getattr(r, "fecha_entrega_dispositivo", None)
+        motivo_indet = _ascii_lower_no_accent(getattr(getattr(r, "motivo_indeterminada", None), "nombre", "") or "")
+        rec = {
+            "victima_nombre": _clean(getattr(vict, "nombre", "")),
+            "victima_edad": _edad_desde_fecha_nacimiento(getattr(vict, "fecha_nacimiento", None)),
+            "victima_dni": _clean(getattr(vict, "dni", "")),
+            "victima_domicilio": _clean(getattr(d_v, "direccion", "")),
+            "causa": _clean(getattr(r, "expediente", "")),
+            "juzgado": _clean(getattr(r, "juzgado", "")),
+            "fecha_notif": _fmt_date(getattr(r, "fecha_notificacion", None)),
+            "fecha_entrega": _fmt_date(fecha_ent),
+            "acusado_nombre": _clean(getattr(acus, "nombre", "")),
+            "acusado_dni": _clean(getattr(acus, "dni", "")),
+            "acusado_domicilio": _clean(getattr(d_a, "direccion", "")),
+            "tipo_consigna": (_clean(getattr(r, "tipo_consigna", "")) or "").upper(),
+        }
+        if tipo_ent == "pulsera":
+            data_duales.append(rec)
+        elif tipo_ent in {"boton", "aplicativo"}:
+            data_boton_app.append(rec)
+        elif _clean(getattr(r, "tipo_consigna", "")).lower() == "indeterminada":
+            if ("boton" in motivo_indet) or ("app" in motivo_indet) or ("aplicativo" in motivo_indet):
+                data_espera.append(rec)
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, Border, Side, PatternFill
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Hoja1"
+    for col, width in {"B": 5, "C": 34, "D": 8, "E": 14, "F": 28, "G": 18, "H": 30, "I": 14, "J": 16, "K": 34, "L": 14, "M": 28, "N": 14}.items():
+        ws.column_dimensions[col].width = width
+    border = Border(
+        left=Side(style="thin", color="000000"),
+        right=Side(style="thin", color="000000"),
+        top=Side(style="thin", color="000000"),
+        bottom=Side(style="thin", color="000000"),
+    )
+    fill_title = PatternFill("solid", fgColor="D9E2F3")
+    fill_head = PatternFill("solid", fgColor="F2F2F2")
+
+    ws.merge_cells("B2:N2")
+    ws["B2"] = f"BOTON DE PANICO - {year}"
+    ws["B2"].font = Font(bold=True, size=13)
+    ws["B2"].alignment = Alignment(horizontal="center")
+
+    def _paint_row(rr: int, c0: int = 2, c1: int = 14, fill=None, bold: bool = False):
+        for cc in range(c0, c1 + 1):
+            cell = ws.cell(rr, cc)
+            cell.border = border
+            cell.alignment = Alignment(vertical="center", horizontal="center", wrap_text=True)
+            if fill:
+                cell.fill = fill
+            if bold:
+                cell.font = Font(bold=True)
+
+    def _write_section(start_row: int, title: str, rows_data: list[dict], col_g_label: str):
+        ws.merge_cells(start_row=start_row, start_column=2, end_row=start_row, end_column=14)
+        ws.cell(start_row, 2, title)
+        _paint_row(start_row, fill=fill_title, bold=True)
+        ws.merge_cells(start_row=start_row + 1, start_column=2, end_row=start_row + 1, end_column=10)
+        ws.merge_cells(start_row=start_row + 1, start_column=11, end_row=start_row + 1, end_column=14)
+        ws.cell(start_row + 1, 2, "VICTIMA")
+        ws.cell(start_row + 1, 11, "ACUSADO")
+        _paint_row(start_row + 1, fill=fill_head, bold=True)
+        headers = [
+            "N°",
+            "APELLIDO Y NOMBRE",
+            "EDAD",
+            "DNI",
+            "DOMICILIO",
+            col_g_label,
+            "JUZGADO INTERVINIENTE",
+            "FECHA DE NOTIF",
+            "FECHA DE ENTREGA",
+            "APELLIDO Y NOMBRE",
+            "DNI",
+            "DOMICILIO",
+            "TIPO CONS.",
+        ]
+        for i, h in enumerate(headers, start=2):
+            ws.cell(start_row + 2, i, h)
+        _paint_row(start_row + 2, fill=fill_head, bold=True)
+        base = start_row + 3
+        if not rows_data:
+            ws.cell(base, 2, 1)
+            ws.cell(base, 3, "SIN DATOS")
+            _paint_row(base)
+            return
+        for idx, item in enumerate(rows_data, start=1):
+            rr = base + idx - 1
+            vals = [
+                idx,
+                item.get("victima_nombre", ""),
+                item.get("victima_edad", "") if item.get("victima_edad", None) is not None else "",
+                item.get("victima_dni", ""),
+                item.get("victima_domicilio", ""),
+                item.get("causa", ""),
+                item.get("juzgado", ""),
+                item.get("fecha_notif", ""),
+                item.get("fecha_entrega", ""),
+                item.get("acusado_nombre", ""),
+                item.get("acusado_dni", ""),
+                item.get("acusado_domicilio", ""),
+                item.get("tipo_consigna", ""),
+            ]
+            for cc, vv in enumerate(vals, start=2):
+                ws.cell(rr, cc, vv)
+            _paint_row(rr)
+
+    _write_section(7, "DISPOSITIVOS DUALES", data_duales, "CAUSA")
+    _write_section(16, "BOTON DE PANICO - APP", data_boton_app, "N° OFICIO")
+    _write_section(23, "A LA ESPERA DEL BOTON - APP", data_espera, "N° OFICIO")
+
+    bio = io.BytesIO()
+    wb.save(bio)
+    bio.seek(0)
+    return Response(
+        bio.read(),
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename=boton_panico_{year}_{datetime.utcnow().strftime('%Y%m%d_%H%M')}.xlsx"},
+    )
+
+
 @bp.route("/manual/dashboard")
 def manual_dashboard():
     if not _can_view():
@@ -4201,7 +4383,7 @@ def manual_nuevo():
             row.estado = "activa"
             row.fecha_finalizacion = None
 
-        def _add_person_manual(nombre, dni, tipo, notificar, es_menor):
+        def _add_person_manual(nombre, dni, tipo, notificar, es_menor, fecha_nacimiento):
             nom = _clean(nombre)
             if not nom:
                 return
@@ -4216,6 +4398,7 @@ def manual_nuevo():
             if exists:
                 exists.notificar = _normalize_notificar(notificar, exists.notificar or "no")
                 exists.es_menor = bool(es_menor)
+                exists.fecha_nacimiento = fecha_nacimiento or None
                 return
             db.session.add(
                 ConsignaPersona(
@@ -4224,6 +4407,7 @@ def manual_nuevo():
                     nombre_key=nom_k,
                     dni=dni_n,
                     dni_key=dni_k,
+                    fecha_nacimiento=fecha_nacimiento or None,
                     es_menor=bool(es_menor),
                     tipo=tipo,
                     notificar=_normalize_notificar(notificar, "no"),
@@ -4270,6 +4454,7 @@ def manual_nuevo():
         p_tipos = request.form.getlist("persona_tipo[]")
         p_noti = request.form.getlist("persona_notificar[]")
         p_menor = request.form.getlist("persona_es_menor[]")
+        p_fnac = request.form.getlist("persona_fecha_nacimiento[]")
         p_dom = request.form.getlist("persona_domicilio[]")
         p_latlng = request.form.getlist("persona_latlng[]")
         p_barrio = request.form.getlist("persona_barrio_id[]")
@@ -4279,6 +4464,7 @@ def manual_nuevo():
             len(p_tipos),
             len(p_noti),
             len(p_menor),
+            len(p_fnac),
             len(p_dom),
             len(p_latlng),
             len(p_barrio),
@@ -4290,6 +4476,7 @@ def manual_nuevo():
             noti = p_noti[i] if i < len(p_noti) else "no"
             menor_raw = _clean(p_menor[i] if i < len(p_menor) else "")
             es_menor = menor_raw in {"si", "1", "true", "on"}
+            fecha_nac = _parse_date(_clean(p_fnac[i] if i < len(p_fnac) else ""))
             dom = p_dom[i] if i < len(p_dom) else ""
             lat = lng = ""
             if i < len(p_latlng):
@@ -4299,7 +4486,7 @@ def manual_nuevo():
                 if ln is not None:
                     lng = str(ln)
             barr = p_barrio[i] if i < len(p_barrio) else ""
-            _add_person_manual(nombre, dni, tipo, noti, es_menor)
+            _add_person_manual(nombre, dni, tipo, noti, es_menor, fecha_nac)
             _add_domicilio_manual(dom, tipo, lat, lng, barr)
 
         _reemplazar_dias_por_tipo(row.id, id_to_dias)
@@ -4357,6 +4544,7 @@ def manual_nuevo():
                     "dni": p.dni or "",
                     "tipo": "denunciado" if pt == "denunciado" else "victima",
                     "es_menor": bool(getattr(p, "es_menor", False)),
+                    "fecha_nacimiento": p.fecha_nacimiento.isoformat() if getattr(p, "fecha_nacimiento", None) else "",
                     "notificar": p.notificar or ("si" if pt == "denunciado" else "no"),
                     "domicilio": dsel.direccion if dsel else "",
                     "latlng": f"{dsel.latitud}, {dsel.longitud}" if dsel and dsel.latitud is not None and dsel.longitud is not None else "",
@@ -4872,7 +5060,13 @@ def detalle(consigna_id: int):
                     break
         if chosen:
             used_dom_ids.add(chosen.id)
-        persona_domicilio.append({"persona": p, "domicilio": chosen})
+        persona_domicilio.append(
+            {
+                "persona": p,
+                "domicilio": chosen,
+                "edad": _edad_desde_fecha_nacimiento(getattr(p, "fecha_nacimiento", None)),
+            }
+        )
     if not cronologia_plazos and row.fecha_notificacion and (row.dias_personalizada or row.dias_fija or row.dias_ambulatoria):
         cur = row.fecha_notificacion
         for label, d in (
