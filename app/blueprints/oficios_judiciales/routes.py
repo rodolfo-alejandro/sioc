@@ -2720,6 +2720,215 @@ def manual_export_ficha_victimologica_xlsx():
         for r in rows
         if _manual_estado_operativo(r, cat_row=cat_estado_map.get(r.estado_expediente_id)) in est_set
     ]
+    from pathlib import Path
+    from openpyxl import Workbook, load_workbook
+
+    row_ids = [r.id for r in rows]
+    personas = (
+        ConsignaPersona.query.filter(ConsignaPersona.consigna_id.in_(row_ids))
+        .order_by(ConsignaPersona.consigna_id.asc(), ConsignaPersona.id.asc())
+        .all()
+    ) if row_ids else []
+    domicilios = (
+        ConsignaDomicilio.query.filter(ConsignaDomicilio.consigna_id.in_(row_ids))
+        .order_by(ConsignaDomicilio.consigna_id.asc(), ConsignaDomicilio.id.asc())
+        .all()
+    ) if row_ids else []
+    dias_pairs = (
+        db.session.query(ConsignaDiasPorTipo, CatalogoTipoConsigna)
+        .join(CatalogoTipoConsigna, ConsignaDiasPorTipo.tipo_catalogo_id == CatalogoTipoConsigna.id)
+        .filter(ConsignaDiasPorTipo.consigna_id.in_(row_ids))
+        .all()
+    ) if row_ids else []
+    medidas = (
+        ConsignaMedidaDetalle.query.filter(ConsignaMedidaDetalle.consigna_id.in_(row_ids))
+        .order_by(ConsignaMedidaDetalle.consigna_id.asc(), ConsignaMedidaDetalle.id.asc())
+        .all()
+    ) if row_ids else []
+    pers_map: dict[int, list[ConsignaPersona]] = {}
+    for p in personas:
+        pers_map.setdefault(p.consigna_id, []).append(p)
+    dom_map: dict[int, list[ConsignaDomicilio]] = {}
+    for d in domicilios:
+        dom_map.setdefault(d.consigna_id, []).append(d)
+    dias_map: dict[int, list[tuple[ConsignaDiasPorTipo, CatalogoTipoConsigna]]] = {}
+    for dp, cat in dias_pairs:
+        dias_map.setdefault(dp.consigna_id, []).append((dp, cat))
+    medidas_map: dict[int, list[ConsignaMedidaDetalle]] = {}
+    for md in medidas:
+        medidas_map.setdefault(md.consigna_id, []).append(md)
+
+    def _pick_persona(con_id: int, tipo: str):
+        plist = pers_map.get(con_id, [])
+        return next((x for x in plist if _clean(x.tipo).lower() == tipo), None)
+
+    def _pick_domicilio(con_id: int, tipo: str):
+        dlist = dom_map.get(con_id, [])
+        exact = next((x for x in dlist if _clean(x.tipo).lower() == tipo), None)
+        return exact or (dlist[0] if dlist else None)
+
+    def _dias_tipo(con_id: int):
+        fija = pers = amb = 0
+        for dp, cat in dias_map.get(con_id, []):
+            n = _ascii_lower_no_accent(cat.nombre)
+            d = int(dp.dias or 0)
+            if d <= 0:
+                continue
+            if "fija" in n:
+                fija += d
+            elif "personal" in n:
+                pers += d
+            elif "ambulator" in n:
+                amb += d
+        return fija, pers, amb
+
+    def _fmt_date(v):
+        return v.strftime("%d/%m/%Y") if getattr(v, "strftime", None) else ""
+
+    def _victima_key(v):
+        if v is None:
+            return "sin_victima"
+        d = _digits_only(getattr(v, "dni", ""))
+        if d:
+            return f"dni:{d}"
+        n = _ascii_lower_no_accent(getattr(v, "nombre", "") or "")
+        return f"nom:{n or 'sin_nombre'}"
+
+    dep_origen = _clean(getattr(current_user, "unidad_nombre", "")) or _clean(getattr(getattr(current_user, "unidad", None), "nombre", ""))
+    victim_groups: dict[str, dict] = {}
+    for r in rows:
+        vict = _pick_persona(r.id, "victima")
+        k = _victima_key(vict)
+        g = victim_groups.setdefault(k, {"victima": vict, "items": []})
+        if g["victima"] is None and vict is not None:
+            g["victima"] = vict
+        g["items"].append(r)
+
+    plantilla = Path(current_app.root_path).parent / "FICHA VICTIMOLOGICA.xlsx"
+    wb = load_workbook(str(plantilla)) if plantilla.exists() else Workbook()
+    ws_base = wb[wb.sheetnames[0]]
+
+    if not victim_groups:
+        ws_base["A1"] = dep_origen or "DEPENDENCIA"
+        ws_base["A7"] = "SIN DATOS"
+    else:
+        used_titles: set[str] = set()
+        for idx, (_k, g) in enumerate(victim_groups.items(), start=1):
+            ws = ws_base if idx == 1 else wb.copy_worksheet(ws_base)
+            vict = g.get("victima")
+            dni_s = _digits_only(getattr(vict, "dni", "")) if vict else ""
+            base_title = (dni_s or f"FICHA_{idx}")[:28]
+            title = base_title
+            c = 2
+            while title in used_titles:
+                suf = f"_{c}"
+                title = (base_title[: 31 - len(suf)] + suf)
+                c += 1
+            used_titles.add(title)
+            ws.title = title
+            items = sorted(
+                g.get("items") or [],
+                key=lambda r: (r.fecha_notificacion or date.min, r.created_at or datetime.min),
+                reverse=True,
+            )
+            r0 = items[0]
+            acus = _pick_persona(r0.id, "denunciado")
+            d_v = _pick_domicilio(r0.id, "victima")
+            d_a = _pick_domicilio(r0.id, "denunciado")
+            fija_d, pers_d, amb_d = _dias_tipo(r0.id)
+
+            ws["A1"] = dep_origen or "DEPENDENCIA"
+            ws["B7"] = _clean(getattr(vict, "nombre", ""))
+            ws["B9"] = _edad_desde_fecha_nacimiento(getattr(vict, "fecha_nacimiento", None)) or ""
+            ws["D9"] = _fmt_date(getattr(vict, "fecha_nacimiento", None))
+            ws["H9"] = _clean(getattr(vict, "dni", ""))
+            ws["B11"] = _clean(getattr(d_v, "direccion", ""))
+            ws["B13"] = _clean(getattr(vict, "telefono", "")) or _clean(getattr(r0, "telefono_contacto", ""))
+            ws["F13"] = _clean(getattr(vict, "email", ""))
+
+            ws["B21"] = _clean(getattr(acus, "nombre", ""))
+            ws["B23"] = _edad_desde_fecha_nacimiento(getattr(acus, "fecha_nacimiento", None)) or ""
+            ws["D23"] = _fmt_date(getattr(acus, "fecha_nacimiento", None))
+            ws["H23"] = _clean(getattr(acus, "dni", ""))
+            ws["B25"] = _clean(getattr(d_a, "direccion", ""))
+            ws["B27"] = _clean(getattr(acus, "telefono", ""))
+            ws["F27"] = _clean(getattr(acus, "email", ""))
+
+            ws["C35"] = r0.numero_denuncia or ""
+            ws["G35"] = r0.numero_ap or ""
+            ws["C37"] = _fmt_date(r0.fecha_denuncia)
+            ws["G37"] = r0.hora_denuncia.strftime("%H:%M") if getattr(r0, "hora_denuncia", None) else ""
+            ws["G39"] = r0.expediente or ""
+            ws["C41"] = " · ".join([x for x in [r0.fiscalia or "", r0.juzgado or ""] if _clean(x)])
+            ws["B43"] = r0.relato_breve_hecho or r0.caratula or ""
+
+            for rr in range(60, 77):
+                ws[f"C{rr}"] = ""
+                ws[f"E{rr}"] = ""
+                ws[f"G{rr}"] = ""
+            if fija_d > 0:
+                ws["C60"] = _fmt_date(r0.fecha_notificacion)
+                ws["E60"] = _fmt_date((r0.fecha_notificacion + timedelta(days=fija_d)) if r0.fecha_notificacion else None)
+                ws["G60"] = f"{fija_d} días"
+            if amb_d > 0:
+                ws["C61"] = _fmt_date(r0.fecha_notificacion)
+                ws["E61"] = _fmt_date((r0.fecha_notificacion + timedelta(days=amb_d)) if r0.fecha_notificacion else None)
+                ws["G61"] = f"{amb_d} días"
+            if pers_d > 0:
+                ws["C62"] = _fmt_date(r0.fecha_notificacion)
+                ws["E62"] = _fmt_date((r0.fecha_notificacion + timedelta(days=pers_d)) if r0.fecha_notificacion else None)
+                ws["G62"] = f"{pers_d} días"
+
+            medida_blob = _ascii_lower_no_accent(" | ".join([r0.tipo_medida or ""] + [_clean(getattr(m, "descripcion", "")) for m in medidas_map.get(r0.id, [])]))
+            marks = {
+                63: ["exclusion"],
+                64: ["prohibicion", "acercamiento"],
+                65: ["abstenerse", "violencia", "intimidacion"],
+                66: ["derivacion"],
+                67: ["reintegro"],
+                68: ["tenencia", "provisor"],
+                69: ["interdisciplin"],
+                70: ["guarda"],
+                71: ["inspeccion"],
+                72: ["regla de conducta", "otra medida"],
+                73: ["audiencia"],
+                74: ["resolucion"],
+                75: ["red vif", "ayuda"],
+                76: ["archivo"],
+            }
+            for rr, keys in marks.items():
+                ws[f"C{rr}"] = "SI" if any(k in medida_blob for k in keys) else ""
+            if "derivacion" in medida_blob:
+                ws["G66"] = "Derivación registrada"
+
+            antecedentes = items[1:3]
+            for pos, ant in enumerate(antecedentes, start=1):
+                base = 81 if pos == 1 else 96
+                acus_ant = _pick_persona(ant.id, "denunciado")
+                ws[f"H{base}"] = pos
+                ws[f"C{base+2}"] = ant.numero_denuncia or ""
+                ws[f"F{base+2}"] = ant.expediente or ""
+                ws[f"C{base+4}"] = " · ".join([x for x in [ant.fiscalia or "", ant.juzgado or ""] if _clean(x)])
+                ws[f"C{base+6}"] = _clean(getattr(acus_ant, "nombre", ""))
+                ws[f"C{base+8}"] = ant.tipo_medida or ""
+            for base in (81, 96):
+                if ((base == 81 and len(antecedentes) < 1) or (base == 96 and len(antecedentes) < 2)):
+                    ws[f"H{base}"] = ""
+                    ws[f"C{base+2}"] = ""
+                    ws[f"F{base+2}"] = ""
+                    ws[f"C{base+4}"] = ""
+                    ws[f"C{base+6}"] = ""
+                    ws[f"C{base+8}"] = ""
+
+    bio = io.BytesIO()
+    wb.save(bio)
+    bio.seek(0)
+    return Response(
+        bio.read(),
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename=fichas_victimologicas_{datetime.utcnow().strftime('%Y%m%d_%H%M')}.xlsx"},
+    )
+
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
