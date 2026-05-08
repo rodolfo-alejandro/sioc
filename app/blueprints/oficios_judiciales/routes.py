@@ -576,7 +576,11 @@ def _excel_clean(v):
         return ""
     s = str(v)
     # OpenPyXL no acepta caracteres de control ASCII en celdas.
-    return re.sub(r"[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]", "", s)
+    s = re.sub(r"[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]", "", s)
+    # Límite de Excel por celda.
+    if len(s) > 32760:
+        s = s[:32760]
+    return s
 
 
 def _normalize_spaces(text: str) -> str:
@@ -3420,16 +3424,35 @@ def manual_export_estadistico_anual():
     ws.cell(row, 1).font = Font(size=9)
     ws.row_dimensions[row].height = 32
 
-    bio = io.BytesIO()
-    wb.save(bio)
-    bio.seek(0)
-    return Response(
-        bio.read(),
-        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={
-            "Content-Disposition": f"attachment; filename=estadistico_consignas_{year}_{datetime.utcnow().strftime('%Y%m%d_%H%M')}.xlsx"
-        },
-    )
+    try:
+        bio = io.BytesIO()
+        wb.save(bio)
+        bio.seek(0)
+        return Response(
+            bio.read(),
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={
+                "Content-Disposition": f"attachment; filename=estadistico_consignas_{year}_{datetime.utcnow().strftime('%Y%m%d_%H%M')}.xlsx"
+            },
+        )
+    except Exception:
+        current_app.logger.exception("Error generando export estadístico de consignas")
+        wb_fallback = Workbook()
+        ws_f = wb_fallback.active
+        ws_f.title = "ESTADISTICO"
+        ws_f["A1"] = "No se pudo generar el formato completo del estadístico."
+        ws_f["A2"] = "Se aplicó una salida de resguardo para evitar error 500."
+        ws_f["A3"] = f"Año solicitado: {year}"
+        bio = io.BytesIO()
+        wb_fallback.save(bio)
+        bio.seek(0)
+        return Response(
+            bio.read(),
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={
+                "Content-Disposition": f"attachment; filename=estadistico_consignas_{year}_fallback_{datetime.utcnow().strftime('%Y%m%d_%H%M')}.xlsx"
+            },
+        )
 
 
 @bp.route("/manual/export-boton-panico.xlsx")
