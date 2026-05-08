@@ -27,6 +27,10 @@ class ConsignaJudicial(db.Model):
     fiscalia = db.Column(db.String(255), nullable=True, index=True)
     fiscalia_key = db.Column(db.String(255), nullable=True, index=True)
     telefono_contacto = db.Column(db.String(120), nullable=True, index=True)
+    numero_denuncia = db.Column(db.String(64), nullable=True, index=True)
+    numero_ap = db.Column(db.String(64), nullable=True, index=True)
+    fecha_denuncia = db.Column(db.Date, nullable=True, index=True)
+    hora_denuncia = db.Column(db.Time, nullable=True, index=True)
     seps_ingreso = db.Column(db.String(128), nullable=True, index=True)
     seps_salida = db.Column(db.String(128), nullable=True, index=True)
     fecha_oficio = db.Column(db.Date, nullable=True, index=True)
@@ -43,6 +47,7 @@ class ConsignaJudicial(db.Model):
     acusado_notificar = db.Column(db.String(20), nullable=True)  # si | no | indeterminada
     estado = db.Column(db.String(40), nullable=False, default="activa", index=True)
     observaciones = db.Column(db.Text, nullable=True)
+    relato_breve_hecho = db.Column(db.Text, nullable=True)
 
     texto_fuente = db.Column(db.Text, nullable=True)
     fuente_principal = db.Column(db.String(20), nullable=False, default="ocr")  # ocr | qr
@@ -142,6 +147,8 @@ class ConsignaPersona(db.Model):
     nombre_key = db.Column(db.String(255), nullable=True, index=True)
     dni = db.Column(db.String(40), nullable=True, index=True)
     dni_key = db.Column(db.String(20), nullable=True, index=True)
+    telefono = db.Column(db.String(80), nullable=True, index=True)
+    email = db.Column(db.String(191), nullable=True, index=True)
     fecha_nacimiento = db.Column(db.Date, nullable=True, index=True)
     es_menor = db.Column(db.Boolean, nullable=False, default=False, index=True)
     tipo = db.Column(db.String(30), nullable=False, index=True)  # victima | denunciado | notificado

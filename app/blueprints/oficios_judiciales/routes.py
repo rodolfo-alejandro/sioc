@@ -172,6 +172,18 @@ def _ensure_schema():
     if "telefono_contacto" not in cols:
         db.session.execute(text("ALTER TABLE oficios_consignas ADD COLUMN telefono_contacto VARCHAR(80) NULL"))
         db.session.commit()
+    if "numero_denuncia" not in cols:
+        db.session.execute(text("ALTER TABLE oficios_consignas ADD COLUMN numero_denuncia VARCHAR(64) NULL"))
+        db.session.commit()
+    if "numero_ap" not in cols:
+        db.session.execute(text("ALTER TABLE oficios_consignas ADD COLUMN numero_ap VARCHAR(64) NULL"))
+        db.session.commit()
+    if "fecha_denuncia" not in cols:
+        db.session.execute(text("ALTER TABLE oficios_consignas ADD COLUMN fecha_denuncia DATE NULL"))
+        db.session.commit()
+    if "hora_denuncia" not in cols:
+        db.session.execute(text("ALTER TABLE oficios_consignas ADD COLUMN hora_denuncia TIME NULL"))
+        db.session.commit()
     if "seps_ingreso" not in cols:
         db.session.execute(text("ALTER TABLE oficios_consignas ADD COLUMN seps_ingreso VARCHAR(64) NULL"))
         db.session.commit()
@@ -229,6 +241,13 @@ def _ensure_schema():
             db.session.commit()
         except Exception:
             current_app.logger.exception("No se pudo agregar dispositivo_tipo_entrega en oficios_consignas")
+            db.session.rollback()
+    if "relato_breve_hecho" not in cols:
+        try:
+            db.session.execute(text("ALTER TABLE oficios_consignas ADD COLUMN relato_breve_hecho TEXT NULL"))
+            db.session.commit()
+        except Exception:
+            current_app.logger.exception("No se pudo agregar relato_breve_hecho en oficios_consignas")
             db.session.rollback()
     # Ajustes de longitudes/texto para campos extensos.
     # Nota: 191 evita errores de índice en MySQL/MariaDB con utf8mb4.
@@ -307,6 +326,12 @@ def _ensure_schema():
         db.session.commit()
     if "fecha_nacimiento" not in pcols:
         db.session.execute(text("ALTER TABLE oficios_consigna_personas ADD COLUMN fecha_nacimiento DATE NULL"))
+        db.session.commit()
+    if "telefono" not in pcols:
+        db.session.execute(text("ALTER TABLE oficios_consigna_personas ADD COLUMN telefono VARCHAR(80) NULL"))
+        db.session.commit()
+    if "email" not in pcols:
+        db.session.execute(text("ALTER TABLE oficios_consigna_personas ADD COLUMN email VARCHAR(191) NULL"))
         db.session.commit()
     dcols = {c.get("name") for c in insp.get_columns(ConsignaDomicilio.__tablename__)}
     if "latitud" not in dcols:
@@ -530,6 +555,18 @@ def _parse_date(s: str):
         if pd.isna(d):
             return None
         return d.date()
+    except Exception:
+        return None
+
+
+def _parse_time(s: str):
+    if not s:
+        return None
+    s = _clean(s)
+    if not s:
+        return None
+    try:
+        return datetime.strptime(s[:5], "%H:%M").time()
     except Exception:
         return None
 
@@ -2878,8 +2915,11 @@ def manual_export_ficha_victimologica_xlsx():
             _set_pair(ws, cur, "Apellido y nombre", getattr(vict, "nombre", "") if vict else "")
             _set_pair(ws, cur, "DNI", getattr(vict, "dni", "") if vict else "")
             cur += 1
-            _set_pair(ws, cur, "Teléfono", _clean(getattr(first_row, "telefono_contacto", "")))
-            _set_pair(ws, cur, "E-mail", "")
+            _set_pair(ws, cur, "Edad", str(_edad_desde_fecha_nacimiento(getattr(vict, "fecha_nacimiento", None)) or ""))
+            _set_pair(ws, cur, "Fecha nacimiento", _fmt_date(getattr(vict, "fecha_nacimiento", None)))
+            cur += 1
+            _set_pair(ws, cur, "Teléfono", _clean(getattr(vict, "telefono", "")) or _clean(getattr(first_row, "telefono_contacto", "")))
+            _set_pair(ws, cur, "E-mail", _clean(getattr(vict, "email", "")))
             cur += 1
             _set_pair(ws, cur, "FF/SS", "")
             _set_pair(ws, cur, "Domicilio", "")
@@ -2916,16 +2956,19 @@ def manual_export_ficha_victimologica_xlsx():
                 _set_pair(ws, cur, "Fecha de carga", _fmt_dt(r.created_at))
                 cur += 1
                 _set_pair(ws, cur, "N° AP o expediente", r.expediente or "")
-                _set_pair(ws, cur, "SEPS ingreso", r.seps_ingreso or "")
+                _set_pair(ws, cur, "N° denuncia", r.numero_denuncia or "")
                 cur += 1
-                _set_pair(ws, cur, "SEPS salida", r.seps_salida or "")
-                _set_pair(ws, cur, "Fecha oficio", _fmt_date(r.fecha_oficio))
+                _set_pair(ws, cur, "N° A.P.", r.numero_ap or "")
+                _set_pair(ws, cur, "N° Expte. VIF", r.expediente or "")
+                cur += 1
+                _set_pair(ws, cur, "Fecha denuncia", _fmt_date(r.fecha_denuncia))
+                _set_pair(ws, cur, "Hora denuncia", (r.hora_denuncia.strftime("%H:%M") if getattr(r, "hora_denuncia", None) else ""))
                 cur += 1
                 _set_pair(ws, cur, "Fecha notificación (inicio)", _fmt_date(r.fecha_notificacion))
                 _set_pair(ws, cur, "Estado operativo", _manual_estado_operativo(r, cat_row=ee).replace("_", " ").title())
                 cur += 1
+                _set_pair(ws, cur, "Fiscal/Juzgado interviniente", " · ".join([x for x in [r.fiscalia or "", r.juzgado or ""] if _clean(x)]))
                 _set_pair(ws, cur, "Estado expediente", ee.nombre if ee else "")
-                _set_pair(ws, cur, "Bloquea cumplimiento", "SI" if (ee and ee.bloquea_cumplimiento) else "NO")
                 cur += 1
                 _set_pair(ws, cur, "Tipo medida", r.tipo_medida or "")
                 _set_pair(
@@ -2947,6 +2990,12 @@ def manual_export_ficha_victimologica_xlsx():
                 _set_pair(ws, cur, "Apellido y nombre acusado", acus_nombres or (acus.nombre if acus else ""))
                 _set_pair(ws, cur, "DNI acusado", acus_dnis or (acus.dni if acus else ""))
                 cur += 1
+                _set_pair(ws, cur, "Edad acusado", str(_edad_desde_fecha_nacimiento(getattr(acus, "fecha_nacimiento", None)) or ""))
+                _set_pair(ws, cur, "F. nac. acusado", _fmt_date(getattr(acus, "fecha_nacimiento", None)))
+                cur += 1
+                _set_pair(ws, cur, "Teléfono acusado", _clean(getattr(acus, "telefono", "")))
+                _set_pair(ws, cur, "E-mail acusado", _clean(getattr(acus, "email", "")))
+                cur += 1
                 _set_pair(ws, cur, "Domicilio víctima", d_vict.direccion if d_vict else "")
                 _set_pair(ws, cur, "Domicilio acusado", d_acus.direccion if d_acus else "")
                 cur += 1
@@ -2956,13 +3005,18 @@ def manual_export_ficha_victimologica_xlsx():
                 _set_pair(ws, cur, "Latitud/Longitud", latlng)
                 _set_pair(ws, cur, "Notificar", (_clean(getattr(acus, "notificar", "")) or _clean(r.acusado_notificar)).upper())
                 cur += 1
-                _set_pair(ws, cur, "Fiscalía", r.fiscalia or "")
-                _set_pair(ws, cur, "Juzgado", r.juzgado or "")
+                _set_pair(ws, cur, "SEPS ingreso", r.seps_ingreso or "")
+                _set_pair(ws, cur, "SEPS salida", r.seps_salida or "")
                 cur += 1
                 _set_pair(ws, cur, "Carátula", r.caratula or "")
                 ws.merge_cells(start_row=cur, start_column=2, end_row=cur, end_column=8)
                 ws.cell(cur, 2).alignment = Alignment(wrap_text=True, vertical="top")
                 ws.row_dimensions[cur].height = 32
+                cur += 1
+                _set_pair(ws, cur, "Breve relato del hecho", r.relato_breve_hecho or "")
+                ws.merge_cells(start_row=cur, start_column=2, end_row=cur, end_column=8)
+                ws.cell(cur, 2).alignment = Alignment(wrap_text=True, vertical="top")
+                ws.row_dimensions[cur].height = 42
                 cur += 1
                 _set_pair(ws, cur, "Observaciones", r.observaciones or "")
                 ws.merge_cells(start_row=cur, start_column=2, end_row=cur, end_column=8)
@@ -4273,6 +4327,11 @@ def manual_nuevo():
         caratula = _clean(request.form.get("caratula"))
         estado = "activa"
         tel_contacto = _clean(request.form.get("telefono_contacto"))
+        numero_denuncia = _clean(request.form.get("numero_denuncia"))
+        numero_ap = _clean(request.form.get("numero_ap"))
+        fecha_denuncia = _parse_date(_clean(request.form.get("fecha_denuncia")))
+        hora_denuncia = _parse_time(_clean(request.form.get("hora_denuncia")))
+        relato_breve_hecho = _clean(request.form.get("relato_breve_hecho"))
         seps_ingreso = _clean(request.form.get("seps_ingreso"))
         seps_salida = _clean(request.form.get("seps_salida"))
         juz_n = _names_from_catalog_ids(request.form.getlist("juzgado_id"), CatalogoJuzgado)
@@ -4341,8 +4400,13 @@ def manual_nuevo():
                 fiscalia=fiscalia,
                 fiscalia_key=_fiscalia_key(fiscalia) if fiscalia else "",
                 telefono_contacto=tel_contacto,
+                numero_denuncia=numero_denuncia or None,
+                numero_ap=numero_ap or None,
+                fecha_denuncia=fecha_denuncia,
+                hora_denuncia=hora_denuncia,
                 seps_ingreso=seps_ingreso or None,
                 seps_salida=seps_salida or None,
+                relato_breve_hecho=relato_breve_hecho or None,
                 motivo_indeterminada_id=motivo_indeterminada_id if has_indeterminada else None,
                 estado_expediente_id=ee_row.id if ee_row else None,
                 tipo_base_indeterminada=tipo_base_indeterminada if has_indeterminada else None,
@@ -4370,8 +4434,13 @@ def manual_nuevo():
             row.fiscalia = fiscalia or row.fiscalia
             row.fiscalia_key = _fiscalia_key(fiscalia) if fiscalia else (row.fiscalia_key or "")
             row.telefono_contacto = tel_contacto or row.telefono_contacto
+            row.numero_denuncia = numero_denuncia or None
+            row.numero_ap = numero_ap or None
+            row.fecha_denuncia = fecha_denuncia or row.fecha_denuncia
+            row.hora_denuncia = hora_denuncia or row.hora_denuncia
             row.seps_ingreso = seps_ingreso or None
             row.seps_salida = seps_salida or None
+            row.relato_breve_hecho = relato_breve_hecho or None
             row.motivo_indeterminada_id = motivo_indeterminada_id if has_indeterminada else None
             row.estado_expediente_id = ee_row.id if ee_row else None
             row.tipo_base_indeterminada = tipo_base_indeterminada if has_indeterminada else None
@@ -4383,7 +4452,7 @@ def manual_nuevo():
             row.estado = "activa"
             row.fecha_finalizacion = None
 
-        def _add_person_manual(nombre, dni, tipo, notificar, es_menor, fecha_nacimiento):
+        def _add_person_manual(nombre, dni, tipo, notificar, es_menor, fecha_nacimiento, telefono, email):
             nom = _clean(nombre)
             if not nom:
                 return
@@ -4399,6 +4468,8 @@ def manual_nuevo():
                 exists.notificar = _normalize_notificar(notificar, exists.notificar or "no")
                 exists.es_menor = bool(es_menor)
                 exists.fecha_nacimiento = fecha_nacimiento or None
+                exists.telefono = _clean(telefono) or None
+                exists.email = _clean(email) or None
                 return
             db.session.add(
                 ConsignaPersona(
@@ -4407,6 +4478,8 @@ def manual_nuevo():
                     nombre_key=nom_k,
                     dni=dni_n,
                     dni_key=dni_k,
+                    telefono=_clean(telefono) or None,
+                    email=_clean(email) or None,
                     fecha_nacimiento=fecha_nacimiento or None,
                     es_menor=bool(es_menor),
                     tipo=tipo,
@@ -4455,6 +4528,8 @@ def manual_nuevo():
         p_noti = request.form.getlist("persona_notificar[]")
         p_menor = request.form.getlist("persona_es_menor[]")
         p_fnac = request.form.getlist("persona_fecha_nacimiento[]")
+        p_tel = request.form.getlist("persona_telefono[]")
+        p_mail = request.form.getlist("persona_email[]")
         p_dom = request.form.getlist("persona_domicilio[]")
         p_latlng = request.form.getlist("persona_latlng[]")
         p_barrio = request.form.getlist("persona_barrio_id[]")
@@ -4465,6 +4540,8 @@ def manual_nuevo():
             len(p_noti),
             len(p_menor),
             len(p_fnac),
+            len(p_tel),
+            len(p_mail),
             len(p_dom),
             len(p_latlng),
             len(p_barrio),
@@ -4477,6 +4554,8 @@ def manual_nuevo():
             menor_raw = _clean(p_menor[i] if i < len(p_menor) else "")
             es_menor = menor_raw in {"si", "1", "true", "on"}
             fecha_nac = _parse_date(_clean(p_fnac[i] if i < len(p_fnac) else ""))
+            tel_p = _clean(p_tel[i] if i < len(p_tel) else "")
+            mail_p = _clean(p_mail[i] if i < len(p_mail) else "")
             dom = p_dom[i] if i < len(p_dom) else ""
             lat = lng = ""
             if i < len(p_latlng):
@@ -4486,7 +4565,7 @@ def manual_nuevo():
                 if ln is not None:
                     lng = str(ln)
             barr = p_barrio[i] if i < len(p_barrio) else ""
-            _add_person_manual(nombre, dni, tipo, noti, es_menor, fecha_nac)
+            _add_person_manual(nombre, dni, tipo, noti, es_menor, fecha_nac, tel_p, mail_p)
             _add_domicilio_manual(dom, tipo, lat, lng, barr)
 
         _reemplazar_dias_por_tipo(row.id, id_to_dias)
@@ -4508,8 +4587,13 @@ def manual_nuevo():
             "tipo_denuncia": row_edit.tipo_denuncia or "",
             "consigna_aplica_a": row_edit.consigna_aplica_a or "",
             "telefono_contacto": row_edit.telefono_contacto or "",
+            "numero_denuncia": row_edit.numero_denuncia or "",
+            "numero_ap": row_edit.numero_ap or "",
+            "fecha_denuncia": row_edit.fecha_denuncia.isoformat() if row_edit.fecha_denuncia else "",
+            "hora_denuncia": row_edit.hora_denuncia.strftime("%H:%M") if row_edit.hora_denuncia else "",
             "seps_ingreso": row_edit.seps_ingreso or "",
             "seps_salida": row_edit.seps_salida or "",
+            "relato_breve_hecho": row_edit.relato_breve_hecho or "",
             "motivo_indeterminada_id": row_edit.motivo_indeterminada_id or "",
             "estado_expediente_id": row_edit.estado_expediente_id or "",
             "tipo_base_indeterminada": row_edit.tipo_base_indeterminada or "",
@@ -4545,6 +4629,8 @@ def manual_nuevo():
                     "tipo": "denunciado" if pt == "denunciado" else "victima",
                     "es_menor": bool(getattr(p, "es_menor", False)),
                     "fecha_nacimiento": p.fecha_nacimiento.isoformat() if getattr(p, "fecha_nacimiento", None) else "",
+                    "telefono": _clean(getattr(p, "telefono", "")),
+                    "email": _clean(getattr(p, "email", "")),
                     "notificar": p.notificar or ("si" if pt == "denunciado" else "no"),
                     "domicilio": dsel.direccion if dsel else "",
                     "latlng": f"{dsel.latitud}, {dsel.longitud}" if dsel and dsel.latitud is not None and dsel.longitud is not None else "",

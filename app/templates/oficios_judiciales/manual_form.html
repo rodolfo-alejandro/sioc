@@ -136,8 +136,16 @@
     </div>
     <div class="col-6 col-md-2"><label class="form-label">Días total</label><input class="form-control bg-light" type="text" id="manual-dias-total" value="0" readonly autocomplete="off" title="Suma solo de días numéricos (no incluye indeterminada Sí/No)"></div>
     <div class="col-md-3"><label class="form-label">Teléfono contacto</label><input class="form-control" name="telefono_contacto" value="{{ form_data.get('telefono_contacto','') }}"></div>
+    <div class="col-md-2"><label class="form-label">N° denuncia</label><input class="form-control" name="numero_denuncia" value="{{ form_data.get('numero_denuncia','') }}"></div>
+    <div class="col-md-2"><label class="form-label">N° A.P.</label><input class="form-control" name="numero_ap" value="{{ form_data.get('numero_ap','') }}"></div>
+    <div class="col-md-2"><label class="form-label">Fecha denuncia</label><input class="form-control" type="date" name="fecha_denuncia" value="{{ form_data.get('fecha_denuncia','') }}"></div>
+    <div class="col-md-2"><label class="form-label">Hora denuncia</label><input class="form-control" type="time" name="hora_denuncia" value="{{ form_data.get('hora_denuncia','') }}"></div>
     <div class="col-md-3"><label class="form-label">SEPS ingreso</label><input class="form-control" name="seps_ingreso" placeholder="Nº expediente interno SEPS" autocomplete="off" title="Seguimiento en sistema policial (ingreso)" value="{{ form_data.get('seps_ingreso','') }}"></div>
     <div class="col-md-3"><label class="form-label">SEPS salida</label><input class="form-control" name="seps_salida" placeholder="Nº expediente interno SEPS" autocomplete="off" title="Seguimiento en sistema policial (salida)" value="{{ form_data.get('seps_salida','') }}"></div>
+    <div class="col-12">
+        <label class="form-label">Breve relato del hecho</label>
+        <textarea class="form-control" name="relato_breve_hecho" rows="3" placeholder="Resumen breve para ficha victimológica">{{ form_data.get('relato_breve_hecho','') }}</textarea>
+    </div>
 
     <div class="col-12">
         <div class="card">
@@ -402,8 +410,10 @@
             '</div>' +
             '<div class="row g-2 align-items-end mt-1">' +
             '<div class="col-md-3"><label class="form-label">Barrio</label><select class="form-select ts-barrio" name="persona_barrio_id[]">' + barrioOptionsHtml + '</select></div>' +
+            '<div class="col-md-2"><label class="form-label">Teléfono</label><input class="form-control" name="persona_telefono[]" value="' + (prefill.telefono || '') + '"></div>' +
+            '<div class="col-md-3"><label class="form-label">E-mail</label><input class="form-control" name="persona_email[]" value="' + (prefill.email || '') + '"></div>' +
             '<div class="col-md-2"><label class="form-label">¿Notificar?</label><select class="form-select" name="persona_notificar[]"><option value="si"' + ((prefill.notificar || '') === 'si' ? ' selected' : '') + '>Sí</option><option value="no"' + ((prefill.notificar || '') === 'no' ? ' selected' : '') + '>No</option></select></div>' +
-            '<div class="col-md-3"><label class="form-label">Latitud, longitud</label><div class="input-group"><input class="form-control js-persona-coords" name="persona_latlng[]" type="text" placeholder="-24.xxxxxx, -65.xxxxxx" title="Pegá desde Google Maps o tocá el mapa" autocomplete="off" value="' + (prefill.latlng || '') + '"><button class="btn btn-outline-secondary js-mapa-btn" type="button" title="Elegir en mapa"><i class="bi bi-geo-alt"></i></button></div></div>' +
+            '<div class="col-md-2"><label class="form-label">Latitud, longitud</label><div class="input-group"><input class="form-control js-persona-coords" name="persona_latlng[]" type="text" placeholder="-24.xxxxxx, -65.xxxxxx" title="Pegá desde Google Maps o tocá el mapa" autocomplete="off" value="' + (prefill.latlng || '') + '"><button class="btn btn-outline-secondary js-mapa-btn" type="button" title="Elegir en mapa"><i class="bi bi-geo-alt"></i></button></div></div>' +
             '<div class="col-md-2"><label class="form-label">Tipo</label><select class="form-select" name="persona_tipo[]"><option value="victima"' + ((prefill.tipo || '') === 'victima' ? ' selected' : '') + '>Víctima</option><option value="denunciado"' + ((prefill.tipo || '') === 'denunciado' ? ' selected' : '') + '>Acusado</option></select></div>' +
             '<div class="col-md-1"><label class="form-label">Menor</label><select class="form-select" name="persona_es_menor[]"><option value="no"' + ((prefill.es_menor ? '' : ' selected')) + '>No</option><option value="si"' + ((prefill.es_menor ? ' selected' : '')) + '>Sí</option></select></div>' +
             '<div class="col-md-1"><label class="form-label d-block">&nbsp;</label><button class="btn btn-outline-danger w-100 btn-sm js-del" type="button">Quitar</button></div>' +
