@@ -1,0 +1,133 @@
+{% extends "layouts/base.html" %}
+{% block title %}Dashboard Análisis de Intervenciones - SIOC{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/analisis_intervenciones.css') }}">
+{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-bar-chart-line"></i> Dashboard de intervenciones</h1>
+  <p class="text-muted">Comparativo anual de allanamientos, procedimientos, secuestros, dinero y personas intervenidas.</p>
+</div>
+
+{% include "analisis_intervenciones/_filtros.html" %}
+
+<div class="d-flex gap-2 my-2 flex-wrap">
+  {% if can_view %}<a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_intervenciones.listado', **request.args) }}">Listado</a>{% endif %}
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-md-2"><div class="card ai-kpi-card"><div class="card-body"><div>Total</div><div class="value">{{ kpis.total|number_format }}</div></div></div></div>
+  <div class="col-md-2"><div class="card ai-kpi-card"><div class="card-body"><div>Allanamientos</div><div class="value">{{ kpis.allanamientos|number_format }}</div></div></div></div>
+  <div class="col-md-2"><div class="card ai-kpi-card"><div class="card-body"><div>Procedimientos</div><div class="value">{{ kpis.procedimientos|number_format }}</div></div></div></div>
+  <div class="col-md-2"><div class="card ai-kpi-card"><div class="card-body"><div>Marihuana</div><div class="value">{{ fmt_float(kpis.marihuana) }}</div></div></div></div>
+  <div class="col-md-2"><div class="card ai-kpi-card"><div class="card-body"><div>Cocaína</div><div class="value">{{ fmt_float(kpis.cocaina) }}</div></div></div></div>
+  <div class="col-md-2"><div class="card ai-kpi-card"><div class="card-body"><div>Det./Ident.</div><div class="value">{{ kpis.detenidos|number_format }}/{{ kpis.identificados|number_format }}</div></div></div></div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header">
+    <h6 class="mb-0">Comparativo anual</h6>
+  </div>
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Año</th>
+            <th>Total</th>
+            <th>Allanamientos</th>
+            <th>Procedimientos</th>
+            <th>Marihuana</th>
+            <th>Cocaína</th>
+            <th>Plantas</th>
+            <th>Pesos</th>
+            <th>Detenidos</th>
+            <th>Identificados</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in comparativo_anual %}
+          <tr>
+            <td>{{ row.anio }}</td>
+            <td>{{ row.total|number_format }}</td>
+            <td>{{ row.allanamientos|number_format }}</td>
+            <td>{{ row.procedimientos|number_format }}</td>
+            <td>{{ fmt_float(row.marihuana) }}</td>
+            <td>{{ fmt_float(row.cocaina) }}</td>
+            <td>{{ fmt_float(row.plantas) }}</td>
+            <td>{{ fmt_float(row.pesos_arg) }}</td>
+            <td>{{ row.detenidos|number_format }}</td>
+            <td>{{ row.identificados|number_format }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="10" class="text-center text-muted">Sin datos para los filtros actuales.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-12"><div class="card"><div class="card-header">Intervenciones por año</div><div class="card-body"><div id="ai-chart-anio-total" style="height: 320px;"></div></div></div></div>
+  <div class="col-12"><div class="card"><div class="card-header">Tipo de intervención por año</div><div class="card-body"><div id="ai-chart-tipo-anio" style="height: 360px;"></div></div></div></div>
+  <div class="col-12"><div class="card"><div class="card-header">Evolución mensual comparada</div><div class="card-body"><div id="ai-chart-mensual" style="height: 360px;"></div></div></div></div>
+  <div class="col-12"><div class="card"><div class="card-header">Totales por trimestre</div><div class="card-body"><div id="ai-chart-trimestral" style="height: 320px;"></div></div></div></div>
+  <div class="col-lg-4"><div class="card"><div class="card-header">DINAR (Zona)</div><div class="card-body"><div id="ai-chart-zonas" style="height: 420px;"></div></div></div></div>
+  <div class="col-lg-4"><div class="card"><div class="card-header">SINAR</div><div class="card-body"><div id="ai-chart-sinares" style="height: 420px;"></div></div></div></div>
+  <div class="col-lg-4"><div class="card"><div class="card-header">Departamento operativo</div><div class="card-body"><div id="ai-chart-depops" style="height: 420px;"></div></div></div></div>
+  <div class="col-lg-6"><div class="card"><div class="card-header">Tipos de intervención</div><div class="card-body"><div id="ai-chart-tipos" style="height: 320px;"></div></div></div></div>
+  <div class="col-lg-6"><div class="card"><div class="card-header">Localidades con más intervenciones</div><div class="card-body"><div id="ai-chart-localidades" style="height: 320px;"></div></div></div></div>
+  <div class="col-lg-6"><div class="card"><div class="card-header">Sustancias secuestradas</div><div class="card-body"><div id="ai-chart-secuestros" style="height: 320px;"></div></div></div></div>
+  <div class="col-lg-6"><div class="card"><div class="card-header">Dinero secuestrado</div><div class="card-body"><div id="ai-chart-dinero" style="height: 320px;"></div></div></div></div>
+  <div class="col-12"><div class="card"><div class="card-header">Detenidos e identificados por sexo/mayoría</div><div class="card-body"><div id="ai-chart-personas" style="height: 360px;"></div></div></div></div>
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header">Top DINAR</div>
+      <div class="card-body">
+        <ol class="mb-0">
+          {% for item in ranking_zonas[:10] %}
+          <li>{{ item.label }}: {{ item.value|number_format }}</li>
+          {% else %}
+          <li class="text-muted">Sin datos.</li>
+          {% endfor %}
+        </ol>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header">Top SINAR</div>
+      <div class="card-body">
+        <ol class="mb-0">
+          {% for item in ranking_sinares[:10] %}
+          <li>{{ item.label }}: {{ item.value|number_format }}</li>
+          {% else %}
+          <li class="text-muted">Sin datos.</li>
+          {% endfor %}
+        </ol>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header">Top departamento operativo</div>
+      <div class="card-body">
+        <ol class="mb-0">
+          {% for item in ranking_depops[:10] %}
+          <li>{{ item.label }}: {{ item.value|number_format }}</li>
+          {% else %}
+          <li class="text-muted">Sin datos.</li>
+          {% endfor %}
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<textarea id="ai-dashboard-data" class="d-none">{{ datos_json }}</textarea>
+{% endblock %}
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/analisis_intervenciones_filtros.js') }}"></script>
+<script src="{{ url_for('static', filename='js/analisis_intervenciones_dashboard.js') }}"></script>
+{% endblock %}

@@ -160,6 +160,27 @@
                 </li>
                 {% endif %}
 
+                <!-- Análisis de Intervenciones -->
+                {% if current_user.has_permission('ANALISIS_INTERVENCIONES_VIEW') or current_user.has_permission('ANALISIS_INTERVENCIONES_IMPORT') %}
+                <li class="nav-item">
+                    <a class="nav-link" href="#" data-bs-toggle="collapse" data-bs-target="#submenuAnalisisIntervenciones">
+                        <i class="bi bi-diagram-3"></i> Análisis Intervenciones
+                        <i class="bi bi-chevron-down ms-auto"></i>
+                    </a>
+                    <ul class="nav flex-column collapse" id="submenuAnalisisIntervenciones">
+                        {% if current_user.has_permission('ANALISIS_INTERVENCIONES_VIEW') %}
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('analisis_intervenciones.listado') }}"><i class="bi bi-table"></i> Listado</a></li>
+                        {% endif %}
+                        {% if current_user.has_permission('ANALISIS_INTERVENCIONES_DASHBOARD') %}
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('analisis_intervenciones.dashboard') }}"><i class="bi bi-bar-chart-line"></i> Dashboard</a></li>
+                        {% endif %}
+                        {% if current_user.has_permission('ANALISIS_INTERVENCIONES_IMPORT') %}
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('analisis_intervenciones.importar') }}"><i class="bi bi-cloud-upload"></i> Importar CSV</a></li>
+                        {% endif %}
+                    </ul>
+                </li>
+                {% endif %}
+
                 <!-- Oficios Judiciales -->
                 {% if current_user.has_permission('OFICIOS_JUDICIALES_VIEW') or current_user.has_permission('OFICIOS_JUDICIALES_UPLOAD') %}
                 <li class="nav-item">

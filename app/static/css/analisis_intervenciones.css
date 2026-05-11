@@ -1,0 +1,20 @@
+.ai-kpi-card .value {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.ai-filtros .form-label {
+  font-size: 0.85rem;
+  margin-bottom: 0.2rem;
+}
+
+.ai-filtros .form-control-sm,
+.ai-filtros .form-select-sm,
+.ai-filtros .btn-sm {
+  font-size: 0.83rem;
+}
+
+.ai-pre {
+  white-space: pre-wrap;
+  line-height: 1.35;
+}

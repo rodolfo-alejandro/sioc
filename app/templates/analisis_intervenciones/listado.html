@@ -1,0 +1,97 @@
+{% extends "layouts/base.html" %}
+{% block title %}Listado Análisis de Intervenciones - SIOC{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/analisis_intervenciones.css') }}">
+{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-table"></i> Análisis de intervenciones</h1>
+  <p class="text-muted">Listado filtrable de allanamientos y procedimientos importados por año.</p>
+</div>
+
+{% include "analisis_intervenciones/_filtros.html" %}
+
+<div class="d-flex gap-2 my-2 flex-wrap">
+  {% if can_import %}<a class="btn btn-outline-primary btn-sm" href="{{ url_for('analisis_intervenciones.importar') }}">Importar CSV</a>{% endif %}
+  {% if can_dashboard %}<a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_intervenciones.dashboard', **request.args) }}">Dashboard</a>{% endif %}
+  {% if can_export %}
+    <a class="btn btn-outline-success btn-sm" href="{{ url_for('analisis_intervenciones.export_csv', **request.args) }}">CSV</a>
+    <a class="btn btn-outline-success btn-sm" href="{{ url_for('analisis_intervenciones.export_xlsx', **request.args) }}">Excel</a>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="card-header d-flex justify-content-between">
+    <h6 class="mb-0">Resultados</h6>
+    <span class="badge bg-light text-dark border">Total: {{ total|number_format }}</span>
+  </div>
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-sm align-middle">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Tipo</th>
+            <th>DINAR</th>
+            <th>SINAR</th>
+            <th>Dpto operativo</th>
+            <th>Localidad / Barrio</th>
+            <th>Secuestros</th>
+            <th>Personas</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+          <tr>
+            <td>
+              <div>{{ r.interv_fecha.strftime('%d/%m/%Y') if r.interv_fecha else '—' }}</div>
+              <div class="small text-muted">{{ r.interv_hora.strftime('%H:%M') if r.interv_hora else '—' }} · {{ r.anio or '—' }}</div>
+            </td>
+            <td>
+              <div>{{ r.tipo_interv_desc or '—' }}</div>
+              <div class="small text-muted">{{ r.causa_escala or '—' }} / {{ r.causa_actividad or '—' }}</div>
+            </td>
+            <td>{{ r.zona or '—' }}</td>
+            <td>{{ r.dep_interviniente or '—' }}</td>
+            <td>{{ r.departamento_operativo or '—' }}</td>
+            <td>
+              <div>{{ r.localidad_nombre or '—' }}</div>
+              <div class="small text-muted">{{ r.barrios_nombre or '—' }}</div>
+            </td>
+            <td class="small">
+              <div>Marihuana: {{ '%.2f'|format(r.secuestro_marihuana or 0) }}</div>
+              <div>Cocaína: {{ '%.2f'|format(r.secuestro_cocaina or 0) }}</div>
+            </td>
+            <td class="small">
+              <div>Det.: {{ total_detenidos(r)|number_format }}</div>
+              <div>Ident.: {{ total_identificados(r)|number_format }}</div>
+            </td>
+            <td><a class="btn btn-outline-primary btn-sm" href="{{ url_for('analisis_intervenciones.detalle', intervencion_id=r.id) }}">Detalle</a></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="9" class="text-muted text-center">Sin resultados.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<nav class="mt-3">
+  <ul class="pagination pagination-sm">
+    {% set prev_page = page - 1 %}
+    {% set next_page = page + 1 %}
+    <li class="page-item {% if page <= 1 %}disabled{% endif %}">
+      <a class="page-link" href="{{ url_for('analisis_intervenciones.listado') }}?{{ qs_no_page }}{% if qs_no_page %}&{% endif %}page={{ prev_page }}">Anterior</a>
+    </li>
+    <li class="page-item disabled"><span class="page-link">Página {{ page }} / {{ pages }}</span></li>
+    <li class="page-item {% if page >= pages %}disabled{% endif %}">
+      <a class="page-link" href="{{ url_for('analisis_intervenciones.listado') }}?{{ qs_no_page }}{% if qs_no_page %}&{% endif %}page={{ next_page }}">Siguiente</a>
+    </li>
+  </ul>
+</nav>
+{% endblock %}
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/analisis_intervenciones_filtros.js') }}"></script>
+{% endblock %}

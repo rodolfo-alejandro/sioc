@@ -1,0 +1,147 @@
+<div class="card mb-3 ai-filtros sabana-filtros-top">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <h6 class="mb-0">Filtros avanzados</h6>
+    <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#ai-filtros-collapse">
+      Mostrar / Ocultar
+    </button>
+  </div>
+  <div class="collapse" id="ai-filtros-collapse">
+    <div class="card-body">
+      <form method="get" class="row g-2" id="ai-form-filtros">
+        <div class="col-lg-3 col-md-6">
+          <label class="form-label">Superbuscador</label>
+          <input type="text" class="form-control form-control-sm" name="q" value="{{ selected.q }}" placeholder="causa, DINAR, SINAR, localidad, barrio...">
+        </div>
+        <div class="col-lg-2 col-md-3">
+          <label class="form-label">Fecha desde</label>
+          <input type="date" class="form-control form-control-sm" name="fecha_desde" value="{{ selected.fecha_desde }}">
+        </div>
+        <div class="col-lg-2 col-md-3">
+          <label class="form-label">Fecha hasta</label>
+          <input type="date" class="form-control form-control-sm" name="fecha_hasta" value="{{ selected.fecha_hasta }}">
+        </div>
+
+        <div class="col-lg-2 col-md-4">
+          <label class="form-label">Años</label>
+          <button class="btn btn-outline-secondary btn-sm w-100 sabana-dd-btn text-start text-truncate" type="button" id="dd-ai-anios" data-bs-toggle="dropdown" data-bs-auto-close="outside">Años...</button>
+          <div class="dropdown-menu p-2 sabana-dd-menu w-100">
+            <input type="text" class="form-control form-control-sm mb-1 sabana-dd-search" placeholder="Buscar año..." data-target="ai-filtro-anios">
+            <div id="ai-filtro-anios" class="sabana-filtro-checkboxes sabana-dd-list">
+              {% for x in filtros.anios %}
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" value="{{ x }}" id="ai-anio-{{ loop.index }}" {% if x in selected.anios %}checked{% endif %}>
+                <label class="form-check-label" for="ai-anio-{{ loop.index }}">{{ x }}</label>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-3 col-md-4">
+          <label class="form-label">DINAR (Zona)</label>
+          <button class="btn btn-outline-secondary btn-sm w-100 sabana-dd-btn text-start text-truncate" type="button" id="dd-ai-zonas" data-bs-toggle="dropdown" data-bs-auto-close="outside">DINAR...</button>
+          <div class="dropdown-menu p-2 sabana-dd-menu w-100">
+            <input type="text" class="form-control form-control-sm mb-1 sabana-dd-search" placeholder="Buscar DINAR..." data-target="ai-filtro-zonas">
+            <div id="ai-filtro-zonas" class="sabana-filtro-checkboxes sabana-dd-list">
+              {% for x in filtros.zonas %}
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" value="{{ x }}" id="ai-zona-{{ loop.index }}" {% if x in selected.zonas %}checked{% endif %}>
+                <label class="form-check-label" for="ai-zona-{{ loop.index }}">{{ x }}</label>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-3 col-md-4">
+          <label class="form-label">SINAR</label>
+          <button class="btn btn-outline-secondary btn-sm w-100 sabana-dd-btn text-start text-truncate" type="button" id="dd-ai-sinares" data-bs-toggle="dropdown" data-bs-auto-close="outside">SINAR...</button>
+          <div class="dropdown-menu p-2 sabana-dd-menu w-100">
+            <input type="text" class="form-control form-control-sm mb-1 sabana-dd-search" placeholder="Buscar SINAR..." data-target="ai-filtro-sinares">
+            <div id="ai-filtro-sinares" class="sabana-filtro-checkboxes sabana-dd-list">
+              {% for x in filtros.sinares %}
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" value="{{ x }}" id="ai-sinar-{{ loop.index }}" {% if x in selected.sinares %}checked{% endif %}>
+                <label class="form-check-label" for="ai-sinar-{{ loop.index }}">{{ x }}</label>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-2 col-md-4">
+          <label class="form-label">Dpto operativo</label>
+          <button class="btn btn-outline-secondary btn-sm w-100 sabana-dd-btn text-start text-truncate" type="button" id="dd-ai-depops" data-bs-toggle="dropdown" data-bs-auto-close="outside">Dpto operativo...</button>
+          <div class="dropdown-menu p-2 sabana-dd-menu w-100">
+            <input type="text" class="form-control form-control-sm mb-1 sabana-dd-search" placeholder="Buscar DOZ..." data-target="ai-filtro-depops">
+            <div id="ai-filtro-depops" class="sabana-filtro-checkboxes sabana-dd-list">
+              {% for x in filtros.departamentos_operativos %}
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" value="{{ x }}" id="ai-depop-{{ loop.index }}" {% if x in selected.departamentos_operativos %}checked{% endif %}>
+                <label class="form-check-label" for="ai-depop-{{ loop.index }}">{{ x }}</label>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-3 col-md-4">
+          <label class="form-label">Tipo intervención</label>
+          <button class="btn btn-outline-secondary btn-sm w-100 sabana-dd-btn text-start text-truncate" type="button" id="dd-ai-tipos" data-bs-toggle="dropdown" data-bs-auto-close="outside">Tipos...</button>
+          <div class="dropdown-menu p-2 sabana-dd-menu w-100">
+            <input type="text" class="form-control form-control-sm mb-1 sabana-dd-search" placeholder="Buscar tipo..." data-target="ai-filtro-tipos">
+            <div id="ai-filtro-tipos" class="sabana-filtro-checkboxes sabana-dd-list">
+              {% for x in filtros.tipos_interv %}
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" value="{{ x }}" id="ai-tipo-{{ loop.index }}" {% if x in selected.tipos_interv %}checked{% endif %}>
+                <label class="form-check-label" for="ai-tipo-{{ loop.index }}">{{ x }}</label>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-2 col-md-4">
+          <label class="form-label">Localidad</label>
+          <button class="btn btn-outline-secondary btn-sm w-100 sabana-dd-btn text-start text-truncate" type="button" id="dd-ai-localidades" data-bs-toggle="dropdown" data-bs-auto-close="outside">Localidades...</button>
+          <div class="dropdown-menu p-2 sabana-dd-menu w-100">
+            <input type="text" class="form-control form-control-sm mb-1 sabana-dd-search" placeholder="Buscar localidad..." data-target="ai-filtro-localidades">
+            <div id="ai-filtro-localidades" class="sabana-filtro-checkboxes sabana-dd-list">
+              {% for x in filtros.localidades %}
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" value="{{ x }}" id="ai-localidad-{{ loop.index }}" {% if x in selected.localidades %}checked{% endif %}>
+                <label class="form-check-label" for="ai-localidad-{{ loop.index }}">{{ x }}</label>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-3 col-md-4">
+          <label class="form-label">Barrio</label>
+          <button class="btn btn-outline-secondary btn-sm w-100 sabana-dd-btn text-start text-truncate" type="button" id="dd-ai-barrios" data-bs-toggle="dropdown" data-bs-auto-close="outside">Barrios...</button>
+          <div class="dropdown-menu p-2 sabana-dd-menu w-100">
+            <input type="text" class="form-control form-control-sm mb-1 sabana-dd-search" placeholder="Buscar barrio..." data-target="ai-filtro-barrios">
+            <div id="ai-filtro-barrios" class="sabana-filtro-checkboxes sabana-dd-list">
+              {% for x in filtros.barrios %}
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" value="{{ x }}" id="ai-barrio-{{ loop.index }}" {% if x in selected.barrios %}checked{% endif %}>
+                <label class="form-check-label" for="ai-barrio-{{ loop.index }}">{{ x }}</label>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-1 col-md-3 d-grid">
+          <label class="form-label">&nbsp;</label>
+          <button class="btn btn-primary btn-sm" type="submit">Aplicar</button>
+        </div>
+        <div class="col-lg-1 col-md-3 d-grid">
+          <label class="form-label">&nbsp;</label>
+          <a class="btn btn-outline-secondary btn-sm" href="{{ request.path }}">Limpiar</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

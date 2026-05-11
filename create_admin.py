@@ -120,6 +120,11 @@ def create_seed_data():
             ('LLAMADAS_SE_EXPORT', 'Exportar llamadas SE filtradas'),
             ('LLAMADAS_SE_DASHBOARD', 'Ver dashboard de llamadas SE'),
             ('LLAMADAS_SE_MAPA', 'Ver mapa de llamadas SE'),
+            # Analisis de intervenciones
+            ('ANALISIS_INTERVENCIONES_VIEW', 'Ver análisis de intervenciones'),
+            ('ANALISIS_INTERVENCIONES_IMPORT', 'Importar intervenciones desde CSV'),
+            ('ANALISIS_INTERVENCIONES_EXPORT', 'Exportar intervenciones filtradas'),
+            ('ANALISIS_INTERVENCIONES_DASHBOARD', 'Ver dashboard de intervenciones'),
             # Capacitaciones / seminarios
             ('CAPACITACIONES_VIEW', 'Ver módulo de capacitaciones, padrón e informes'),
             ('CAPACITACIONES_ADMIN', 'Gestionar padrón, eventos, inscriptos y momentos de asistencia'),
@@ -183,6 +188,8 @@ def create_seed_data():
                           'OFICIOS_JUDICIALES_VIEW', 'OFICIOS_JUDICIALES_UPLOAD', 'OFICIOS_JUDICIALES_EXPORT',
                           'LLAMADAS_SE_VIEW', 'LLAMADAS_SE_IMPORT', 'LLAMADAS_SE_EXPORT',
                           'LLAMADAS_SE_DASHBOARD', 'LLAMADAS_SE_MAPA',
+                          'ANALISIS_INTERVENCIONES_VIEW', 'ANALISIS_INTERVENCIONES_IMPORT',
+                          'ANALISIS_INTERVENCIONES_EXPORT', 'ANALISIS_INTERVENCIONES_DASHBOARD',
                           'CAPACITACIONES_VIEW', 'CAPACITACIONES_ADMIN', 'CAPACITACIONES_ASISTENCIA']
             for perm_code in admin_perms:
                 if perm_code in permisos_creados:
@@ -203,7 +210,9 @@ def create_seed_data():
                 'DENUNCIAS_WEB_DASHBOARD', 'DENUNCIAS_WEB_MAPA',
                 'OFICIOS_JUDICIALES_VIEW', 'OFICIOS_JUDICIALES_UPLOAD', 'OFICIOS_JUDICIALES_EXPORT',
                 'LLAMADAS_SE_VIEW', 'LLAMADAS_SE_IMPORT', 'LLAMADAS_SE_EXPORT',
-                'LLAMADAS_SE_DASHBOARD', 'LLAMADAS_SE_MAPA'
+                'LLAMADAS_SE_DASHBOARD', 'LLAMADAS_SE_MAPA',
+                'ANALISIS_INTERVENCIONES_VIEW', 'ANALISIS_INTERVENCIONES_IMPORT',
+                'ANALISIS_INTERVENCIONES_EXPORT', 'ANALISIS_INTERVENCIONES_DASHBOARD',
             ]
             for perm_code in analista_perms:
                 if perm_code in permisos_creados:

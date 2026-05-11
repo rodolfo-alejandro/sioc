@@ -1,0 +1,91 @@
+{% extends "layouts/base.html" %}
+{% block title %}Detalle Intervención - SIOC{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/analisis_intervenciones.css') }}">
+{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-file-earmark-text"></i> Detalle intervención #{{ row.causas_interv_id }}</h1>
+</div>
+
+<div class="d-flex gap-2 mb-3">
+  <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_intervenciones.listado') }}">Volver</a>
+  {% if row.zona %}
+  <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_intervenciones.listado', **{'zona[]': [row.zona]}) }}">Ver mismo DINAR</a>
+  {% endif %}
+</div>
+
+<div class="row g-3">
+  <div class="col-md-6">
+    <div class="card"><div class="card-header"><h6 class="mb-0">Datos principales</h6></div><div class="card-body">
+      <div><strong>Causa:</strong> {{ row.causas_id or '—' }}</div>
+      <div><strong>Intervención:</strong> {{ row.causas_interv_id or '—' }}</div>
+      <div><strong>Fecha:</strong> {{ fecha_hora|localtime('%d/%m/%Y %H:%M') if fecha_hora else '—' }}</div>
+      <div><strong>Tipo:</strong> {{ row.tipo_interv_desc or '—' }}</div>
+      <div><strong>Escala / Actividad:</strong> {{ row.causa_escala or '—' }} / {{ row.causa_actividad or '—' }}</div>
+      <div><strong>Operativo:</strong> {{ row.tipo_operativo or '—' }}</div>
+      <div><strong>Día / Mes / Trimestre:</strong> {{ row.interv_dia_semana or '—' }} / {{ row.interv_mes or '—' }} / {{ row.interv_trimestre or '—' }}</div>
+    </div></div>
+  </div>
+  <div class="col-md-6">
+    <div class="card"><div class="card-header"><h6 class="mb-0">Ubicación y orgánica</h6></div><div class="card-body">
+      <div><strong>DINAR:</strong> {{ row.zona or '—' }}</div>
+      <div><strong>SINAR:</strong> {{ row.dep_interviniente or '—' }}</div>
+      <div><strong>Departamento operativo:</strong> {{ row.departamento_operativo or '—' }}</div>
+      <div><strong>Distrito:</strong> {{ row.distrito or '—' }}</div>
+      <div><strong>Dependencia policial:</strong> {{ row.dep_policial or '—' }}</div>
+      <div><strong>Localidad / Barrio:</strong> {{ row.localidad_nombre or '—' }} / {{ row.barrios_nombre or '—' }}</div>
+      <div><strong>Coord:</strong> {{ row.coordx if row.coordx is not none else '—' }}, {{ row.coordy if row.coordy is not none else '—' }}</div>
+    </div></div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card"><div class="card-header"><h6 class="mb-0">Secuestros ampliados</h6></div><div class="card-body">
+      {% for label, value in secuestros %}
+      <div class="d-flex justify-content-between border-bottom py-1">
+        <span>{{ label }}</span>
+        <strong>{{ fmt_float(value) }}</strong>
+      </div>
+      {% endfor %}
+    </div></div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card"><div class="card-header"><h6 class="mb-0">Dinero secuestrado</h6></div><div class="card-body">
+      {% for label, value in dinero %}
+      <div class="d-flex justify-content-between border-bottom py-1">
+        <span>{{ label }}</span>
+        <strong>{{ fmt_float(value) }}</strong>
+      </div>
+      {% endfor %}
+    </div></div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card"><div class="card-header"><h6 class="mb-0">Personas detenidas</h6></div><div class="card-body">
+      <div><strong>Hombre mayor:</strong> {{ row.det_hombre_may|number_format }}</div>
+      <div><strong>Hombre menor:</strong> {{ row.det_hombre_men|number_format }}</div>
+      <div><strong>Mujer mayor:</strong> {{ row.det_mujer_may|number_format }}</div>
+      <div><strong>Mujer menor:</strong> {{ row.det_mujer_men|number_format }}</div>
+      <div class="mt-2"><strong>Total detenidos:</strong> {{ total_detenidos|number_format }}</div>
+    </div></div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card"><div class="card-header"><h6 class="mb-0">Personas identificadas / supeditadas</h6></div><div class="card-body">
+      <div><strong>Hombre mayor:</strong> {{ row.is_hombre_may|number_format }}</div>
+      <div><strong>Hombre menor:</strong> {{ row.is_hombre_men|number_format }}</div>
+      <div><strong>Mujer mayor:</strong> {{ row.is_mujer_may|number_format }}</div>
+      <div><strong>Mujer menor:</strong> {{ row.is_mujer_men|number_format }}</div>
+      <div class="mt-2"><strong>Total identificados:</strong> {{ total_identificados|number_format }}</div>
+    </div></div>
+  </div>
+
+  <div class="col-12">
+    <div class="card"><div class="card-header"><h6 class="mb-0">Interviniente / usuario de carga</h6></div><div class="card-body">
+      <div class="ai-pre">{{ row.pers_interviniente or '—' }}</div>
+      <div class="small text-muted mt-2">Usuario carga: {{ row.us_carga or '—' }}</div>
+    </div></div>
+  </div>
+</div>
+{% endblock %}
