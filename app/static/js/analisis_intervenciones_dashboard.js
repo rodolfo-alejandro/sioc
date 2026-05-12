@@ -15,6 +15,15 @@
     });
   }
 
+  function escapeHtml(value) {
+    return String(value == null ? "" : value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
   var PLOT_CONFIG = {
     responsive: true,
     displayModeBar: false,
@@ -51,15 +60,17 @@
     }, PLOT_CONFIG);
   }
 
-  function groupedBar(elId, data) {
+  function groupedBar(elId, data, options) {
     if (!window.Plotly || !data || !data.categories || !data.series || !data.series.length) return;
+    options = options || {};
+    var digits = (typeof options.digits === "number") ? options.digits : 0;
     var traces = data.series.map(function (serie) {
       return {
         type: "bar",
         name: serie.name,
         x: data.categories,
         y: serie.values,
-        text: serie.values.map(function (v) { return formatNumber(v, 0); }),
+        text: serie.values.map(function (v) { return formatNumber(v, digits); }),
         textposition: "outside",
         cliponaxis: false,
       };
@@ -72,13 +83,67 @@
     }, PLOT_CONFIG);
   }
 
+  function renderDimensionTable(bundle, labels) {
+    var tbody = byId("ai-dim-table-body");
+    var labelHead = byId("ai-dim-table-label");
+    if (labelHead) labelHead.textContent = labels.label;
+    if (!tbody) return;
+    var rows = (bundle && bundle.table_rows) || [];
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted">Sin datos.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map(function (row) {
+      return [
+        "<tr>",
+        "<td>" + escapeHtml(row.label) + "</td>",
+        "<td>" + escapeHtml(row.anio) + "</td>",
+        "<td>" + formatNumber(row.total, 0) + "</td>",
+        "<td>" + formatNumber(row.allanamientos, 0) + "</td>",
+        "<td>" + formatNumber(row.causas_allanadas, 0) + "</td>",
+        "<td>" + formatNumber(row.procedimientos, 0) + "</td>",
+        "<td>" + formatNumber(row.marihuana, 2) + "</td>",
+        "<td>" + formatNumber(row.cocaina, 2) + "</td>",
+        "<td>" + formatNumber(row.pesos_arg, 2) + "</td>",
+        "<td>" + formatNumber(row.detenidos, 0) + "</td>",
+        "<td>" + formatNumber(row.identificados, 0) + "</td>",
+        "</tr>"
+      ].join("");
+    }).join("");
+  }
+
   function renderDimensionCompare(data, key) {
     var map = {
-      depops: data.chart_compare_depops || {},
-      sinares: data.chart_compare_sinares || {},
-      zonas: data.chart_compare_zonas || {}
+      depops: {
+        label: "Departamento operativo",
+        title: "Comparativo anual por departamento operativo",
+        bundle: (data.dimension_compare || {}).depops || {}
+      },
+      sinares: {
+        label: "SINAR / División",
+        title: "Comparativo anual por SINAR / División",
+        bundle: (data.dimension_compare || {}).sinares || {}
+      },
+      zonas: {
+        label: "DINAR",
+        title: "Comparativo anual por DINAR",
+        bundle: (data.dimension_compare || {}).zonas || {}
+      }
     };
-    groupedBar("ai-chart-dimension-compare", map[key] || map.depops || {});
+    var selected = map[key] || map.depops;
+    var title = byId("ai-dim-compare-title");
+    if (title) title.textContent = selected.title;
+    var metrics = (selected.bundle && selected.bundle.metrics) || {};
+    groupedBar("ai-dim-chart-total", metrics.total || {}, { digits: 0 });
+    groupedBar("ai-dim-chart-allanamientos", metrics.allanamientos || {}, { digits: 0 });
+    groupedBar("ai-dim-chart-causas-allanadas", metrics.causas_allanadas || {}, { digits: 0 });
+    groupedBar("ai-dim-chart-procedimientos", metrics.procedimientos || {}, { digits: 0 });
+    groupedBar("ai-dim-chart-marihuana", metrics.marihuana || {}, { digits: 2 });
+    groupedBar("ai-dim-chart-cocaina", metrics.cocaina || {}, { digits: 2 });
+    groupedBar("ai-dim-chart-pesos", metrics.pesos_arg || {}, { digits: 2 });
+    groupedBar("ai-dim-chart-detenidos", metrics.detenidos || {}, { digits: 0 });
+    groupedBar("ai-dim-chart-identificados", metrics.identificados || {}, { digits: 0 });
+    renderDimensionTable(selected.bundle, selected);
   }
 
   function wireDimensionToggle(data) {
@@ -127,19 +192,12 @@
     bar("ai-chart-anio-plantines", data.chart_anio_plantines || [], "#6610f2", { digits: 2 });
     bar("ai-chart-anio-semillas", data.chart_anio_semillas || [], "#6f42c1", { digits: 2 });
     bar("ai-chart-anio-hojas-coca", data.chart_anio_hojas_coca || [], "#fd7e14", { digits: 2 });
+    bar("ai-chart-anio-pesos", data.chart_anio_pesos || [], "#198754", { digits: 2 });
     bar("ai-chart-anio-detenidos", data.chart_anio_detenidos || [], "#6c757d", { digits: 0 });
     bar("ai-chart-anio-identificados", data.chart_anio_identificados || [], "#0dcaf0", { digits: 0 });
     wireDimensionToggle(data);
     multiLine("ai-chart-mensual", data.chart_mensual_por_anio || {});
-    groupedBar("ai-chart-trimestral", data.chart_trimestral_por_anio || {});
-    bar("ai-chart-zonas", data.chart_zonas || [], "#0d6efd", { horizontal: true, digits: 0 });
-    bar("ai-chart-sinares", data.chart_sinares || [], "#6f42c1", { horizontal: true, digits: 0 });
-    bar("ai-chart-depops", data.chart_depops || [], "#fd7e14", { horizontal: true, digits: 0 });
-    bar("ai-chart-tipos", data.chart_tipos || [], "#20c997", { digits: 0 });
-    bar("ai-chart-secuestros", data.chart_secuestros || [], "#dc3545", { digits: 2 });
-    bar("ai-chart-dinero", data.chart_dinero || [], "#198754", { digits: 2 });
-    bar("ai-chart-localidades", data.chart_localidades || [], "#6610f2", { horizontal: true, digits: 0 });
-    bar("ai-chart-personas", data.chart_personas || [], "#6c757d", { digits: 0 });
+    groupedBar("ai-chart-trimestral", data.chart_trimestral_por_anio || {}, { digits: 0 });
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);

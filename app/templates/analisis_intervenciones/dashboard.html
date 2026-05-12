@@ -82,12 +82,13 @@
   <div class="col-md-6"><div class="card"><div class="card-header">Plantines por año</div><div class="card-body"><div id="ai-chart-anio-plantines" style="height: 320px;"></div></div></div></div>
   <div class="col-md-6"><div class="card"><div class="card-header">Semillas por año</div><div class="card-body"><div id="ai-chart-anio-semillas" style="height: 320px;"></div></div></div></div>
   <div class="col-md-6"><div class="card"><div class="card-header">Hojas de coca por año</div><div class="card-body"><div id="ai-chart-anio-hojas-coca" style="height: 320px;"></div></div></div></div>
+  <div class="col-md-6"><div class="card"><div class="card-header">Pesos Arg por año</div><div class="card-body"><div id="ai-chart-anio-pesos" style="height: 320px;"></div></div></div></div>
   <div class="col-md-6"><div class="card"><div class="card-header">Detenidos por año</div><div class="card-body"><div id="ai-chart-anio-detenidos" style="height: 320px;"></div></div></div></div>
   <div class="col-md-6"><div class="card"><div class="card-header">Identificados por año</div><div class="card-body"><div id="ai-chart-anio-identificados" style="height: 320px;"></div></div></div></div>
   <div class="col-12">
     <div class="card">
       <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <span>Comparativo anual por dependencia</span>
+        <span id="ai-dim-compare-title">Comparativo anual por dependencia</span>
         <div class="btn-group btn-group-sm" role="group">
           <input type="radio" class="btn-check" name="ai-dim-mode" id="ai-dim-depop" value="depops" checked>
           <label class="btn btn-outline-primary" for="ai-dim-depop">Dpto operativo</label>
@@ -98,20 +99,46 @@
         </div>
       </div>
       <div class="card-body">
-        <div id="ai-chart-dimension-compare" style="height: 420px;"></div>
+        <div class="row g-3">
+          <div class="col-md-6"><div class="card"><div class="card-header">Intervenciones</div><div class="card-body"><div id="ai-dim-chart-total" style="height: 320px;"></div></div></div></div>
+          <div class="col-md-6"><div class="card"><div class="card-header">Allanamientos</div><div class="card-body"><div id="ai-dim-chart-allanamientos" style="height: 320px;"></div></div></div></div>
+          <div class="col-md-6"><div class="card"><div class="card-header">Causas allanadas</div><div class="card-body"><div id="ai-dim-chart-causas-allanadas" style="height: 320px;"></div></div></div></div>
+          <div class="col-md-6"><div class="card"><div class="card-header">Procedimientos</div><div class="card-body"><div id="ai-dim-chart-procedimientos" style="height: 320px;"></div></div></div></div>
+          <div class="col-md-6"><div class="card"><div class="card-header">Marihuana</div><div class="card-body"><div id="ai-dim-chart-marihuana" style="height: 320px;"></div></div></div></div>
+          <div class="col-md-6"><div class="card"><div class="card-header">Cocaína</div><div class="card-body"><div id="ai-dim-chart-cocaina" style="height: 320px;"></div></div></div></div>
+          <div class="col-md-6"><div class="card"><div class="card-header">Pesos Arg</div><div class="card-body"><div id="ai-dim-chart-pesos" style="height: 320px;"></div></div></div></div>
+          <div class="col-md-6"><div class="card"><div class="card-header">Detenidos</div><div class="card-body"><div id="ai-dim-chart-detenidos" style="height: 320px;"></div></div></div></div>
+          <div class="col-md-6"><div class="card"><div class="card-header">Identificados</div><div class="card-body"><div id="ai-dim-chart-identificados" style="height: 320px;"></div></div></div></div>
+          <div class="col-12">
+            <div class="table-responsive">
+              <table class="table table-sm align-middle mb-0">
+                <thead>
+                  <tr>
+                    <th id="ai-dim-table-label">Dimensión</th>
+                    <th>Año</th>
+                    <th>Total</th>
+                    <th>Allanamientos</th>
+                    <th>Causas allanadas</th>
+                    <th>Procedimientos</th>
+                    <th>Marihuana</th>
+                    <th>Cocaína</th>
+                    <th>Pesos Arg</th>
+                    <th>Detenidos</th>
+                    <th>Identificados</th>
+                  </tr>
+                </thead>
+                <tbody id="ai-dim-table-body">
+                  <tr><td colspan="11" class="text-center text-muted">Sin datos.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
   <div class="col-12"><div class="card"><div class="card-header">Evolución mensual comparada</div><div class="card-body"><div id="ai-chart-mensual" style="height: 360px;"></div></div></div></div>
   <div class="col-12"><div class="card"><div class="card-header">Totales por trimestre</div><div class="card-body"><div id="ai-chart-trimestral" style="height: 320px;"></div></div></div></div>
-  <div class="col-lg-4"><div class="card"><div class="card-header">DINAR (Zona)</div><div class="card-body"><div id="ai-chart-zonas" style="height: 420px;"></div></div></div></div>
-  <div class="col-lg-4"><div class="card"><div class="card-header">SINAR</div><div class="card-body"><div id="ai-chart-sinares" style="height: 420px;"></div></div></div></div>
-  <div class="col-lg-4"><div class="card"><div class="card-header">Departamento operativo</div><div class="card-body"><div id="ai-chart-depops" style="height: 420px;"></div></div></div></div>
-  <div class="col-lg-6"><div class="card"><div class="card-header">Tipos de intervención</div><div class="card-body"><div id="ai-chart-tipos" style="height: 320px;"></div></div></div></div>
-  <div class="col-lg-6"><div class="card"><div class="card-header">Localidades con más intervenciones</div><div class="card-body"><div id="ai-chart-localidades" style="height: 320px;"></div></div></div></div>
-  <div class="col-lg-6"><div class="card"><div class="card-header">Sustancias secuestradas</div><div class="card-body"><div id="ai-chart-secuestros" style="height: 320px;"></div></div></div></div>
-  <div class="col-lg-6"><div class="card"><div class="card-header">Dinero secuestrado</div><div class="card-body"><div id="ai-chart-dinero" style="height: 320px;"></div></div></div></div>
-  <div class="col-12"><div class="card"><div class="card-header">Detenidos e identificados por sexo/mayoría</div><div class="card-body"><div id="ai-chart-personas" style="height: 360px;"></div></div></div></div>
   <div class="col-lg-4">
     <div class="card">
       <div class="card-header">Top DINAR</div>

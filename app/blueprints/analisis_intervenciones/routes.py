@@ -534,6 +534,109 @@ def _grouped_dimension_chart(rows: list[AnalisisIntervencion], key_fn, limit: in
     }
 
 
+def _empty_metric_row() -> dict:
+    return {
+        "total": 0,
+        "allanamientos": 0,
+        "causas_allanadas": 0,
+        "procedimientos": 0,
+        "marihuana": 0.0,
+        "cocaina": 0.0,
+        "pesos_arg": 0.0,
+        "detenidos": 0,
+        "identificados": 0,
+    }
+
+
+def _grouped_dimension_bundle(rows: list[AnalisisIntervencion], key_fn, limit: int = 8) -> dict:
+    years = sorted({_to_int(r.anio) for r in rows if _to_int(r.anio)})
+    totals: dict[str, int] = defaultdict(int)
+    nested: dict[str, dict[int, dict]] = defaultdict(lambda: defaultdict(_empty_metric_row))
+    causas_sets: dict[str, dict[int, set[int]]] = defaultdict(lambda: defaultdict(set))
+
+    for row in rows:
+        label = str(key_fn(row) or "Sin dato").strip() or "Sin dato"
+        year = _to_int(row.anio)
+        if not year:
+            continue
+        totals[label] += 1
+        item = nested[label][year]
+        item["total"] += 1
+        if _is_allanamiento(row.tipo_interv_desc):
+            item["allanamientos"] += 1
+            cause_key = _cause_key(row)
+            if cause_key is not None:
+                causas_sets[label][year].add(cause_key)
+        elif _is_procedimiento(row.tipo_interv_desc):
+            item["procedimientos"] += 1
+        item["marihuana"] += _to_num(row.secuestro_marihuana)
+        item["cocaina"] += _to_num(row.secuestro_cocaina)
+        item["pesos_arg"] += _to_num(row.pesos_arg)
+        item["detenidos"] += _total_detenidos(row)
+        item["identificados"] += _total_identificados(row)
+
+    categories = [label for label, _ in sorted(totals.items(), key=lambda item: (-item[1], item[0]))[:limit]]
+
+    def metric_chart(metric: str, digits: int) -> dict:
+        return {
+            "digits": digits,
+            "categories": categories,
+            "series": [
+                {
+                    "name": str(year),
+                    "values": [
+                        (
+                            len(causas_sets[label][year])
+                            if metric == "causas_allanadas"
+                            else round(float(nested[label][year][metric]), digits)
+                            if digits > 0
+                            else int(nested[label][year][metric] or 0)
+                        )
+                        for label in categories
+                    ],
+                }
+                for year in years
+            ],
+        }
+
+    table_rows = []
+    for label in categories:
+        for year in years:
+            item = nested[label][year]
+            table_rows.append(
+                {
+                    "label": label,
+                    "anio": year,
+                    "total": int(item["total"] or 0),
+                    "allanamientos": int(item["allanamientos"] or 0),
+                    "causas_allanadas": len(causas_sets[label][year]),
+                    "procedimientos": int(item["procedimientos"] or 0),
+                    "marihuana": round(float(item["marihuana"] or 0), 2),
+                    "cocaina": round(float(item["cocaina"] or 0), 2),
+                    "pesos_arg": round(float(item["pesos_arg"] or 0), 2),
+                    "detenidos": int(item["detenidos"] or 0),
+                    "identificados": int(item["identificados"] or 0),
+                }
+            )
+
+    return {
+        "years": years,
+        "categories": categories,
+        "metrics": {
+            "total": metric_chart("total", 0),
+            "allanamientos": metric_chart("allanamientos", 0),
+            "causas_allanadas": metric_chart("causas_allanadas", 0),
+            "procedimientos": metric_chart("procedimientos", 0),
+            "marihuana": metric_chart("marihuana", 2),
+            "cocaina": metric_chart("cocaina", 2),
+            "pesos_arg": metric_chart("pesos_arg", 2),
+            "detenidos": metric_chart("detenidos", 0),
+            "identificados": metric_chart("identificados", 0),
+        },
+        "table_rows": table_rows,
+    }
+
+
 def _dashboard_data(rows: list[AnalisisIntervencion]) -> dict:
     comparativo: dict[int, dict] = {}
     mensual: dict[int, list[int]] = defaultdict(lambda: [0] * 12)
@@ -666,11 +769,17 @@ def _dashboard_data(rows: list[AnalisisIntervencion]) -> dict:
     chart_anio_plantines = [{"label": str(r["anio"]), "value": round(r["plantines"], 2)} for r in comparativo_anual]
     chart_anio_semillas = [{"label": str(r["anio"]), "value": round(r["semillas"], 2)} for r in comparativo_anual]
     chart_anio_hojas_coca = [{"label": str(r["anio"]), "value": round(r["hojas_coca"], 2)} for r in comparativo_anual]
+    chart_anio_pesos = [{"label": str(r["anio"]), "value": round(r["pesos_arg"], 2)} for r in comparativo_anual]
     chart_anio_detenidos = [{"label": str(r["anio"]), "value": r["detenidos"]} for r in comparativo_anual]
     chart_anio_identificados = [{"label": str(r["anio"]), "value": r["identificados"]} for r in comparativo_anual]
     chart_compare_depops = _grouped_dimension_chart(rows, lambda r: r.departamento_operativo, limit=8)
     chart_compare_sinares = _grouped_dimension_chart(rows, lambda r: r.dep_interviniente, limit=8)
     chart_compare_zonas = _grouped_dimension_chart(rows, lambda r: r.zona, limit=8)
+    dimension_compare = {
+        "depops": _grouped_dimension_bundle(rows, lambda r: r.departamento_operativo, limit=8),
+        "sinares": _grouped_dimension_bundle(rows, lambda r: r.dep_interviniente, limit=8),
+        "zonas": _grouped_dimension_bundle(rows, lambda r: r.zona, limit=8),
+    }
     years = [r["anio"] for r in comparativo_anual]
     chart_tipo_por_anio = {
         "categories": [str(y) for y in years],
@@ -718,11 +827,13 @@ def _dashboard_data(rows: list[AnalisisIntervencion]) -> dict:
         "chart_anio_plantines": chart_anio_plantines,
         "chart_anio_semillas": chart_anio_semillas,
         "chart_anio_hojas_coca": chart_anio_hojas_coca,
+        "chart_anio_pesos": chart_anio_pesos,
         "chart_anio_detenidos": chart_anio_detenidos,
         "chart_anio_identificados": chart_anio_identificados,
         "chart_compare_depops": chart_compare_depops,
         "chart_compare_sinares": chart_compare_sinares,
         "chart_compare_zonas": chart_compare_zonas,
+        "dimension_compare": dimension_compare,
         "chart_tipo_por_anio": chart_tipo_por_anio,
         "chart_mensual_por_anio": chart_mensual_por_anio,
         "chart_trimestral_por_anio": chart_trimestral_por_anio,
