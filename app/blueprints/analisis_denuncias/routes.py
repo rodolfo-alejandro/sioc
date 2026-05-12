@@ -544,7 +544,8 @@ def importar():
             flash(res["error"], "danger")
         else:
             msg = (
-                f"Importación finalizada. Importados: {res['importados']}, actualizados: {res['actualizados']}, omitidos: {res['omitidos']}."
+                f"Importación finalizada. Importados: {res['importados']}, actualizados: {res['actualizados']}, omitidos: {res['omitidos']}. "
+                "La carga quedó compartida para toda la dependencia."
             )
             if int(res.get("eliminados_previos") or 0) > 0:
                 msg = f"Se eliminaron {res['eliminados_previos']} registros previos. " + msg
@@ -575,7 +576,10 @@ def importar_base():
         flash(res["error"], "danger")
     else:
         flash(
-            f"Archivo base importado. Importados: {res['importados']}, actualizados: {res['actualizados']}, omitidos: {res['omitidos']}.",
+            (
+                f"Archivo base importado. Importados: {res['importados']}, actualizados: {res['actualizados']}, "
+                f"omitidos: {res['omitidos']}. La carga quedó compartida para toda la dependencia."
+            ),
             "success",
         )
     return redirect(url_for("analisis_denuncias.importar"))

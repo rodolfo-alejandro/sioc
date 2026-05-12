@@ -3,7 +3,7 @@
 {% block content %}
 <div class="page-header">
   <h1><i class="bi bi-cloud-upload"></i> Importar análisis de intervenciones</h1>
-  <p class="text-muted">Subí un CSV anual separado por <strong>;</strong>. La carga reemplaza únicamente el año detectado en el archivo.</p>
+  <p class="text-muted">Subí un CSV anual separado por <strong>;</strong>. La carga reemplaza únicamente el año detectado en el archivo y queda disponible para todos los usuarios de la misma dependencia.</p>
 </div>
 
 <div class="card">
@@ -24,6 +24,9 @@
     <div class="alert alert-info mt-3 mb-0">
       El archivo debe contener una sola gestión anual. Si trae 2024, se reemplaza solo 2024; 2025 y 2026 quedan intactos.
     </div>
+    <div class="alert alert-secondary mt-3 mb-0">
+      No hace falta que cada usuario vuelva a subir el mismo archivo: esta carga es compartida por dependencia y cualquier usuario con permiso puede actualizarla.
+    </div>
   </div>
 </div>
 
@@ -38,16 +41,20 @@
           <tr>
             <th>Año</th>
             <th>Total</th>
+            <th>Última actualización</th>
+            <th>Actualizado por</th>
           </tr>
         </thead>
         <tbody>
-          {% for anio, cantidad in por_anio %}
+          {% for row in anios_cargados %}
           <tr>
-            <td>{{ anio }}</td>
-            <td>{{ cantidad|number_format }}</td>
+            <td>{{ row.anio }}</td>
+            <td>{{ row.cantidad|number_format }}</td>
+            <td>{{ row.fecha_importacion|localtime('%d/%m/%Y %H:%M') if row.fecha_importacion else '—' }}</td>
+            <td>{{ row.usuario or '—' }}</td>
           </tr>
           {% else %}
-          <tr><td colspan="2" class="text-center text-muted">Todavía no hay años importados.</td></tr>
+          <tr><td colspan="4" class="text-center text-muted">Todavía no hay años importados.</td></tr>
           {% endfor %}
         </tbody>
       </table>

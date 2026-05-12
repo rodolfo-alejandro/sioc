@@ -323,13 +323,17 @@ def importar():
         if res.get("error"):
             flash(res["error"], "danger")
         else:
-            msg = f"Importación OK. Importados: {res['importados']}, omitidos: {res['omitidos']}."
+            msg = (
+                f"Importación OK. Importados: {res['importados']}, omitidos: {res['omitidos']}. "
+                "La carga quedó compartida para toda la dependencia."
+            )
             if int(res.get("eliminados_previos") or 0) > 0:
                 msg = f"Se eliminaron {res['eliminados_previos']} previos. " + msg
             flash(msg, "success")
         return redirect(url_for("analisis_llamadas_se.importar"))
     total = _base_q().count()
-    return render_template("analisis_llamadas_se/importar.html", total=total)
+    ultima = _base_q().order_by(LlamadaSE.fecha_importacion.desc(), LlamadaSE.id.desc()).first()
+    return render_template("analisis_llamadas_se/importar.html", total=total, ultima=ultima)
 
 
 @bp.route("/importar/base", methods=["POST"])
@@ -346,7 +350,13 @@ def importar_base():
     if res.get("error"):
         flash(res["error"], "danger")
     else:
-        flash(f"Base importada. Importados: {res['importados']}, omitidos: {res['omitidos']}.", "success")
+        flash(
+            (
+                f"Base importada. Importados: {res['importados']}, omitidos: {res['omitidos']}. "
+                "La carga quedó compartida para toda la dependencia."
+            ),
+            "success",
+        )
     return redirect(url_for("analisis_llamadas_se.importar"))
 
 

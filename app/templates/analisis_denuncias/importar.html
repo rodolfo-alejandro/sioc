@@ -6,7 +6,7 @@
 {% block content %}
 <div class="page-header">
     <h1><i class="bi bi-cloud-upload"></i> Importar denuncias web</h1>
-    <p class="text-muted">Carga CSV separado por <strong>;</strong> y codificación UTF-8 con BOM.</p>
+    <p class="text-muted">Carga CSV separado por <strong>;</strong> y codificación UTF-8 con BOM. La información queda compartida para todos los usuarios de la misma dependencia.</p>
 </div>
 
 <div class="card mb-3">
@@ -15,7 +15,11 @@
             <div class="col-md-6">
                 <div><strong>Total vigente:</strong> {{ total|number_format }}</div>
                 <div><strong>Última importación:</strong> {{ ultima.fecha_importacion|localtime if ultima else '—' }}</div>
+                <div><strong>Actualizado por:</strong> {{ ultima.usuario_creador.username if ultima and ultima.usuario_creador else '—' }}</div>
             </div>
+        </div>
+        <div class="alert alert-secondary mt-3 mb-0">
+            No hace falta que cada usuario vuelva a subir el mismo archivo: la carga es compartida por dependencia y cualquier usuario con permiso puede actualizarla.
         </div>
         <hr>
         <form method="POST" enctype="multipart/form-data" class="row g-2 align-items-end">

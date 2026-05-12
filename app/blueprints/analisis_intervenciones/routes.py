@@ -716,24 +716,45 @@ def importar():
                     f"Nuevas filas: {result['importados']}. "
                     f"Reemplazadas previas: {result['eliminados_previos']}. "
                     f"Omitidas: {result['omitidos']}. "
-                    f"Duplicadas internas: {result['duplicados']}."
+                    f"Duplicadas internas: {result['duplicados']}. "
+                    "La carga quedó compartida para toda la dependencia."
                 ),
                 "success",
             )
         return redirect(url_for("analisis_intervenciones.importar"))
 
     total = _base_q().count()
-    por_anio = (
+    resumen_por_anio = (
         _base_q()
-        .with_entities(AnalisisIntervencion.anio, db.func.count(AnalisisIntervencion.id))
+        .with_entities(
+            AnalisisIntervencion.anio,
+            db.func.count(AnalisisIntervencion.id),
+            db.func.max(AnalisisIntervencion.fecha_importacion),
+        )
         .group_by(AnalisisIntervencion.anio)
         .order_by(AnalisisIntervencion.anio.asc())
         .all()
     )
+    anios_cargados = []
+    for anio, cantidad, fecha_importacion in resumen_por_anio:
+        ultima = (
+            _base_q()
+            .filter(AnalisisIntervencion.anio == anio)
+            .order_by(AnalisisIntervencion.fecha_importacion.desc(), AnalisisIntervencion.id.desc())
+            .first()
+        )
+        anios_cargados.append(
+            {
+                "anio": anio,
+                "cantidad": cantidad,
+                "fecha_importacion": fecha_importacion,
+                "usuario": (ultima.usuario_creador.username if ultima and ultima.usuario_creador else "—"),
+            }
+        )
     return render_template(
         "analisis_intervenciones/importar.html",
         total=total,
-        por_anio=por_anio,
+        anios_cargados=anios_cargados,
     )
 
 
