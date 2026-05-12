@@ -432,6 +432,7 @@ def _blank_year_row(anio: int) -> dict:
         "anio": anio,
         "total": 0,
         "allanamientos": 0,
+        "causas_allanadas": 0,
         "procedimientos": 0,
         "otros_tipos": 0,
         "marihuana": 0.0,
@@ -448,6 +449,10 @@ def _blank_year_row(anio: int) -> dict:
         "detenidos": 0,
         "identificados": 0,
     }
+
+
+def _cause_key(row: AnalisisIntervencion) -> int | None:
+    return row.causas_id or row.causas_interv_id
 
 
 def _count_by(rows: list[AnalisisIntervencion], key_fn, limit: int | None = None) -> list[dict]:
@@ -508,9 +513,11 @@ def _dashboard_data(rows: list[AnalisisIntervencion]) -> dict:
 
     total = len(rows)
     allanamientos = 0
+    causas_allanadas: set[int] = set()
     procedimientos = 0
     detenidos_total = 0
     identificados_total = 0
+    causas_allanadas_por_anio: dict[int, set[int]] = defaultdict(set)
 
     for row in rows:
         year = _to_int(row.anio)
@@ -530,6 +537,10 @@ def _dashboard_data(rows: list[AnalisisIntervencion]) -> dict:
         if _is_allanamiento(row.tipo_interv_desc):
             allanamientos += 1
             comp["allanamientos"] += 1
+            cause_key = _cause_key(row)
+            if cause_key is not None:
+                causas_allanadas.add(cause_key)
+                causas_allanadas_por_anio[year].add(cause_key)
         elif _is_procedimiento(row.tipo_interv_desc):
             procedimientos += 1
             comp["procedimientos"] += 1
@@ -581,6 +592,10 @@ def _dashboard_data(rows: list[AnalisisIntervencion]) -> dict:
         comp["detenidos"] += detenidos
         comp["identificados"] += identificados
 
+    for year, causes in causas_allanadas_por_anio.items():
+        if year in comparativo:
+            comparativo[year]["causas_allanadas"] = len(causes)
+
     comparativo_anual = [comparativo[k] for k in sorted(comparativo)]
     chart_anio_total = [{"label": str(r["anio"]), "value": r["total"]} for r in comparativo_anual]
     years = [r["anio"] for r in comparativo_anual]
@@ -612,6 +627,7 @@ def _dashboard_data(rows: list[AnalisisIntervencion]) -> dict:
         "kpis": {
             "total": total,
             "allanamientos": allanamientos,
+            "causas_allanadas": len(causas_allanadas),
             "procedimientos": procedimientos,
             "marihuana": round(secuestros_totales["Marihuana"], 2),
             "cocaina": round(secuestros_totales["Cocaina"], 2),
