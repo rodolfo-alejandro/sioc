@@ -63,21 +63,21 @@
 
   <div class="col-md-6">
     <div class="card"><div class="card-header"><h6 class="mb-0">Personas detenidas</h6></div><div class="card-body">
-      <div><strong>Hombre mayor:</strong> {{ row.det_hombre_may|number_format }}</div>
-      <div><strong>Hombre menor:</strong> {{ row.det_hombre_men|number_format }}</div>
-      <div><strong>Mujer mayor:</strong> {{ row.det_mujer_may|number_format }}</div>
-      <div><strong>Mujer menor:</strong> {{ row.det_mujer_men|number_format }}</div>
-      <div class="mt-2"><strong>Total detenidos:</strong> {{ total_detenidos|number_format }}</div>
+      <div><strong>Hombre mayor:</strong> {{ fmt_int(row.det_hombre_may) }}</div>
+      <div><strong>Hombre menor:</strong> {{ fmt_int(row.det_hombre_men) }}</div>
+      <div><strong>Mujer mayor:</strong> {{ fmt_int(row.det_mujer_may) }}</div>
+      <div><strong>Mujer menor:</strong> {{ fmt_int(row.det_mujer_men) }}</div>
+      <div class="mt-2"><strong>Total detenidos:</strong> {{ fmt_int(total_detenidos) }}</div>
     </div></div>
   </div>
 
   <div class="col-md-6">
     <div class="card"><div class="card-header"><h6 class="mb-0">Personas identificadas / supeditadas</h6></div><div class="card-body">
-      <div><strong>Hombre mayor:</strong> {{ row.is_hombre_may|number_format }}</div>
-      <div><strong>Hombre menor:</strong> {{ row.is_hombre_men|number_format }}</div>
-      <div><strong>Mujer mayor:</strong> {{ row.is_mujer_may|number_format }}</div>
-      <div><strong>Mujer menor:</strong> {{ row.is_mujer_men|number_format }}</div>
-      <div class="mt-2"><strong>Total identificados:</strong> {{ total_identificados|number_format }}</div>
+      <div><strong>Hombre mayor:</strong> {{ fmt_int(row.is_hombre_may) }}</div>
+      <div><strong>Hombre menor:</strong> {{ fmt_int(row.is_hombre_men) }}</div>
+      <div><strong>Mujer mayor:</strong> {{ fmt_int(row.is_mujer_may) }}</div>
+      <div><strong>Mujer menor:</strong> {{ fmt_int(row.is_mujer_men) }}</div>
+      <div class="mt-2"><strong>Total identificados:</strong> {{ fmt_int(total_identificados) }}</div>
     </div></div>
   </div>
 

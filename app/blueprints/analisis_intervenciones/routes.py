@@ -178,6 +178,10 @@ def _fmt_float(v: float | int | None) -> str:
     return f"{float(v or 0):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
+def _fmt_int(v: int | float | None) -> str:
+    return f"{int(v or 0):,}".replace(",", ".")
+
+
 def _total_detenidos(row: AnalisisIntervencion) -> int:
     return (
         _to_int(row.det_hombre_may)
@@ -598,6 +602,9 @@ def _dashboard_data(rows: list[AnalisisIntervencion]) -> dict:
 
     comparativo_anual = [comparativo[k] for k in sorted(comparativo)]
     chart_anio_total = [{"label": str(r["anio"]), "value": r["total"]} for r in comparativo_anual]
+    chart_anio_allanamientos = [{"label": str(r["anio"]), "value": r["allanamientos"]} for r in comparativo_anual]
+    chart_anio_causas_allanadas = [{"label": str(r["anio"]), "value": r["causas_allanadas"]} for r in comparativo_anual]
+    chart_anio_procedimientos = [{"label": str(r["anio"]), "value": r["procedimientos"]} for r in comparativo_anual]
     years = [r["anio"] for r in comparativo_anual]
     chart_tipo_por_anio = {
         "categories": [str(y) for y in years],
@@ -636,6 +643,9 @@ def _dashboard_data(rows: list[AnalisisIntervencion]) -> dict:
         },
         "comparativo_anual": comparativo_anual,
         "chart_anio_total": chart_anio_total,
+        "chart_anio_allanamientos": chart_anio_allanamientos,
+        "chart_anio_causas_allanadas": chart_anio_causas_allanadas,
+        "chart_anio_procedimientos": chart_anio_procedimientos,
         "chart_tipo_por_anio": chart_tipo_por_anio,
         "chart_mensual_por_anio": chart_mensual_por_anio,
         "chart_trimestral_por_anio": chart_trimestral_por_anio,
@@ -771,6 +781,7 @@ def importar():
         "analisis_intervenciones/importar.html",
         total=total,
         anios_cargados=anios_cargados,
+        fmt_int=_fmt_int,
     )
 
 
@@ -811,6 +822,7 @@ def listado():
         can_dashboard=_can_dashboard(),
         total_detenidos=_total_detenidos,
         total_identificados=_total_identificados,
+        fmt_int=_fmt_int,
     )
 
 
@@ -835,6 +847,7 @@ def dashboard():
         selected=_selected_filters(),
         can_view=_can_view(),
         fmt_float=_fmt_float,
+        fmt_int=_fmt_int,
     )
 
 
@@ -866,6 +879,7 @@ def detalle(intervencion_id: int):
         total_detenidos=_total_detenidos(row),
         total_identificados=_total_identificados(row),
         fmt_float=_fmt_float,
+        fmt_int=_fmt_int,
         fecha_hora=_as_datetime(row.interv_fecha, row.interv_hora),
     )
 

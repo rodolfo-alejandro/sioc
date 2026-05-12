@@ -23,7 +23,7 @@
 <div class="card">
   <div class="card-header d-flex justify-content-between">
     <h6 class="mb-0">Resultados</h6>
-    <span class="badge bg-light text-dark border">Total: {{ total|number_format }}</span>
+    <span class="badge bg-light text-dark border">Total: {{ fmt_int(total) }}</span>
   </div>
   <div class="card-body">
     <div class="table-responsive">
@@ -64,8 +64,8 @@
               <div>Cocaína: {{ '%.2f'|format(r.secuestro_cocaina or 0) }}</div>
             </td>
             <td class="small">
-              <div>Det.: {{ total_detenidos(r)|number_format }}</div>
-              <div>Ident.: {{ total_identificados(r)|number_format }}</div>
+              <div>Det.: {{ fmt_int(total_detenidos(r)) }}</div>
+              <div>Ident.: {{ fmt_int(total_identificados(r)) }}</div>
             </td>
             <td><a class="btn btn-outline-primary btn-sm" href="{{ url_for('analisis_intervenciones.detalle', intervencion_id=r.id) }}">Detalle</a></td>
           </tr>

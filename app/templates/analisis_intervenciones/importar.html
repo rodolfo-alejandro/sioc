@@ -8,7 +8,7 @@
 
 <div class="card">
   <div class="card-body">
-    <div class="mb-3"><strong>Total vigente:</strong> {{ total|number_format }}</div>
+    <div class="mb-3"><strong>Total vigente:</strong> {{ fmt_int(total) }}</div>
 
     <form method="POST" enctype="multipart/form-data" class="row g-2 align-items-end">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -49,7 +49,7 @@
           {% for row in anios_cargados %}
           <tr>
             <td>{{ row.anio }}</td>
-            <td>{{ row.cantidad|number_format }}</td>
+            <td>{{ fmt_int(row.cantidad) }}</td>
             <td>{{ row.fecha_importacion|localtime('%d/%m/%Y %H:%M') if row.fecha_importacion else '—' }}</td>
             <td>{{ row.usuario or '—' }}</td>
           </tr>
