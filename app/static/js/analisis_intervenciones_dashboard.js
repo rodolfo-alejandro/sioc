@@ -15,6 +15,12 @@
     });
   }
 
+  var PLOT_CONFIG = {
+    responsive: true,
+    displayModeBar: false,
+    displaylogo: false
+  };
+
   function bar(elId, items, color, options) {
     if (!window.Plotly || !items || !items.length) return;
     options = options || {};
@@ -42,7 +48,7 @@
         ? { rangemode: "tozero" }
         : { automargin: true, type: "category", categoryorder: "array", categoryarray: labels },
       bargap: 0.35,
-    }, { responsive: true });
+    }, PLOT_CONFIG);
   }
 
   function groupedBar(elId, data) {
@@ -63,7 +69,31 @@
       margin: { l: 50, r: 20, t: 10, b: 60 },
       xaxis: { type: "category", categoryorder: "array", categoryarray: data.categories },
       yaxis: { rangemode: "tozero" },
-    }, { responsive: true });
+    }, PLOT_CONFIG);
+  }
+
+  function renderDimensionCompare(data, key) {
+    var map = {
+      depops: data.chart_compare_depops || {},
+      sinares: data.chart_compare_sinares || {},
+      zonas: data.chart_compare_zonas || {}
+    };
+    groupedBar("ai-chart-dimension-compare", map[key] || map.depops || {});
+  }
+
+  function wireDimensionToggle(data) {
+    var radios = document.querySelectorAll('input[name="ai-dim-mode"]');
+    if (!radios.length) return;
+    function currentValue() {
+      var checked = document.querySelector('input[name="ai-dim-mode"]:checked');
+      return checked ? checked.value : "depops";
+    }
+    radios.forEach(function (radio) {
+      radio.addEventListener("change", function () {
+        renderDimensionCompare(data, currentValue());
+      });
+    });
+    renderDimensionCompare(data, currentValue());
   }
 
   function multiLine(elId, data) {
@@ -80,7 +110,7 @@
     window.Plotly.newPlot(elId, traces, {
       margin: { l: 50, r: 20, t: 10, b: 60 },
       yaxis: { rangemode: "tozero" },
-    }, { responsive: true });
+    }, PLOT_CONFIG);
   }
 
   function init() {
@@ -91,6 +121,15 @@
     bar("ai-chart-anio-allanamientos", data.chart_anio_allanamientos || [], "#dc3545", { digits: 0 });
     bar("ai-chart-anio-causas-allanadas", data.chart_anio_causas_allanadas || [], "#fd7e14", { digits: 0 });
     bar("ai-chart-anio-procedimientos", data.chart_anio_procedimientos || [], "#0d6efd", { digits: 0 });
+    bar("ai-chart-anio-marihuana", data.chart_anio_marihuana || [], "#198754", { digits: 2 });
+    bar("ai-chart-anio-cocaina", data.chart_anio_cocaina || [], "#dc3545", { digits: 2 });
+    bar("ai-chart-anio-plantas", data.chart_anio_plantas || [], "#20c997", { digits: 2 });
+    bar("ai-chart-anio-plantines", data.chart_anio_plantines || [], "#6610f2", { digits: 2 });
+    bar("ai-chart-anio-semillas", data.chart_anio_semillas || [], "#6f42c1", { digits: 2 });
+    bar("ai-chart-anio-hojas-coca", data.chart_anio_hojas_coca || [], "#fd7e14", { digits: 2 });
+    bar("ai-chart-anio-detenidos", data.chart_anio_detenidos || [], "#6c757d", { digits: 0 });
+    bar("ai-chart-anio-identificados", data.chart_anio_identificados || [], "#0dcaf0", { digits: 0 });
+    wireDimensionToggle(data);
     multiLine("ai-chart-mensual", data.chart_mensual_por_anio || {});
     groupedBar("ai-chart-trimestral", data.chart_trimestral_por_anio || {});
     bar("ai-chart-zonas", data.chart_zonas || [], "#0d6efd", { horizontal: true, digits: 0 });

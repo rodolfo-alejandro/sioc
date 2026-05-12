@@ -20,6 +20,22 @@
           <label class="form-label">Fecha hasta</label>
           <input type="date" class="form-control form-control-sm" name="fecha_hasta" value="{{ selected.fecha_hasta }}">
         </div>
+        <div class="col-lg-2 col-md-3">
+          <label class="form-label">Preset período</label>
+          <select class="form-select form-select-sm" name="preset_periodo">
+            <option value="">Manual</option>
+            <option value="enero_hoy" {% if selected.preset_periodo == 'enero_hoy' %}selected{% endif %}>Enero a hoy</option>
+          </select>
+        </div>
+        <div class="col-lg-3 col-md-4">
+          <label class="form-label">Comparación anual</label>
+          <div class="form-check mt-2">
+            <input class="form-check-input" type="checkbox" id="ai-comparar-mismo-periodo" name="comparar_mismo_periodo" value="1" {% if selected.comparar_mismo_periodo %}checked{% endif %}>
+            <label class="form-check-label" for="ai-comparar-mismo-periodo">
+              Comparar mismo período entre años
+            </label>
+          </div>
+        </div>
 
         <div class="col-lg-2 col-md-4">
           <label class="form-label">Años</label>

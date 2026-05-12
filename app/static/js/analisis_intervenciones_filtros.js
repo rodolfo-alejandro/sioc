@@ -42,6 +42,31 @@
     });
   }
 
+  function todayIso() {
+    var d = new Date();
+    var m = String(d.getMonth() + 1).padStart(2, "0");
+    var day = String(d.getDate()).padStart(2, "0");
+    return d.getFullYear() + "-" + m + "-" + day;
+  }
+
+  function januaryFirstIso() {
+    var d = new Date();
+    return d.getFullYear() + "-01-01";
+  }
+
+  function wirePresetPeriodo() {
+    var preset = document.querySelector('select[name="preset_periodo"]');
+    var desde = document.querySelector('input[name="fecha_desde"]');
+    var hasta = document.querySelector('input[name="fecha_hasta"]');
+    if (!preset || !desde || !hasta) return;
+    preset.addEventListener("change", function () {
+      if (this.value === "enero_hoy") {
+        if (!desde.value) desde.value = januaryFirstIso();
+        if (!hasta.value) hasta.value = todayIso();
+      }
+    });
+  }
+
   function wireSubmit() {
     var form = byId("ai-form-filtros");
     if (!form) return;
@@ -91,6 +116,7 @@
     });
 
     wireSubmit();
+    wirePresetPeriodo();
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);

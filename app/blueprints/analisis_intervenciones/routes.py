@@ -10,7 +10,7 @@ from urllib.parse import urlencode
 import pandas as pd
 from flask import Response, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
-from sqlalchemy import inspect, or_
+from sqlalchemy import and_, extract, inspect, or_
 
 from app.blueprints.analisis_intervenciones import bp
 from app.extensions import db
@@ -231,10 +231,12 @@ def _get_list_arg(name: str) -> list[str]:
 
 
 def _selected_filters() -> dict:
-    return {
+    data = {
         "q": _clean(request.args.get("q")) or "",
         "fecha_desde": _clean(request.args.get("fecha_desde")) or "",
         "fecha_hasta": _clean(request.args.get("fecha_hasta")) or "",
+        "preset_periodo": _clean(request.args.get("preset_periodo")) or "",
+        "comparar_mismo_periodo": _clean(request.args.get("comparar_mismo_periodo")) == "1",
         "anios": _get_list_arg("anio[]"),
         "zonas": _get_list_arg("zona[]"),
         "sinares": _get_list_arg("sinar[]"),
@@ -243,6 +245,41 @@ def _selected_filters() -> dict:
         "localidades": _get_list_arg("localidad[]"),
         "barrios": _get_list_arg("barrio[]"),
     }
+    if data["preset_periodo"] == "enero_hoy" and not data["fecha_desde"] and not data["fecha_hasta"]:
+        today = date.today()
+        data["fecha_desde"] = date(today.year, 1, 1).isoformat()
+        data["fecha_hasta"] = today.isoformat()
+    return data
+
+
+def _resolve_period_dates(s: dict) -> tuple[date | None, date | None]:
+    fd = _parse_date(s.get("fecha_desde"))
+    fh = _parse_date(s.get("fecha_hasta"))
+    if s.get("preset_periodo") == "enero_hoy" and not fd and not fh:
+        today = date.today()
+        return date(today.year, 1, 1), today
+    return fd, fh
+
+
+def _month_day_value(dt: date | None) -> int | None:
+    if not dt:
+        return None
+    return dt.month * 100 + dt.day
+
+
+def _apply_same_period_filter(q, fd: date | None, fh: date | None):
+    md_expr = extract("month", AnalisisIntervencion.interv_fecha) * 100 + extract("day", AnalisisIntervencion.interv_fecha)
+    md_from = _month_day_value(fd)
+    md_to = _month_day_value(fh)
+    if md_from and md_to:
+        if md_from <= md_to:
+            return q.filter(and_(md_expr >= md_from, md_expr <= md_to))
+        return q.filter(or_(md_expr >= md_from, md_expr <= md_to))
+    if md_from:
+        return q.filter(md_expr >= md_from)
+    if md_to:
+        return q.filter(md_expr <= md_to)
+    return q
 
 
 def _apply_filters(q):
@@ -273,19 +310,19 @@ def _apply_filters(q):
                 ]
             )
         q = q.filter(or_(*filters))
-    if s["fecha_desde"]:
-        fd = _parse_date(s["fecha_desde"])
-        if fd:
-            q = q.filter(AnalisisIntervencion.interv_fecha >= fd)
-    if s["fecha_hasta"]:
-        fh = _parse_date(s["fecha_hasta"])
-        if fh:
-            q = q.filter(AnalisisIntervencion.interv_fecha <= fh)
+    fd, fh = _resolve_period_dates(s)
     if s["anios"]:
         anios = [_parse_int(x) for x in s["anios"]]
         anios = [x for x in anios if x is not None]
         if anios:
             q = q.filter(AnalisisIntervencion.anio.in_(anios))
+    if s["comparar_mismo_periodo"]:
+        q = _apply_same_period_filter(q, fd, fh)
+    else:
+        if fd:
+            q = q.filter(AnalisisIntervencion.interv_fecha >= fd)
+        if fh:
+            q = q.filter(AnalisisIntervencion.interv_fecha <= fh)
     if s["zonas"]:
         q = q.filter(AnalisisIntervencion.zona.in_(s["zonas"]))
     if s["sinares"]:
@@ -479,6 +516,24 @@ def _sum_chart(items: list[tuple[str, float]], limit: int | None = None) -> list
     return out
 
 
+def _grouped_dimension_chart(rows: list[AnalisisIntervencion], key_fn, limit: int = 10) -> dict:
+    years = sorted({_to_int(r.anio) for r in rows if _to_int(r.anio)})
+    totals: dict[str, int] = defaultdict(int)
+    by_label_year: dict[str, dict[int, int]] = defaultdict(lambda: defaultdict(int))
+    for row in rows:
+        label = str(key_fn(row) or "Sin dato").strip() or "Sin dato"
+        year = _to_int(row.anio)
+        if not year:
+            continue
+        totals[label] += 1
+        by_label_year[label][year] += 1
+    categories = [label for label, _ in sorted(totals.items(), key=lambda item: (-item[1], item[0]))[:limit]]
+    return {
+        "categories": categories,
+        "series": [{"name": str(year), "values": [by_label_year[label].get(year, 0) for label in categories]} for year in years],
+    }
+
+
 def _dashboard_data(rows: list[AnalisisIntervencion]) -> dict:
     comparativo: dict[int, dict] = {}
     mensual: dict[int, list[int]] = defaultdict(lambda: [0] * 12)
@@ -605,6 +660,17 @@ def _dashboard_data(rows: list[AnalisisIntervencion]) -> dict:
     chart_anio_allanamientos = [{"label": str(r["anio"]), "value": r["allanamientos"]} for r in comparativo_anual]
     chart_anio_causas_allanadas = [{"label": str(r["anio"]), "value": r["causas_allanadas"]} for r in comparativo_anual]
     chart_anio_procedimientos = [{"label": str(r["anio"]), "value": r["procedimientos"]} for r in comparativo_anual]
+    chart_anio_marihuana = [{"label": str(r["anio"]), "value": round(r["marihuana"], 2)} for r in comparativo_anual]
+    chart_anio_cocaina = [{"label": str(r["anio"]), "value": round(r["cocaina"], 2)} for r in comparativo_anual]
+    chart_anio_plantas = [{"label": str(r["anio"]), "value": round(r["plantas"], 2)} for r in comparativo_anual]
+    chart_anio_plantines = [{"label": str(r["anio"]), "value": round(r["plantines"], 2)} for r in comparativo_anual]
+    chart_anio_semillas = [{"label": str(r["anio"]), "value": round(r["semillas"], 2)} for r in comparativo_anual]
+    chart_anio_hojas_coca = [{"label": str(r["anio"]), "value": round(r["hojas_coca"], 2)} for r in comparativo_anual]
+    chart_anio_detenidos = [{"label": str(r["anio"]), "value": r["detenidos"]} for r in comparativo_anual]
+    chart_anio_identificados = [{"label": str(r["anio"]), "value": r["identificados"]} for r in comparativo_anual]
+    chart_compare_depops = _grouped_dimension_chart(rows, lambda r: r.departamento_operativo, limit=8)
+    chart_compare_sinares = _grouped_dimension_chart(rows, lambda r: r.dep_interviniente, limit=8)
+    chart_compare_zonas = _grouped_dimension_chart(rows, lambda r: r.zona, limit=8)
     years = [r["anio"] for r in comparativo_anual]
     chart_tipo_por_anio = {
         "categories": [str(y) for y in years],
@@ -646,6 +712,17 @@ def _dashboard_data(rows: list[AnalisisIntervencion]) -> dict:
         "chart_anio_allanamientos": chart_anio_allanamientos,
         "chart_anio_causas_allanadas": chart_anio_causas_allanadas,
         "chart_anio_procedimientos": chart_anio_procedimientos,
+        "chart_anio_marihuana": chart_anio_marihuana,
+        "chart_anio_cocaina": chart_anio_cocaina,
+        "chart_anio_plantas": chart_anio_plantas,
+        "chart_anio_plantines": chart_anio_plantines,
+        "chart_anio_semillas": chart_anio_semillas,
+        "chart_anio_hojas_coca": chart_anio_hojas_coca,
+        "chart_anio_detenidos": chart_anio_detenidos,
+        "chart_anio_identificados": chart_anio_identificados,
+        "chart_compare_depops": chart_compare_depops,
+        "chart_compare_sinares": chart_compare_sinares,
+        "chart_compare_zonas": chart_compare_zonas,
         "chart_tipo_por_anio": chart_tipo_por_anio,
         "chart_mensual_por_anio": chart_mensual_por_anio,
         "chart_trimestral_por_anio": chart_trimestral_por_anio,
