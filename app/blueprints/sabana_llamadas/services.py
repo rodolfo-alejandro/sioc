@@ -174,14 +174,16 @@ def _read_excel_sheet(path, sheet_index, header_row, keywords=None):
 def _parse_fecha(valor):
     if pd.isna(valor) or valor is None:
         return None
+    if isinstance(valor, str) and not valor.strip():
+        return None
     if isinstance(valor, datetime):
         return valor
     if isinstance(valor, date):
         # Algunos Excel traen fecha sin hora
         return datetime(valor.year, valor.month, valor.day)
     try:
-        # En las sábanas suele venir dd/mm/yyyy; usar dayfirst para evitar parseos inconsistentes.
-        dt = pd.to_datetime(valor, errors='coerce', dayfirst=True)
+        # En las sábanas suele venir dd/mm/yyyy; dayfirst + mixed tolera ISO u otros en la misma columna.
+        dt = pd.to_datetime(valor, errors='coerce', dayfirst=True, format='mixed')
         if pd.isna(dt) or dt is None:
             return None
         # pandas Timestamp -> datetime nativo (evita NaT/formatos raros)

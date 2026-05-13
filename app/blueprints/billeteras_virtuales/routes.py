@@ -549,10 +549,13 @@ def _min_tx_vinculo() -> int:
 
 
 def _parse_dt(v):
+    """Import y filtros: día/mes/año (Argentina); format='mixed' tolera ISO en la misma columna."""
     if v is None:
         return None
+    if isinstance(v, str) and not v.strip():
+        return None
     try:
-        d = pd.to_datetime(v, errors="coerce")
+        d = pd.to_datetime(v, errors="coerce", dayfirst=True, format="mixed")
         if pd.isna(d):
             return None
         return d.to_pydatetime()
