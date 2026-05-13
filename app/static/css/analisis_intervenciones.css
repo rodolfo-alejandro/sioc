@@ -18,3 +18,34 @@
   white-space: pre-wrap;
   line-height: 1.35;
 }
+
+.ai-cuadro-tabs .nav-link {
+  font-size: 0.9rem;
+}
+
+.ai-cuadro-card-header {
+  font-weight: 600;
+  background: linear-gradient(90deg, #fff3cd 0%, #ffe69c 100%);
+}
+
+.ai-cuadro-table thead th {
+  font-size: 0.78rem;
+  vertical-align: middle;
+}
+
+.ai-cuadro-table td,
+.ai-cuadro-table th {
+  font-size: 0.82rem;
+}
+
+.ai-cuadro-sticky {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: #fff;
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.04);
+}
+
+.ai-cuadro-total {
+  background-color: #fff3e0;
+}

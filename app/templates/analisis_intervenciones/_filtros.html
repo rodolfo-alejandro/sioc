@@ -8,6 +8,9 @@
   <div class="collapse" id="ai-filtros-collapse">
     <div class="card-body">
       <form method="get" class="row g-2" id="ai-form-filtros">
+        {% if pestana_cuadros is defined %}
+        <input type="hidden" name="pestana" value="{{ pestana_cuadros }}">
+        {% endif %}
         <div class="col-lg-3 col-md-6">
           <label class="form-label">Superbuscador</label>
           <input type="text" class="form-control form-control-sm" name="q" value="{{ selected.q }}" placeholder="causa, DINAR, SINAR, localidad, barrio...">

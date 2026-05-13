@@ -219,6 +219,309 @@ def _is_procedimiento(tipo: str | None) -> bool:
     return "proced" in (tipo or "").strip().lower()
 
 
+def _is_cod_aduanero_row(row: AnalisisIntervencion) -> bool:
+    """Heurística para columna tipo 'Cód. aduanero' de los cuadros oficiales (no hay flag dedicado en el CSV)."""
+    act = (row.causa_actividad or "").lower()
+    top = (row.tipo_operativo or "").lower()
+    if "contrabando" in act:
+        return True
+    if "aduana" in act or "aduana" in top:
+        return True
+    if "cod ad" in top or "cód ad" in top or "cod. ad" in top:
+        return True
+    return False
+
+
+def _row_escala_bucket(row: AnalisisIntervencion) -> str:
+    """Clasificación exclusiva: cód. aduanero primero, luego Macro/Micro por causa_escala."""
+    if _is_cod_aduanero_row(row):
+        return "cod_ad"
+    esc = (row.causa_escala or "").strip().lower()
+    if "macro" in esc:
+        return "macro"
+    return "micro"
+
+
+def _new_cuadros_agg() -> dict:
+    return {
+        "causas": set(),
+        "allanamientos": 0,
+        "procedimientos": 0,
+        "detenidos": 0,
+        "identificados": 0,
+        "marihuana": 0.0,
+        "cocaina": 0.0,
+        "hojas_coca": 0.0,
+        "pesos": 0.0,
+        "dolares": 0.0,
+    }
+
+
+def _cuadros_agg_add_row(agg: dict, row: AnalisisIntervencion) -> None:
+    if _is_allanamiento(row.tipo_interv_desc):
+        ck = _cause_key(row)
+        if ck is not None:
+            agg["causas"].add(ck)
+        agg["allanamientos"] += 1
+    elif _is_procedimiento(row.tipo_interv_desc):
+        agg["procedimientos"] += 1
+    agg["detenidos"] += _total_detenidos(row)
+    agg["identificados"] += _total_identificados(row)
+    agg["marihuana"] += _to_num(row.secuestro_marihuana)
+    agg["cocaina"] += _to_num(row.secuestro_cocaina)
+    agg["hojas_coca"] += _to_num(row.hojas_coca)
+    agg["pesos"] += _to_num(row.pesos_arg)
+    agg["dolares"] += _to_num(row.dolares)
+
+
+def _cuadros_agg_finalize(agg: dict) -> dict:
+    return {
+        "causas_allanadas": len(agg["causas"]),
+        "allanamientos": int(agg["allanamientos"] or 0),
+        "procedimientos": int(agg["procedimientos"] or 0),
+        "detenidos": int(agg["detenidos"] or 0),
+        "identificados": int(agg["identificados"] or 0),
+        "marihuana": float(agg["marihuana"] or 0),
+        "cocaina": float(agg["cocaina"] or 0),
+        "hojas_coca": float(agg["hojas_coca"] or 0),
+        "pesos": float(agg["pesos"] or 0),
+        "dolares": float(agg["dolares"] or 0),
+    }
+
+
+def _cuadros_sum_display_rows(rows: list[dict]) -> dict:
+    keys = [
+        "causas_allanadas",
+        "allanamientos",
+        "procedimientos",
+        "detenidos",
+        "identificados",
+        "marihuana",
+        "cocaina",
+        "hojas_coca",
+        "pesos",
+        "dolares",
+    ]
+    t = {k: 0 for k in keys}
+    for r in rows:
+        for k in keys:
+            t[k] += float(r.get(k) or 0)
+    for k in ("causas_allanadas", "allanamientos", "procedimientos", "detenidos", "identificados"):
+        t[k] = int(t[k])
+    return t
+
+
+def _cuadros_data(rows: list[AnalisisIntervencion]) -> dict:
+    """Agregaciones para cuadros tipo tabulación oficial (filtros ya aplicados)."""
+    by_zona: dict[str, dict] = defaultdict(_new_cuadros_agg)
+    by_sinar: dict[str, dict] = defaultdict(_new_cuadros_agg)
+    by_dep: dict[str, dict] = defaultdict(_new_cuadros_agg)
+    b_micro = _new_cuadros_agg()
+    b_macro = _new_cuadros_agg()
+    b_cod = _new_cuadros_agg()
+    by_year_bucket: dict[int, dict[str, dict]] = defaultdict(
+        lambda: {"micro": _new_cuadros_agg(), "macro": _new_cuadros_agg(), "cod_ad": _new_cuadros_agg()}
+    )
+
+    for row in rows:
+        zona = (row.zona or "Sin dato").strip() or "Sin dato"
+        sinar = (row.dep_interviniente or "Sin dato").strip() or "Sin dato"
+        depop = (row.departamento_operativo or "Sin dato").strip() or "Sin dato"
+        _cuadros_agg_add_row(by_zona[zona], row)
+        _cuadros_agg_add_row(by_sinar[sinar], row)
+        _cuadros_agg_add_row(by_dep[depop], row)
+        bucket = _row_escala_bucket(row)
+        if bucket == "cod_ad":
+            _cuadros_agg_add_row(b_cod, row)
+        elif bucket == "macro":
+            _cuadros_agg_add_row(b_macro, row)
+        else:
+            _cuadros_agg_add_row(b_micro, row)
+        y = _to_int(row.anio) or (row.interv_fecha.year if row.interv_fecha else None)
+        if y:
+            _cuadros_agg_add_row(by_year_bucket[y][bucket], row)
+
+    def sort_table(items: list[tuple[str, dict]]) -> list[tuple[str, dict]]:
+        return sorted(items, key=lambda x: (-_cuadros_agg_finalize(x[1])["allanamientos"] - x[1]["procedimientos"], x[0]))
+
+    def finalize_map(m: dict[str, dict]) -> list[dict]:
+        out = []
+        for label, raw in sort_table(list(m.items())):
+            d = _cuadros_agg_finalize(raw)
+            d["label"] = label
+            out.append(d)
+        return out
+
+    tabla_zona = finalize_map(by_zona)
+    tabla_sinar = finalize_map(by_sinar)
+    tabla_dep = finalize_map(by_dep)
+
+    mic = _cuadros_agg_finalize(b_micro)
+    mac = _cuadros_agg_finalize(b_macro)
+    cod = _cuadros_agg_finalize(b_cod)
+
+    def cell(d: dict, k: str) -> int | float:
+        return d.get(k) or 0
+
+    clasificacion_filas = [
+        {
+            "label": "Causas allanadas",
+            "micro": cell(mic, "causas_allanadas"),
+            "macro": cell(mac, "causas_allanadas"),
+            "cod_ad": cell(cod, "causas_allanadas"),
+            "total_mm": cell(mic, "causas_allanadas") + cell(mac, "causas_allanadas"),
+            "total_mmc": cell(mic, "causas_allanadas") + cell(mac, "causas_allanadas") + cell(cod, "causas_allanadas"),
+        },
+        {
+            "label": "Allanamientos (interv.)",
+            "micro": cell(mic, "allanamientos"),
+            "macro": cell(mac, "allanamientos"),
+            "cod_ad": cell(cod, "allanamientos"),
+            "total_mm": cell(mic, "allanamientos") + cell(mac, "allanamientos"),
+            "total_mmc": cell(mic, "allanamientos") + cell(mac, "allanamientos") + cell(cod, "allanamientos"),
+        },
+        {
+            "label": "Procedimientos",
+            "micro": cell(mic, "procedimientos"),
+            "macro": cell(mac, "procedimientos"),
+            "cod_ad": cell(cod, "procedimientos"),
+            "total_mm": cell(mic, "procedimientos") + cell(mac, "procedimientos"),
+            "total_mmc": cell(mic, "procedimientos") + cell(mac, "procedimientos") + cell(cod, "procedimientos"),
+        },
+        {
+            "label": "Detenidos",
+            "micro": cell(mic, "detenidos"),
+            "macro": cell(mac, "detenidos"),
+            "cod_ad": cell(cod, "detenidos"),
+            "total_mm": cell(mic, "detenidos") + cell(mac, "detenidos"),
+            "total_mmc": cell(mic, "detenidos") + cell(mac, "detenidos") + cell(cod, "detenidos"),
+        },
+        {
+            "label": "Identificados / supeditados",
+            "micro": cell(mic, "identificados"),
+            "macro": cell(mac, "identificados"),
+            "cod_ad": cell(cod, "identificados"),
+            "total_mm": cell(mic, "identificados") + cell(mac, "identificados"),
+            "total_mmc": cell(mic, "identificados") + cell(mac, "identificados") + cell(cod, "identificados"),
+        },
+        {
+            "label": "Marihuana (unid. importe)",
+            "micro": cell(mic, "marihuana"),
+            "macro": cell(mac, "marihuana"),
+            "cod_ad": cell(cod, "marihuana"),
+            "total_mm": cell(mic, "marihuana") + cell(mac, "marihuana"),
+            "total_mmc": cell(mic, "marihuana") + cell(mac, "marihuana") + cell(cod, "marihuana"),
+            "num": True,
+        },
+        {
+            "label": "Cocaína (unid. importe)",
+            "micro": cell(mic, "cocaina"),
+            "macro": cell(mac, "cocaina"),
+            "cod_ad": cell(cod, "cocaina"),
+            "total_mm": cell(mic, "cocaina") + cell(mac, "cocaina"),
+            "total_mmc": cell(mic, "cocaina") + cell(mac, "cocaina") + cell(cod, "cocaina"),
+            "num": True,
+        },
+        {
+            "label": "Hoja de coca (unid. importe)",
+            "micro": cell(mic, "hojas_coca"),
+            "macro": cell(mac, "hojas_coca"),
+            "cod_ad": cell(cod, "hojas_coca"),
+            "total_mm": cell(mic, "hojas_coca") + cell(mac, "hojas_coca"),
+            "total_mmc": cell(mic, "hojas_coca") + cell(mac, "hojas_coca") + cell(cod, "hojas_coca"),
+            "num": True,
+        },
+        {
+            "label": "Pesos Arg",
+            "micro": cell(mic, "pesos"),
+            "macro": cell(mac, "pesos"),
+            "cod_ad": cell(cod, "pesos"),
+            "total_mm": cell(mic, "pesos") + cell(mac, "pesos"),
+            "total_mmc": cell(mic, "pesos") + cell(mac, "pesos") + cell(cod, "pesos"),
+            "num": True,
+        },
+        {
+            "label": "Dólares",
+            "micro": cell(mic, "dolares"),
+            "macro": cell(mac, "dolares"),
+            "cod_ad": cell(cod, "dolares"),
+            "total_mm": cell(mic, "dolares") + cell(mac, "dolares"),
+            "total_mmc": cell(mic, "dolares") + cell(mac, "dolares") + cell(cod, "dolares"),
+            "num": True,
+        },
+    ]
+
+    years_sorted = sorted(by_year_bucket.keys())
+    comparativo_anios = []
+    for y in years_sorted:
+        yb = by_year_bucket[y]
+        ym = _cuadros_agg_finalize(yb["micro"])
+        ymac = _cuadros_agg_finalize(yb["macro"])
+        ycod = _cuadros_agg_finalize(yb["cod_ad"])
+
+        comparativo_anios.append(
+            {
+                "anio": y,
+                "micro": ym,
+                "macro": ymac,
+                "cod_ad": ycod,
+                "tot_micro_macro": {k: int(ym[k]) + int(ymac[k]) if k in ("causas_allanadas", "allanamientos", "procedimientos", "detenidos", "identificados") else float(ym[k] or 0) + float(ymac[k] or 0) for k in ym},
+                "tot_todo": {k: float(ym[k] or 0) + float(ymac[k] or 0) + float(ycod[k] or 0) for k in ym},
+            }
+        )
+    # Normalizar totales comparativos a int donde aplica
+    for block in comparativo_anios:
+        for key in ("causas_allanadas", "allanamientos", "procedimientos", "detenidos", "identificados"):
+            block["tot_micro_macro"][key] = int(block["tot_micro_macro"][key])
+            block["tot_todo"][key] = int(block["tot_todo"][key])
+
+    int_keys = ("causas_allanadas", "allanamientos", "procedimientos", "detenidos", "identificados")
+    comparativo_filas: list[dict] = []
+    for label, key, is_float in (
+        ("Causas allanadas", "causas_allanadas", False),
+        ("Allanamientos (interv.)", "allanamientos", False),
+        ("Procedimientos", "procedimientos", False),
+        ("Detenidos", "detenidos", False),
+        ("Identificados / supeditados", "identificados", False),
+        ("Marihuana (unid. importe)", "marihuana", True),
+        ("Cocaína (unid. importe)", "cocaina", True),
+        ("Hoja de coca (unid. importe)", "hojas_coca", True),
+        ("Pesos Arg", "pesos", True),
+        ("Dólares", "dolares", True),
+    ):
+        fila = {"label": label, "is_float": is_float, "por_anio": []}
+        for b in comparativo_anios:
+            ym, ymac, ycod = b["micro"], b["macro"], b["cod_ad"]
+            vm, vma, vc = ym[key], ymac[key], ycod[key]
+            if key in int_keys:
+                tot = int(vm) + int(vma) + int(vc)
+            else:
+                tot = float(vm or 0) + float(vma or 0) + float(vc or 0)
+            fila["por_anio"].append(
+                {
+                    "anio": b["anio"],
+                    "micro": vm,
+                    "macro": vma,
+                    "cod_ad": vc,
+                    "total": tot,
+                }
+            )
+        comparativo_filas.append(fila)
+
+    return {
+        "tabla_zona": tabla_zona,
+        "totales_zona": _cuadros_sum_display_rows(tabla_zona),
+        "tabla_sinar": tabla_sinar,
+        "totales_sinar": _cuadros_sum_display_rows(tabla_sinar),
+        "tabla_dep": tabla_dep,
+        "totales_dep": _cuadros_sum_display_rows(tabla_dep),
+        "clasificacion_filas": clasificacion_filas,
+        "comparativo_anios": comparativo_anios,
+        "comparativo_filas": comparativo_filas,
+        "nota_cod_ad": "La columna «Cód. aduanero» usa heurística: causa actividad «Contrabando» o texto con «aduana» en actividad/tipo operativo.",
+    }
+
+
 def _base_q():
     return AnalisisIntervencion.query.filter(
         AnalisisIntervencion.unidad_id == current_user.unidad_id,
@@ -1039,6 +1342,53 @@ def dashboard():
         filtros=_filter_options(),
         selected=_selected_filters(),
         can_view=_can_view(),
+        fmt_float=_fmt_float,
+        fmt_int=_fmt_int,
+    )
+
+
+_CUADROS_PESTANAS = frozenset({"zona", "sinar", "departamento", "clasificacion", "comparativo"})
+
+
+@bp.route("/cuadros")
+def cuadros():
+    if not _can_dashboard():
+        abort(403)
+    pestana = (request.args.get("pestana") or "zona").strip().lower()
+    if pestana not in _CUADROS_PESTANAS:
+        pestana = "zona"
+    args = request.args.to_dict(flat=False)
+    args.pop("pestana", None)
+    filter_qs = urlencode(args, doseq=True)
+
+    rows = _apply_filters(_base_q()).order_by(
+        AnalisisIntervencion.interv_fecha.asc(),
+        AnalisisIntervencion.interv_hora.asc(),
+    ).all()
+    datos = _cuadros_data(rows)
+    sel = _selected_filters()
+    fd, fh = _resolve_period_dates(sel)
+    subtitulo_periodo = ""
+    if fd and fh:
+        subtitulo_periodo = f"{fd.strftime('%d/%m/%Y')} al {fh.strftime('%d/%m/%Y')}"
+    elif fd:
+        subtitulo_periodo = f"Desde {fd.strftime('%d/%m/%Y')}"
+    elif fh:
+        subtitulo_periodo = f"Hasta {fh.strftime('%d/%m/%Y')}"
+    return render_template(
+        "analisis_intervenciones/cuadros.html",
+        cuadros=datos,
+        pestana=pestana,
+        pestana_cuadros=pestana,
+        filter_qs=filter_qs,
+        filtros=_filter_options(),
+        selected=sel,
+        subtitulo_periodo=subtitulo_periodo,
+        n_registros=len(rows),
+        can_view=_can_view(),
+        can_import=_can_import(),
+        can_export=_can_export(),
+        can_dashboard=_can_dashboard(),
         fmt_float=_fmt_float,
         fmt_int=_fmt_int,
     )

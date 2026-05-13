@@ -1,0 +1,184 @@
+{% extends "layouts/base.html" %}
+{% block title %}Cuadros estadísticos — Análisis Intervenciones{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/analisis_intervenciones.css') }}">
+{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-grid-3x3-gap"></i> Cuadros comparativos</h1>
+  <p class="text-muted mb-1">Totales por DINAR (zona), SINAR/división, departamento operativo y clasificación Micro/Macro/Cód. aduanero. Respetan los mismos filtros que el listado y el dashboard.</p>
+  {% if subtitulo_periodo %}<p class="small text-muted mb-0">Período aplicado: {{ subtitulo_periodo }}</p>{% endif %}
+  <p class="small text-muted">Registros considerados: {{ fmt_int(n_registros) }}.</p>
+</div>
+
+<div class="d-flex gap-2 my-2 flex-wrap">
+  {% if can_view %}<a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_intervenciones.listado') }}{% if request.query_string %}?{{ request.query_string.decode('utf-8') }}{% endif %}">Listado</a>{% endif %}
+  {% if can_dashboard %}<a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_intervenciones.dashboard') }}{% if request.query_string %}?{{ request.query_string.decode('utf-8') }}{% endif %}">Dashboard</a>{% endif %}
+  {% if can_import %}<a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_intervenciones.importar') }}">Importar</a>{% endif %}
+</div>
+
+{% include "analisis_intervenciones/_filtros.html" %}
+
+{% macro tablink(pid, label) -%}
+<a class="nav-link {% if pestana == pid %}active{% endif %}" href="{{ url_for('analisis_intervenciones.cuadros') }}?pestana={{ pid }}{% if filter_qs %}&{{ filter_qs }}{% endif %}">{{ label }}</a>
+{%- endmacro %}
+
+<ul class="nav nav-tabs flex-wrap mb-3 ai-cuadro-tabs">
+  <li class="nav-item">{{ tablink('zona', 'Por DINAR (zona)') }}</li>
+  <li class="nav-item">{{ tablink('sinar', 'Por SINAR / División') }}</li>
+  <li class="nav-item">{{ tablink('departamento', 'Por dpto. operativo') }}</li>
+  <li class="nav-item">{{ tablink('clasificacion', 'Micro / Macro / Cód. ad.') }}</li>
+  <li class="nav-item">{{ tablink('comparativo', 'Comparativo por año') }}</li>
+</ul>
+
+{% macro tabla_territorial(titulo, tabla, totales) %}
+<div class="card mb-4 ai-cuadro-card">
+  <div class="card-header ai-cuadro-card-header">{{ titulo }}</div>
+  <div class="card-body p-0 table-responsive">
+    <table class="table table-sm table-bordered mb-0 align-middle ai-cuadro-table">
+      <thead class="table-light">
+        <tr>
+          <th class="ai-cuadro-sticky">Unidad</th>
+          <th class="text-end">Causas allan.</th>
+          <th class="text-end">Allanam.</th>
+          <th class="text-end">Proc.</th>
+          <th class="text-end">Detenidos</th>
+          <th class="text-end">Identif.</th>
+          <th class="text-end">Marihuana</th>
+          <th class="text-end">Cocaína</th>
+          <th class="text-end">Hoja coca</th>
+          <th class="text-end">Pesos</th>
+          <th class="text-end">Dólares</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in tabla %}
+        <tr>
+          <td class="ai-cuadro-sticky text-nowrap">{{ r.label }}</td>
+          <td class="text-end">{{ fmt_int(r.causas_allanadas) }}</td>
+          <td class="text-end">{{ fmt_int(r.allanamientos) }}</td>
+          <td class="text-end">{{ fmt_int(r.procedimientos) }}</td>
+          <td class="text-end">{{ fmt_int(r.detenidos) }}</td>
+          <td class="text-end">{{ fmt_int(r.identificados) }}</td>
+          <td class="text-end">{{ fmt_float(r.marihuana) }}</td>
+          <td class="text-end">{{ fmt_float(r.cocaina) }}</td>
+          <td class="text-end">{{ fmt_float(r.hojas_coca) }}</td>
+          <td class="text-end">{{ fmt_float(r.pesos) }}</td>
+          <td class="text-end">{{ fmt_float(r.dolares) }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="11" class="text-center text-muted py-4">Sin datos para los filtros actuales.</td></tr>
+        {% endfor %}
+        {% if tabla %}
+        <tr class="table-secondary fw-semibold">
+          <td class="ai-cuadro-sticky">TOTALES</td>
+          <td class="text-end">{{ fmt_int(totales.causas_allanadas) }}</td>
+          <td class="text-end">{{ fmt_int(totales.allanamientos) }}</td>
+          <td class="text-end">{{ fmt_int(totales.procedimientos) }}</td>
+          <td class="text-end">{{ fmt_int(totales.detenidos) }}</td>
+          <td class="text-end">{{ fmt_int(totales.identificados) }}</td>
+          <td class="text-end">{{ fmt_float(totales.marihuana) }}</td>
+          <td class="text-end">{{ fmt_float(totales.cocaina) }}</td>
+          <td class="text-end">{{ fmt_float(totales.hojas_coca) }}</td>
+          <td class="text-end">{{ fmt_float(totales.pesos) }}</td>
+          <td class="text-end">{{ fmt_float(totales.dolares) }}</td>
+        </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endmacro %}
+
+{% if pestana == 'zona' %}
+  {{ tabla_territorial('Estadística por DINAR (zona)', cuadros.tabla_zona, cuadros.totales_zona) }}
+{% elif pestana == 'sinar' %}
+  {{ tabla_territorial('Estadística por SINAR / división interviniente', cuadros.tabla_sinar, cuadros.totales_sinar) }}
+{% elif pestana == 'departamento' %}
+  {{ tabla_territorial('Estadística por departamento operativo', cuadros.tabla_dep, cuadros.totales_dep) }}
+{% elif pestana == 'clasificacion' %}
+<div class="card mb-4">
+  <div class="card-header">Progresivo por escala operativa (Micro / Macro / Cód. aduanero)</div>
+  <div class="card-body">
+    <p class="small text-muted">{{ cuadros.nota_cod_ad }}</p>
+    <div class="table-responsive">
+      <table class="table table-sm table-bordered align-middle ai-cuadro-table">
+        <thead class="table-light">
+          <tr>
+            <th>Indicador</th>
+            <th class="text-end">Micro</th>
+            <th class="text-end">Macro</th>
+            <th class="text-end">Cód. aduanero</th>
+            <th class="text-end ai-cuadro-total">Total M+M</th>
+            <th class="text-end ai-cuadro-total">Total M+M+C</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for fila in cuadros.clasificacion_filas %}
+          <tr>
+            <td>{{ fila.label }}</td>
+            <td class="text-end">{% if fila.num %}{{ fmt_float(fila.micro) }}{% else %}{{ fmt_int(fila.micro) }}{% endif %}</td>
+            <td class="text-end">{% if fila.num %}{{ fmt_float(fila.macro) }}{% else %}{{ fmt_int(fila.macro) }}{% endif %}</td>
+            <td class="text-end">{% if fila.num %}{{ fmt_float(fila.cod_ad) }}{% else %}{{ fmt_int(fila.cod_ad) }}{% endif %}</td>
+            <td class="text-end ai-cuadro-total">{% if fila.num %}{{ fmt_float(fila.total_mm) }}{% else %}{{ fmt_int(fila.total_mm) }}{% endif %}</td>
+            <td class="text-end ai-cuadro-total">{% if fila.num %}{{ fmt_float(fila.total_mmc) }}{% else %}{{ fmt_int(fila.total_mmc) }}{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% elif pestana == 'comparativo' %}
+<div class="card mb-4">
+  <div class="card-header">Comparativo por año (Micro / Macro / Cód. aduanero)</div>
+  <div class="card-body">
+    <p class="small text-muted">{{ cuadros.nota_cod_ad }}</p>
+    {% if cuadros.comparativo_anios %}
+    <div class="table-responsive">
+      <table class="table table-sm table-bordered align-middle text-nowrap ai-cuadro-table">
+        <thead class="table-light">
+          <tr>
+            <th rowspan="2" class="align-middle">Indicador</th>
+            {% for b in cuadros.comparativo_anios %}
+            <th colspan="4" class="text-center">{{ b.anio }}</th>
+            {% endfor %}
+          </tr>
+          <tr>
+            {% for b in cuadros.comparativo_anios %}
+            <th class="text-end">Micro</th>
+            <th class="text-end">Macro</th>
+            <th class="text-end">Cód. ad.</th>
+            <th class="text-end ai-cuadro-total">Total</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for fila in cuadros.comparativo_filas %}
+          <tr>
+            <td>{{ fila.label }}</td>
+            {% for col in fila.por_anio %}
+            <td class="text-end">{% if fila.is_float %}{{ fmt_float(col.micro) }}{% else %}{{ fmt_int(col.micro) }}{% endif %}</td>
+            <td class="text-end">{% if fila.is_float %}{{ fmt_float(col.macro) }}{% else %}{{ fmt_int(col.macro) }}{% endif %}</td>
+            <td class="text-end">{% if fila.is_float %}{{ fmt_float(col.cod_ad) }}{% else %}{{ fmt_int(col.cod_ad) }}{% endif %}</td>
+            <td class="text-end ai-cuadro-total">{% if fila.is_float %}{{ fmt_float(col.total) }}{% else %}{{ fmt_int(col.total) }}{% endif %}</td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-muted mb-0">No hay años para comparar en el conjunto filtrado (revisá filtros de fecha o de año).</p>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<div class="alert alert-light border small mb-0">
+  <strong>Nota:</strong> «Allanam.» cuenta intervenciones tipo allanamiento; «Causas allan.» cuenta causas únicas por clave importada. «Domicilios allanados» del Excel oficial no está en el CSV: si más adelante incorporan campo o regla, lo enlazamos aquí.
+</div>
+{% endblock %}
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/analisis_intervenciones_filtros.js') }}"></script>
+{% endblock %}
