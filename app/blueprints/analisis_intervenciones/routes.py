@@ -139,8 +139,13 @@ def _parse_float(v: object) -> float | None:
 
 
 def _parse_date(v: object) -> date | None:
+    """CSV intervenciones: día/mes/año; format='mixed' tolera ISO u otros en la misma columna."""
     try:
-        d = pd.to_datetime(v, errors="coerce", dayfirst=True)
+        if v is None:
+            return None
+        if isinstance(v, str) and not v.strip():
+            return None
+        d = pd.to_datetime(v, errors="coerce", dayfirst=True, format="mixed")
         if pd.isna(d):
             return None
         return d.date()

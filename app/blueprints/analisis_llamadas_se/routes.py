@@ -77,8 +77,13 @@ def _parse_int(v):
 
 
 def _parse_dt(v):
+    """Fechas como en Argentina: día/mes/año (no mes/día como pandas por defecto)."""
     try:
-        d = pd.to_datetime(v, errors="coerce")
+        if v is None:
+            return None
+        if isinstance(v, str) and not v.strip():
+            return None
+        d = pd.to_datetime(v, errors="coerce", dayfirst=True, format="mixed")
         if pd.isna(d):
             return None
         return d.to_pydatetime()

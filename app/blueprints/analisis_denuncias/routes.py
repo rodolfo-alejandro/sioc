@@ -94,10 +94,13 @@ def _parse_int(v: object) -> int | None:
 
 
 def _parse_dt(v: object) -> datetime | None:
+    """Fechas como en Argentina: día/mes/año; format='mixed' tolera ISO u otros en la misma columna."""
     try:
         if v is None:
             return None
-        d = pd.to_datetime(v, errors="coerce", dayfirst=True)
+        if isinstance(v, str) and not v.strip():
+            return None
+        d = pd.to_datetime(v, errors="coerce", dayfirst=True, format="mixed")
         if pd.isna(d):
             return None
         return d.to_pydatetime()
