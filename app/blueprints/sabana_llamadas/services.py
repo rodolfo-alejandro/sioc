@@ -128,7 +128,8 @@ def _read_excel_sheet(path, sheet_index, header_row, keywords=None):
         if not keywords_local:
             return default_idx
         kws = [k.lower() for k in keywords_local]
-        max_scan = min(10, len(rows))
+        # Claro (record/sábana) puede tener encabezados en fila 10–14.
+        max_scan = min(20, len(rows))
         for r in range(max_scan):
             vals = [str(v).strip().lower() for v in rows[r]]
             for k in kws:
@@ -149,7 +150,7 @@ def _read_excel_sheet(path, sheet_index, header_row, keywords=None):
 
         # Leer una ventana de filas inicial para detectar encabezados
         preview_rows = []
-        max_preview = min(10, sheet.nrows)
+        max_preview = min(20, sheet.nrows)
         for r in range(max_preview):
             preview_rows.append(sheet.row_values(r))
         hdr_idx = detect_header_index_rows(preview_rows, header_row, keywords)

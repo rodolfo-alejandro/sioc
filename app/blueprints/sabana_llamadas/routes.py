@@ -36,6 +36,8 @@ from app.blueprints.sabana_llamadas.services import (
     procesar_archivo_voz,
     guardar_imagen_sujeto,
 )
+from app.blueprints.sabana_llamadas.claro_import import procesar_archivo_claro
+from app.blueprints.analisis_puntos.claro_record import procesar_record_claro
 from app.extensions import db
 from app.models.sabana_llamadas import (
     Sujeto,
@@ -1283,7 +1285,10 @@ def cargas_upload_unificado():
         if operadora not in {'PERSONAL', 'MOVISTAR', 'CLARO', 'OTRA'}:
             flash('Debe seleccionar una operadora válida.', 'warning')
             return redirect(url_for('sabana_llamadas.cargas_list', nuevo=1))
-        if tipo_carga not in {'sabana_gprs', 'sabana_voz', 'record_voz', 'record_gprs'}:
+        if tipo_carga not in {
+            'sabana_gprs', 'sabana_voz', 'sabana_claro',
+            'record_voz', 'record_gprs', 'record_claro',
+        }:
             flash('Debe seleccionar un tipo de archivo válido.', 'warning')
             return redirect(url_for('sabana_llamadas.cargas_list', nuevo=1))
         if not f or not f.filename:
@@ -1306,6 +1311,26 @@ def cargas_upload_unificado():
                 return redirect(url_for('sabana_llamadas.cargas_list', nuevo=1))
 
         # Dispatch por tipo
+        if tipo_carga == 'sabana_claro':
+            if operadora != 'CLARO':
+                flash('La sábana Claro completa requiere operadora CLARO.', 'warning')
+                return redirect(url_for('sabana_llamadas.cargas_list', nuevo=1))
+            carga_voz, carga_gprs, stats, err = procesar_archivo_claro(
+                f, current_user.unidad_id, current_user.id, sujeto_id or None,
+                operadora=operadora, caso_id=caso_id,
+            )
+            if err:
+                flash(f'Error cargando sábana Claro: {err}', 'danger')
+            else:
+                flash(
+                    f'Sábana Claro procesada: VOZ {stats.get("voz", 0)} eventos '
+                    f'({stats.get("entrantes", 0)} entrantes, {stats.get("salientes_voz", 0)} salientes voz) '
+                    f'→ carga #{carga_voz.id}; GPRS {stats.get("gprs", 0)} conexiones móviles '
+                    f'→ carga #{carga_gprs.id}.',
+                    'success',
+                )
+            return redirect(url_for('sabana_llamadas.cargas_list'))
+
         if tipo_carga == 'sabana_gprs':
             _, ct, cd, err = procesar_archivo_gprs(
                 f, current_user.unidad_id, current_user.id, sujeto_id or None,
@@ -1328,7 +1353,86 @@ def cargas_upload_unificado():
                 flash(f'Sábana VOZ cargada: {ct} tráfico, {cd} técnicos.', 'success')
             return redirect(url_for('sabana_llamadas.cargas_list'))
 
-        # Record VOZ / GPRS
+        # Record Claro unificado (VOZ + GPRS)
+        if tipo_carga == 'record_claro':
+            if operadora != 'CLARO':
+                flash('El record Claro completo requiere operadora CLARO.', 'warning')
+                return redirect(url_for('sabana_llamadas.cargas_list', nuevo=1))
+
+            filename = secure_filename(f.filename)
+            ext = os.path.splitext(filename)[1].lower()
+            if ext not in {'.xlsx', '.xls', '.csv'}:
+                flash('Formato no permitido. Use .xlsx, .xls o .csv.', 'warning')
+                return redirect(url_for('sabana_llamadas.cargas_list', nuevo=1))
+
+            base_dir = current_app.config.get('UPLOAD_FOLDER', 'instance/uploads')
+            if not os.path.isabs(base_dir):
+                base_dir = os.path.join(current_app.root_path, base_dir)
+            target_dir = os.path.join(base_dir, 'analisis_puntos', str(current_user.unidad_id), str(caso_id))
+            os.makedirs(target_dir, exist_ok=True)
+            safe_name = f"{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{filename}"
+            path = os.path.join(target_dir, safe_name)
+            f.save(path)
+
+            sha256 = hashlib.sha256()
+            with open(path, 'rb') as rf:
+                for chunk in iter(lambda: rf.read(8192), b''):
+                    sha256.update(chunk)
+            sha = sha256.hexdigest()
+            size = os.path.getsize(path)
+
+            fuente_voz = AnalisisPuntoFuente(
+                caso_id=caso_id,
+                unidad_id=current_user.unidad_id,
+                user_id=current_user.id,
+                source_type='VOZ',
+                operadora=operadora,
+                nombre_archivo=safe_name,
+                sha256=sha,
+                mime_type=f.mimetype,
+                size_bytes=size,
+                upload_status='PENDING',
+            )
+            fuente_gprs = AnalisisPuntoFuente(
+                caso_id=caso_id,
+                unidad_id=current_user.unidad_id,
+                user_id=current_user.id,
+                source_type='GPRS',
+                operadora=operadora,
+                nombre_archivo=safe_name,
+                sha256=sha,
+                mime_type=f.mimetype,
+                size_bytes=size,
+                upload_status='PENDING',
+            )
+            db.session.add(fuente_voz)
+            db.session.add(fuente_gprs)
+            db.session.commit()
+
+            try:
+                stats = procesar_record_claro(fuente_voz, fuente_gprs, path)
+                flash(
+                    f'Record Claro procesado: VOZ {stats.get("voz", 0)} eventos '
+                    f'({stats.get("entrantes", 0)} entrantes, {stats.get("salientes_voz", 0)} salientes voz) '
+                    f'→ fuente #{fuente_voz.id}; GPRS {stats.get("gprs", 0)} sesiones datos '
+                    f'→ fuente #{fuente_gprs.id}.',
+                    'success',
+                )
+            except Exception as e:
+                try:
+                    fuente_voz.upload_status = 'ERROR'
+                    fuente_voz.error_detail = str(e)
+                    fuente_gprs.upload_status = 'ERROR'
+                    fuente_gprs.error_detail = str(e)
+                    db.session.add(fuente_voz)
+                    db.session.add(fuente_gprs)
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
+                flash(f'Record Claro subido, pero falló el procesamiento: {e}', 'warning')
+            return redirect(url_for('sabana_llamadas.cargas_list'))
+
+        # Record VOZ / GPRS (Personal / formato clásico)
         filename = secure_filename(f.filename)
         ext = os.path.splitext(filename)[1].lower()
         if ext not in {'.xlsx', '.xls', '.csv'}:
