@@ -1,0 +1,127 @@
+{% if can_export %}
+<button type="button" class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#alsModalExportPdf">
+  <i class="bi bi-file-earmark-pdf"></i> Informe PDF
+</button>
+
+<div class="modal fade" id="alsModalExportPdf" tabindex="-1" aria-labelledby="alsModalExportPdfLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-lg">
+    <div class="modal-content">
+      <form method="get" action="{{ url_for('analisis_llamadas_se.export_pdf') }}" id="als-form-export-pdf">
+        {% for key, values in request.args.lists() %}
+          {% for v in values %}
+          <input type="hidden" name="{{ key }}" value="{{ v|e }}">
+          {% endfor %}
+        {% endfor %}
+
+        <div class="modal-header">
+          <h5 class="modal-title" id="alsModalExportPdfLabel">
+            <i class="bi bi-file-earmark-pdf me-1"></i> Exportar informe PDF
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <p class="small text-muted mb-3">
+            Se exportará el conjunto <strong>filtrado actual</strong> (mismos criterios que listado/mapa/dashboard).
+            División = campo <strong>DINAR</strong> (<code>llamada_jurisdiccion</code>).
+          </p>
+
+          <div class="row g-3">
+            <div class="col-md-6">
+              <h6 class="mb-2">Qué incluir en el PDF</h6>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="als-inc-cover" checked
+                       onchange="document.getElementById('als-inc-cover-val').value = this.checked ? '1' : '0'">
+                <label class="form-check-label" for="als-inc-cover">Carátula y resumen (KPIs + filtros)</label>
+                <input type="hidden" name="inc_cover" id="als-inc-cover-val" value="1">
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="als-inc-map" checked
+                       onchange="document.getElementById('als-inc-map-val').value = this.checked ? '1' : '0'">
+                <label class="form-check-label" for="als-inc-map">Mapa con todos los puntos georreferenciados</label>
+                <input type="hidden" name="inc_map" id="als-inc-map-val" value="1">
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="als-inc-table" checked
+                       onchange="document.getElementById('als-inc-table-val').value = this.checked ? '1' : '0'">
+                <label class="form-check-label" for="als-inc-table">Tabla detallada (todas las filas filtradas)</label>
+                <input type="hidden" name="inc_table" id="als-inc-table-val" value="1">
+              </div>
+            </div>
+            <div class="col-md-6">
+              <h6 class="mb-2">Columnas de la tabla</h6>
+              <div class="row g-1">
+                {% set cols = [
+                  ('fecha', 'Fecha'),
+                  ('hora', 'Hora'),
+                  ('alerta', 'Alerta'),
+                  ('barrio', 'Barrio'),
+                  ('localidad', 'Localidad'),
+                  ('lugar', 'Lugar (detalle)'),
+                  ('dependencia', 'Dependencia'),
+                  ('dinar', 'División (DINAR)'),
+                  ('semana', 'Semana'),
+                  ('dia_semana', 'Día semana'),
+                  ('coords', 'Coordenadas'),
+                ] %}
+                {% for key, label in cols %}
+                <div class="col-6">
+                  <div class="form-check">
+                    <input class="form-check-input als-col-check" type="checkbox" name="col[]" value="{{ key }}" id="als-col-{{ key }}"
+                      {% if key in ['fecha','hora','alerta','barrio','localidad','lugar','dependencia','dinar'] %}checked{% endif %}>
+                    <label class="form-check-label small" for="als-col-{{ key }}">{{ label }}</label>
+                  </div>
+                </div>
+                {% endfor %}
+              </div>
+              <div class="mt-2 d-flex gap-2">
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="als-cols-all">Todas</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="als-cols-min">Mínimas</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="alert alert-info py-2 small mt-3 mb-0">
+            Informes grandes pueden tardar unos segundos. El mapa incluye <strong>todos</strong> los puntos con coordenadas del filtro (sin límite de 8000 del mapa web).
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-danger">
+            <i class="bi bi-download"></i> Generar PDF
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  var form = document.getElementById('als-form-export-pdf');
+  if (!form) return;
+  var minCols = ['fecha', 'hora', 'alerta', 'barrio', 'lugar', 'dinar'];
+  document.getElementById('als-cols-all')?.addEventListener('click', function () {
+    form.querySelectorAll('.als-col-check').forEach(function (cb) { cb.checked = true; });
+  });
+  document.getElementById('als-cols-min')?.addEventListener('click', function () {
+    form.querySelectorAll('.als-col-check').forEach(function (cb) {
+      cb.checked = minCols.indexOf(cb.value) >= 0;
+    });
+  });
+  form.addEventListener('submit', function (ev) {
+    var tableOn = document.getElementById('als-inc-table-val')?.value === '1';
+    if (tableOn && !form.querySelector('.als-col-check:checked')) {
+      ev.preventDefault();
+      alert('Seleccioná al menos una columna para la tabla.');
+      return;
+    }
+    var cover = document.getElementById('als-inc-cover-val')?.value === '1';
+    var map = document.getElementById('als-inc-map-val')?.value === '1';
+    var table = document.getElementById('als-inc-table-val')?.value === '1';
+    if (!cover && !map && !table) {
+      ev.preventDefault();
+      alert('Seleccioná al menos una sección para exportar.');
+    }
+  });
+})();
+</script>
+{% endif %}

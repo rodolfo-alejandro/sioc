@@ -15,6 +15,11 @@ from sqlalchemy import func, inspect
 from app.blueprints.analisis_llamadas_se import bp
 from app.extensions import db
 from app.models.analisis_llamadas_se import LlamadaSE
+from app.blueprints.analisis_llamadas_se.pdf_informe import (
+    DEFAULT_COLUMNS,
+    INFORME_COLUMN_DEFS,
+    build_informe_pdf,
+)
 
 
 _schema_checked = False
@@ -167,6 +172,48 @@ def _apply_filters(q):
     if s["barrios"]:
         q = q.filter(LlamadaSE.llamada_barrio_nombre.in_(s["barrios"]))
     return q
+
+
+def _filters_summary_lines(selected: dict | None = None) -> list[str]:
+    s = selected if selected is not None else _selected()
+    lines: list[str] = []
+    if s.get("q"):
+        lines.append(f"Búsqueda: {s['q']}")
+    if s.get("fecha_desde") or s.get("fecha_hasta"):
+        lines.append(f"Período: {s.get('fecha_desde') or '…'} → {s.get('fecha_hasta') or '…'}")
+    if s.get("semana"):
+        lines.append(f"Semana: {s['semana']}")
+    if s.get("dia_semana"):
+        lines.append(f"Día de semana: {s['dia_semana']}")
+    if s.get("alertas"):
+        lines.append(f"Alertas: {', '.join(s['alertas'][:8])}{'…' if len(s['alertas']) > 8 else ''}")
+    if s.get("jurisdicciones"):
+        lines.append(f"División (DINAR): {', '.join(s['jurisdicciones'][:6])}{'…' if len(s['jurisdicciones']) > 6 else ''}")
+    if s.get("deps"):
+        lines.append(f"Dependencias: {', '.join(s['deps'][:6])}{'…' if len(s['deps']) > 6 else ''}")
+    if s.get("localidades"):
+        lines.append(f"Localidades: {', '.join(s['localidades'][:6])}{'…' if len(s['localidades']) > 6 else ''}")
+    if s.get("barrios"):
+        lines.append(f"Barrios: {', '.join(s['barrios'][:6])}{'…' if len(s['barrios']) > 6 else ''}")
+    return lines
+
+
+def _parse_export_pdf_options():
+    def _flag(name: str, default: bool = True) -> bool:
+        raw = request.args.get(name)
+        if raw is None:
+            return default
+        return str(raw).strip().lower() in {"1", "true", "yes", "on"}
+
+    cols = [c for c in request.args.getlist("col[]") if c in INFORME_COLUMN_DEFS]
+    if not cols:
+        cols = DEFAULT_COLUMNS.copy()
+    return {
+        "include_cover": _flag("inc_cover", True),
+        "include_map": _flag("inc_map", True),
+        "include_table": _flag("inc_table", True),
+        "columns": cols,
+    }
 
 
 def _filter_options():
@@ -421,6 +468,7 @@ def dashboard():
         selected=_selected(),
         can_map=_can_map(),
         can_view=_can_view(),
+        can_export=_can_export(),
     )
 
 
@@ -455,6 +503,7 @@ def mapa():
         selected=_selected(),
         can_dashboard=_can_dashboard(),
         can_view=_can_view(),
+        can_export=_can_export(),
     )
 
 
@@ -529,5 +578,51 @@ def export_xlsx():
         bio.read(),
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": "attachment; filename=llamadas_se_filtrado.xlsx"},
+    )
+
+
+@bp.route("/export.pdf")
+def export_pdf():
+    if not _can_export():
+        abort(403)
+    opts = _parse_export_pdf_options()
+    if not opts["include_cover"] and not opts["include_map"] and not opts["include_table"]:
+        flash("Seleccioná al menos una sección para el informe PDF.", "warning")
+        return redirect(request.referrer or url_for("analisis_llamadas_se.listado"))
+
+    q = _apply_filters(_base_q()).order_by(LlamadaSE.llamada_fecha.desc(), LlamadaSE.id.desc())
+    rows = q.all()
+    if not rows and opts["include_table"]:
+        flash("No hay registros con los filtros actuales.", "warning")
+        return redirect(request.referrer or url_for("analisis_llamadas_se.listado"))
+
+    unidad_nombre = ""
+    try:
+        if getattr(current_user, "unidad", None):
+            unidad_nombre = current_user.unidad.nombre or ""
+    except Exception:
+        pass
+    usuario_nombre = getattr(current_user, "nombre_completo", None) or getattr(current_user, "username", "") or ""
+
+    try:
+        pdf_bytes = build_informe_pdf(
+            rows,
+            filters_lines=_filters_summary_lines(),
+            columns=opts["columns"],
+            include_cover=opts["include_cover"],
+            include_map=opts["include_map"],
+            include_table=opts["include_table"],
+            unidad_nombre=unidad_nombre,
+            usuario_nombre=usuario_nombre,
+        )
+    except Exception as e:
+        flash(f"No se pudo generar el PDF: {e}", "danger")
+        return redirect(request.referrer or url_for("analisis_llamadas_se.listado"))
+
+    fname = f"informe_llamadas_se_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pdf"
+    return Response(
+        pdf_bytes,
+        mimetype="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
     )
 
