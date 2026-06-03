@@ -4,7 +4,8 @@ Generación de informe PDF para Llamadas SE (servidor).
 from __future__ import annotations
 
 import io
-from datetime import datetime
+import os
+from datetime import datetime, timedelta
 from typing import Any, Callable, Iterable
 
 from app.models.analisis_llamadas_se import LlamadaSE
@@ -54,6 +55,15 @@ INFORME_COLUMN_DEFS: dict[str, tuple[str, Callable[[LlamadaSE], str]]] = {
 }
 
 DEFAULT_COLUMNS = ["fecha", "hora", "alerta", "barrio", "localidad", "lugar", "dependencia", "dinar"]
+
+
+def _now_local_str(fmt: str = "%d/%m/%Y %H:%M") -> str:
+    """Misma lógica que el filtro Jinja localtime (TIMEZONE_OFFSET_HOURS, ej. -3 Salta)."""
+    try:
+        offset = int(os.environ.get("TIMEZONE_OFFSET_HOURS", "-3"))
+    except (TypeError, ValueError):
+        offset = -3
+    return (datetime.utcnow() + timedelta(hours=offset)).strftime(fmt)
 
 
 def _color_alerta_hex(desc: str | None) -> str:
@@ -155,7 +165,7 @@ def build_informe_pdf(
         parent=styles["Heading1"],
         fontSize=16,
         spaceAfter=10,
-        alignment=TA_LEFT,
+        alignment=TA_CENTER,
     )
     sub_style = ParagraphStyle(
         "AlsSub",
@@ -163,6 +173,13 @@ def build_informe_pdf(
         fontSize=9,
         leading=12,
         alignment=TA_LEFT,
+    )
+    center_style = ParagraphStyle(
+        "AlsCenter",
+        parent=styles["Normal"],
+        fontSize=9,
+        leading=13,
+        alignment=TA_CENTER,
     )
     cell_style = ParagraphStyle(
         "AlsCell",
@@ -182,10 +199,10 @@ def build_informe_pdf(
 
     story: list[Any] = []
     stats = _kpis(rows)
-    now_txt = datetime.now().strftime("%d/%m/%Y %H:%M")
+    now_txt = _now_local_str()
 
     if include_cover:
-        story.append(Paragraph("Informe operativo — Llamadas SE", title_style))
+        story.append(Paragraph("Informe - Llamadas SE", title_style))
         story.append(Spacer(1, 0.2 * cm))
         meta = [
             f"<b>Generado:</b> {_escape_pdf_text(now_txt)}",
@@ -195,23 +212,22 @@ def build_informe_pdf(
         for line in meta:
             story.append(Paragraph(line, sub_style))
         story.append(Spacer(1, 0.35 * cm))
-        story.append(Paragraph("<b>Filtros aplicados</b>", sub_style))
         if filters_lines:
             for fl in filters_lines:
-                story.append(Paragraph(f"• {_escape_pdf_text(fl)}", sub_style))
+                story.append(Paragraph(_escape_pdf_text(fl), center_style))
         else:
-            story.append(Paragraph("• Sin filtros adicionales (dataset completo de la unidad)", sub_style))
+            story.append(Paragraph("Sin filtros adicionales (dataset completo de la unidad)", center_style))
         story.append(Spacer(1, 0.4 * cm))
         kpi_data = [
-            ["Total llamadas", "Con coordenadas", "Alerta venta", "Alerta consumo"],
+            ["Total llamadas", "Alerta venta", "Alerta consumo"],
             [
                 str(stats["total"]),
-                str(stats["con_coords"]),
                 str(stats["venta"]),
                 str(stats["consumo"]),
             ],
         ]
-        kpi_table = Table(kpi_data, colWidths=[4 * cm, 4 * cm, 4 * cm, 4 * cm])
+        kpi_table = Table(kpi_data, colWidths=[5 * cm, 5 * cm, 5 * cm])
+        kpi_table.hAlign = "CENTER"
         kpi_table.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#198754")),
             ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),

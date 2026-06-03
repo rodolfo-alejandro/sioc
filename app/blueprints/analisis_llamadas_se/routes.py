@@ -19,6 +19,7 @@ from app.blueprints.analisis_llamadas_se.pdf_informe import (
     DEFAULT_COLUMNS,
     INFORME_COLUMN_DEFS,
     build_informe_pdf,
+    _now_local_str,
 )
 
 
@@ -619,7 +620,7 @@ def export_pdf():
         flash(f"No se pudo generar el PDF: {e}", "danger")
         return redirect(request.referrer or url_for("analisis_llamadas_se.listado"))
 
-    fname = f"informe_llamadas_se_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pdf"
+    fname = f"informe_llamadas_se_{_now_local_str('%Y%m%d_%H%M%S')}.pdf"
     return Response(
         pdf_bytes,
         mimetype="application/pdf",
