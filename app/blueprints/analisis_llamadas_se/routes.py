@@ -21,6 +21,7 @@ from app.blueprints.analisis_llamadas_se.pdf_informe import (
     build_informe_pdf,
     _now_local_str,
 )
+from app.blueprints.analisis_llamadas_se.word_informe import build_informe_docx
 
 
 _schema_checked = False
@@ -199,7 +200,7 @@ def _filters_summary_lines(selected: dict | None = None) -> list[str]:
     return lines
 
 
-def _parse_export_pdf_options():
+def _parse_export_options():
     def _flag(name: str, default: bool = True) -> bool:
         raw = request.args.get(name)
         if raw is None:
@@ -582,11 +583,22 @@ def export_xlsx():
     )
 
 
+def _export_meta():
+    unidad_nombre = ""
+    try:
+        if getattr(current_user, "unidad", None):
+            unidad_nombre = current_user.unidad.nombre or ""
+    except Exception:
+        pass
+    usuario_nombre = getattr(current_user, "nombre_completo", None) or getattr(current_user, "username", "") or ""
+    return unidad_nombre, usuario_nombre
+
+
 @bp.route("/export.pdf")
 def export_pdf():
     if not _can_export():
         abort(403)
-    opts = _parse_export_pdf_options()
+    opts = _parse_export_options()
     if not opts["include_cover"] and not opts["include_map"] and not opts["include_table"]:
         flash("Seleccioná al menos una sección para el informe PDF.", "warning")
         return redirect(request.referrer or url_for("analisis_llamadas_se.listado"))
@@ -597,13 +609,7 @@ def export_pdf():
         flash("No hay registros con los filtros actuales.", "warning")
         return redirect(request.referrer or url_for("analisis_llamadas_se.listado"))
 
-    unidad_nombre = ""
-    try:
-        if getattr(current_user, "unidad", None):
-            unidad_nombre = current_user.unidad.nombre or ""
-    except Exception:
-        pass
-    usuario_nombre = getattr(current_user, "nombre_completo", None) or getattr(current_user, "username", "") or ""
+    unidad_nombre, usuario_nombre = _export_meta()
 
     try:
         pdf_bytes = build_informe_pdf(
@@ -624,6 +630,46 @@ def export_pdf():
     return Response(
         pdf_bytes,
         mimetype="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
+@bp.route("/export.docx")
+def export_docx():
+    if not _can_export():
+        abort(403)
+    opts = _parse_export_options()
+    if not opts["include_cover"] and not opts["include_map"] and not opts["include_table"]:
+        flash("Seleccioná al menos una sección para el informe Word.", "warning")
+        return redirect(request.referrer or url_for("analisis_llamadas_se.listado"))
+
+    q = _apply_filters(_base_q()).order_by(LlamadaSE.llamada_fecha.desc(), LlamadaSE.id.desc())
+    rows = q.all()
+    if not rows and opts["include_table"]:
+        flash("No hay registros con los filtros actuales.", "warning")
+        return redirect(request.referrer or url_for("analisis_llamadas_se.listado"))
+
+    unidad_nombre, usuario_nombre = _export_meta()
+
+    try:
+        docx_bytes = build_informe_docx(
+            rows,
+            filters_lines=_filters_summary_lines(),
+            columns=opts["columns"],
+            include_cover=opts["include_cover"],
+            include_map=opts["include_map"],
+            include_table=opts["include_table"],
+            unidad_nombre=unidad_nombre,
+            usuario_nombre=usuario_nombre,
+        )
+    except Exception as e:
+        flash(f"No se pudo generar el Word: {e}", "danger")
+        return redirect(request.referrer or url_for("analisis_llamadas_se.listado"))
+
+    fname = f"informe_llamadas_se_{_now_local_str('%Y%m%d_%H%M%S')}.docx"
+    return Response(
+        docx_bytes,
+        mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         headers={"Content-Disposition": f'attachment; filename="{fname}"'},
     )
 

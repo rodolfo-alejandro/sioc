@@ -1,12 +1,12 @@
 {% if can_export %}
-<button type="button" class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#alsModalExportPdf">
-  <i class="bi bi-file-earmark-pdf"></i> Informe PDF
+<button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#alsModalExportInforme">
+  <i class="bi bi-file-earmark-text"></i> Informe PDF / Word
 </button>
 
-<div class="modal fade" id="alsModalExportPdf" tabindex="-1" aria-labelledby="alsModalExportPdfLabel" aria-hidden="true">
+<div class="modal fade" id="alsModalExportInforme" tabindex="-1" aria-labelledby="alsModalExportInformeLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-scrollable modal-lg">
     <div class="modal-content">
-      <form method="get" action="{{ url_for('analisis_llamadas_se.export_pdf') }}" id="als-form-export-pdf">
+      <form method="get" action="{{ url_for('analisis_llamadas_se.export_pdf') }}" id="als-form-export-informe">
         {% for key, values in request.args.lists() %}
           {% for v in values %}
           <input type="hidden" name="{{ key }}" value="{{ v|e }}">
@@ -14,20 +14,32 @@
         {% endfor %}
 
         <div class="modal-header">
-          <h5 class="modal-title" id="alsModalExportPdfLabel">
-            <i class="bi bi-file-earmark-pdf me-1"></i> Exportar informe PDF
+          <h5 class="modal-title" id="alsModalExportInformeLabel">
+            <i class="bi bi-file-earmark-text me-1"></i> Exportar informe
           </h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
         </div>
         <div class="modal-body">
           <p class="small text-muted mb-3">
-            Se exportará el conjunto <strong>filtrado actual</strong> (mismos criterios que listado/mapa/dashboard).
-            División = campo <strong>DINAR</strong> (<code>llamada_jurisdiccion</code>).
+            Se exportará el conjunto <strong>filtrado actual</strong>. División = <strong>DINAR</strong>.
           </p>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Formato</label>
+            <div class="btn-group w-100" role="group">
+              <input type="radio" class="btn-check" name="als-format" id="als-fmt-pdf" value="pdf" checked>
+              <label class="btn btn-outline-danger" for="als-fmt-pdf"><i class="bi bi-file-earmark-pdf"></i> PDF (mapa automático)</label>
+              <input type="radio" class="btn-check" name="als-format" id="als-fmt-word" value="docx">
+              <label class="btn btn-outline-primary" for="als-fmt-word"><i class="bi bi-file-earmark-word"></i> Word (pegás captura del mapa)</label>
+            </div>
+            <p class="form-text mb-0 mt-2" id="als-format-hint">
+              PDF: incluye mapa generado en el servidor. Word: deja un recuadro para pegar la captura del mapa web (mejor calidad).
+            </p>
+          </div>
 
           <div class="row g-3">
             <div class="col-md-6">
-              <h6 class="mb-2">Qué incluir en el PDF</h6>
+              <h6 class="mb-2">Qué incluir</h6>
               <div class="form-check">
                 <input class="form-check-input" type="checkbox" id="als-inc-cover" checked
                        onchange="document.getElementById('als-inc-cover-val').value = this.checked ? '1' : '0'">
@@ -37,7 +49,7 @@
               <div class="form-check">
                 <input class="form-check-input" type="checkbox" id="als-inc-map" checked
                        onchange="document.getElementById('als-inc-map-val').value = this.checked ? '1' : '0'">
-                <label class="form-check-label" for="als-inc-map">Mapa con todos los puntos georreferenciados</label>
+                <label class="form-check-label" for="als-inc-map" id="als-inc-map-label">Mapa con puntos georreferenciados</label>
                 <input type="hidden" name="inc_map" id="als-inc-map-val" value="1">
               </div>
               <div class="form-check">
@@ -79,15 +91,11 @@
               </div>
             </div>
           </div>
-
-          <div class="alert alert-info py-2 small mt-3 mb-0">
-            Informes grandes pueden tardar unos segundos. El mapa incluye <strong>todos</strong> los puntos con coordenadas del filtro (sin límite de 8000 del mapa web).
-          </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="submit" class="btn btn-danger">
-            <i class="bi bi-download"></i> Generar PDF
+          <button type="submit" class="btn btn-primary" id="als-btn-export-submit">
+            <i class="bi bi-download"></i> Generar informe
           </button>
         </div>
       </form>
@@ -96,9 +104,42 @@
 </div>
 <script>
 (function () {
-  var form = document.getElementById('als-form-export-pdf');
+  var form = document.getElementById('als-form-export-informe');
   if (!form) return;
+  var pdfUrl = {{ url_for('analisis_llamadas_se.export_pdf')|tojson }};
+  var docxUrl = {{ url_for('analisis_llamadas_se.export_docx')|tojson }};
+  var mapLabel = document.getElementById('als-inc-map-label');
+  var hint = document.getElementById('als-format-hint');
+  var submitBtn = document.getElementById('als-btn-export-submit');
   var minCols = ['fecha', 'hora', 'alerta', 'barrio', 'lugar', 'dinar'];
+
+  function isWord() {
+    return document.getElementById('als-fmt-word')?.checked;
+  }
+  function syncFormat() {
+    var w = isWord();
+    form.action = w ? docxUrl : pdfUrl;
+    if (mapLabel) {
+      mapLabel.textContent = w
+        ? 'Sección MAPA (espacio para pegar captura)'
+        : 'Mapa con puntos georreferenciados';
+    }
+    if (hint) {
+      hint.textContent = w
+        ? 'Word: abrí el .docx, capturá el mapa en SIOC (Mapa con estos filtros) y pegá la imagen en el recuadro gris.'
+        : 'PDF: incluye mapa generado automáticamente en el servidor.';
+    }
+    if (submitBtn) {
+      submitBtn.className = w ? 'btn btn-primary' : 'btn btn-danger';
+      submitBtn.innerHTML = w
+        ? '<i class="bi bi-download"></i> Generar Word'
+        : '<i class="bi bi-download"></i> Generar PDF';
+    }
+  }
+  document.getElementById('als-fmt-pdf')?.addEventListener('change', syncFormat);
+  document.getElementById('als-fmt-word')?.addEventListener('change', syncFormat);
+  syncFormat();
+
   document.getElementById('als-cols-all')?.addEventListener('click', function () {
     form.querySelectorAll('.als-col-check').forEach(function (cb) { cb.checked = true; });
   });

@@ -15,7 +15,7 @@
   {% if can_export %}
     <a class="btn btn-outline-success btn-sm" href="{{ url_for('analisis_llamadas_se.export_csv', **request.args) }}">CSV</a>
     <a class="btn btn-outline-success btn-sm" href="{{ url_for('analisis_llamadas_se.export_xlsx', **request.args) }}">Excel</a>
-    {% include "analisis_llamadas_se/_export_pdf_modal.html" %}
+    {% include "analisis_llamadas_se/_export_informe_modal.html" %}
   {% endif %}
 </div>
 

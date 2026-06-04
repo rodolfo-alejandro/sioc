@@ -15,7 +15,7 @@
 <div class="d-flex gap-2 my-2 flex-wrap align-items-center">
   {% if can_view %}<a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_llamadas_se.listado', **request.args) }}">Listado</a>{% endif %}
   {% if can_dashboard %}<a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_llamadas_se.dashboard', **request.args) }}">Dashboard</a>{% endif %}
-  {% include "analisis_llamadas_se/_export_pdf_modal.html" %}
+  {% include "analisis_llamadas_se/_export_informe_modal.html" %}
 </div>
 
 <div class="alert alert-secondary py-2 small">
