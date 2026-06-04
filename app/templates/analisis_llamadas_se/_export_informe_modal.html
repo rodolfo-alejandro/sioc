@@ -4,9 +4,9 @@
 </button>
 
 <div class="modal fade" id="alsModalExportInforme" tabindex="-1" aria-labelledby="alsModalExportInformeLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-scrollable modal-lg">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg als-modal-export-informe">
     <div class="modal-content">
-      <form method="get" action="{{ url_for('analisis_llamadas_se.export_pdf') }}" id="als-form-export-informe">
+      <form method="get" action="{{ url_for('analisis_llamadas_se.export_pdf') }}" id="als-form-export-informe" class="als-modal-export-form">
         {% for key, values in request.args.lists() %}
           {% for v in values %}
           <input type="hidden" name="{{ key }}" value="{{ v|e }}">

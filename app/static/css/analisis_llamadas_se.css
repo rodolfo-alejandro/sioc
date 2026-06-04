@@ -15,3 +15,27 @@
   line-height: 1.35;
 }
 
+/* Modal export informe: el <form> interrumpe el flex de Bootstrap y ocultaba el footer */
+.als-modal-export-informe .modal-content {
+  max-height: calc(100vh - 2rem);
+  overflow: hidden;
+}
+
+.als-modal-export-informe .als-modal-export-form {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 2rem);
+  min-height: 0;
+}
+
+.als-modal-export-informe .modal-header,
+.als-modal-export-informe .modal-footer {
+  flex-shrink: 0;
+}
+
+.als-modal-export-informe .modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
