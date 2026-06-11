@@ -61,6 +61,7 @@ from app.models.oficios_judiciales import (
     ConsignaPersona,
     ConsignaDomicilio,
     ConsignaMedidaDetalle,
+    ConsignaArchivo,
 )
 from app.models.analisis_llamadas_se import LlamadaSE
 from app.models.analisis_intervenciones import AnalisisIntervencion

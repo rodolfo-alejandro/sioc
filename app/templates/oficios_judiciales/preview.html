@@ -13,6 +13,12 @@
             <div class="card-body">
                 <div><strong>Fuente principal usada:</strong> {{ data.fuente_principal or '—' }}</div>
                 <div><strong>Archivo origen:</strong> {{ data.archivo_origen or '—' }}</div>
+                {% if data.archivos_staging %}
+                <div class="small text-success mt-1">
+                    <i class="bi bi-paperclip"></i>
+                    {{ data.archivos_staging|length }} archivo(s) se adjuntarán al guardar la consigna.
+                </div>
+                {% endif %}
                 <div><strong>QR URL:</strong> {{ data.qr_url or '—' }}</div>
                 <hr>
                 <div class="mb-1"><strong>Archivos procesados</strong></div>
@@ -321,7 +327,9 @@
             texto_fuente: v('f-texto_fuente'),
             fuente_principal: v('f-fuente_principal'),
             qr_url: v('f-qr_url'),
-            archivo_origen: "{{ data.archivo_origen }}",
+            archivo_origen: {{ (data.archivo_origen or '')|tojson }},
+            archivos_staging: {{ (data.archivos_staging or [])|tojson }},
+            staging_id: {{ (data.staging_id or '')|tojson }},
             archivos_procesados: {{ (data.archivos_procesados or [])|tojson }},
             advertencias: {{ (data.advertencias or [])|tojson }},
             campos_detectados: {{ (data.campos_detectados or [])|tojson }},

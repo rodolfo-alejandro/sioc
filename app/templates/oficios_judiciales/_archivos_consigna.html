@@ -1,0 +1,92 @@
+<div class="col-12">
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-light py-2 fw-semibold d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <span><i class="bi bi-paperclip"></i> Archivos del oficio</span>
+            {% if archivos %}
+            <span class="badge text-bg-secondary">{{ archivos|length }}</span>
+            {% endif %}
+        </div>
+        <div class="card-body">
+            {% if archivos %}
+            <div class="table-responsive mb-3">
+                <table class="table table-sm align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Archivo</th>
+                            <th class="text-nowrap">Tamaño</th>
+                            <th class="text-nowrap">Subido</th>
+                            <th class="text-end">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for ar in archivos %}
+                        <tr>
+                            <td>
+                                <div class="d-flex align-items-center gap-2">
+                                    {% if ar.mime_type and 'pdf' in ar.mime_type %}
+                                    <i class="bi bi-file-earmark-pdf text-danger"></i>
+                                    {% else %}
+                                    <i class="bi bi-file-earmark-image text-primary"></i>
+                                    {% endif %}
+                                    <span>{{ ar.nombre_original }}</span>
+                                </div>
+                            </td>
+                            <td class="text-nowrap small text-muted">
+                                {% if ar.size_bytes %}
+                                {% if ar.size_bytes >= 1048576 %}
+                                {{ (ar.size_bytes / 1048576)|round(1) }} MB
+                                {% else %}
+                                {{ (ar.size_bytes / 1024)|round(0, 'floor')|int }} KB
+                                {% endif %}
+                                {% else %}—{% endif %}
+                            </td>
+                            <td class="text-nowrap small text-muted">
+                                {{ ar.created_at|localtime('%d/%m/%Y %H:%M') if ar.created_at else '—' }}
+                            </td>
+                            <td class="text-end text-nowrap">
+                                <a class="btn btn-outline-primary btn-sm" target="_blank" rel="noopener"
+                                   href="{{ url_for('oficios_judiciales.ver_archivo', archivo_id=ar.id) }}">
+                                    <i class="bi bi-eye"></i> Ver
+                                </a>
+                                <a class="btn btn-outline-secondary btn-sm"
+                                   href="{{ url_for('oficios_judiciales.ver_archivo', archivo_id=ar.id, dl=1) }}">
+                                    <i class="bi bi-download"></i>
+                                </a>
+                                {% if can_upload %}
+                                <form method="POST" action="{{ url_for('oficios_judiciales.eliminar_archivo', archivo_id=ar.id) }}"
+                                      class="d-inline" onsubmit="return confirm('¿Eliminar este archivo?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-outline-danger btn-sm" title="Eliminar">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted small mb-3">Todavía no hay PDF ni imágenes adjuntos a esta consigna.</p>
+            {% endif %}
+
+            {% if can_upload %}
+            <form method="POST" action="{{ url_for('oficios_judiciales.detalle_subir_archivos', consigna_id=row.id) }}"
+                  enctype="multipart/form-data" class="row g-2 align-items-end">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="col-md-8">
+                    <label class="form-label small mb-1">Adjuntar PDF o imagen (JPG, PNG, WEBP)</label>
+                    <input type="file" name="archivos" class="form-control form-control-sm"
+                           accept=".pdf,.jpg,.jpeg,.png,.webp" multiple>
+                </div>
+                <div class="col-md-4">
+                    <button type="submit" class="btn btn-primary btn-sm w-100">
+                        <i class="bi bi-cloud-upload"></i> Subir archivo(s)
+                    </button>
+                </div>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+</div>

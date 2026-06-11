@@ -5,16 +5,25 @@ import json
 import os
 import re
 import unicodedata
+import uuid
 from urllib.parse import urlencode
 from datetime import datetime, timedelta, date
 
 import pandas as pd
-from flask import Response, abort, current_app, flash, jsonify, redirect, render_template, request, url_for
+from flask import Response, abort, current_app, flash, jsonify, redirect, render_template, request, send_file, session, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import false, func, inspect, or_, text
 from sqlalchemy.orm import joinedload
 
 from app.blueprints.oficios_judiciales import bp
+from app.blueprints.oficios_judiciales.archivos import (
+    abs_path,
+    allowed_archivo,
+    delete_archivo_record,
+    persist_staged_archivos,
+    save_consigna_archivo,
+    save_staging_file,
+)
 from app.extensions import db
 from app.models.oficios_judiciales import (
     CatalogoBarrio,
@@ -25,6 +34,7 @@ from app.models.oficios_judiciales import (
     CatalogoTipoConsigna,
     CatalogoTipoDenuncia,
     CatalogoTipoMedida,
+    ConsignaArchivo,
     ConsignaDiasPorTipo,
     ConsignaDomicilio,
     ConsignaJudicial,
@@ -138,6 +148,7 @@ def _ensure_schema():
         CatalogoEstadoExpediente,
         CatalogoBarrio,
         ConsignaDiasPorTipo,
+        ConsignaArchivo,
     ):
         if model.__tablename__ not in existing:
             model.__table__.create(bind=db.engine)
@@ -2014,6 +2025,19 @@ def cargar():
                 if _clean(m):
                     db.session.add(ConsignaMedidaDetalle(consigna_id=row.id, descripcion=_clean(m)))
 
+            staging_id = _clean(payload.get("staging_id")) or session.get("oficios_staging_id")
+            staging_entries = payload.get("archivos_staging") or []
+            if staging_id and staging_entries:
+                for ar in persist_staged_archivos(
+                    staging_id,
+                    staging_entries,
+                    row,
+                    current_user.id,
+                    origen="ocr",
+                ):
+                    db.session.add(ar)
+                session.pop("oficios_staging_id", None)
+
             db.session.commit()
             if is_new:
                 flash("Consigna judicial guardada correctamente.", "success")
@@ -2026,6 +2050,10 @@ def cargar():
             flash("Debe seleccionar al menos un archivo.", "warning")
             return redirect(url_for("oficios_judiciales.cargar"))
         files = sorted(files, key=lambda ff: _file_order_key(getattr(ff, "filename", "")))
+
+        staging_id = session.get("oficios_staging_id") or str(uuid.uuid4())
+        session["oficios_staging_id"] = staging_id
+        archivos_staging = []
 
         full_text_parts = []
         best_source = ""
@@ -2050,6 +2078,11 @@ def cargar():
             if not raw:
                 continue
             archivo_origen = archivo_origen or name
+            if allowed_archivo(name):
+                try:
+                    archivos_staging.append(save_staging_file(raw, name, staging_id))
+                except ValueError as ex:
+                    warnings.append(f"{name}: {ex}")
 
             txt_ocr = ""
             txt_qr = ""
@@ -2142,6 +2175,8 @@ def cargar():
         merged["fuente_principal"] = best_source or "OCR imagen"
         merged["qr_url"] = qr_url
         merged["archivo_origen"] = archivo_origen
+        merged["archivos_staging"] = archivos_staging
+        merged["staging_id"] = staging_id
         merged["estado"] = "activa"
         merged["fecha_oficio"] = _to_input_date(merged.get("fecha_oficio"))
         merged["fecha_notificacion"] = _to_input_date(merged.get("fecha_notificacion"))
@@ -5118,7 +5153,72 @@ def detalle(consigna_id: int):
         progreso_detalle=progreso_detalle,
         estado_operativo=estado_operativo,
         persona_domicilio=persona_domicilio,
+        archivos=ConsignaArchivo.query.filter_by(consigna_id=row.id)
+        .order_by(ConsignaArchivo.created_at.desc())
+        .all(),
+        can_upload=_can_upload(),
     )
+
+
+@bp.route("/detalle/<int:consigna_id>/archivos", methods=["POST"])
+def detalle_subir_archivos(consigna_id: int):
+    if not _can_upload():
+        abort(403)
+    row = _q_base().filter(ConsignaJudicial.id == consigna_id).first_or_404()
+    files = request.files.getlist("archivos")
+    files = [f for f in files if _clean(getattr(f, "filename", ""))]
+    if not files:
+        flash("Seleccioná al menos un archivo PDF o imagen.", "warning")
+        return redirect(url_for("oficios_judiciales.detalle", consigna_id=row.id))
+    ok = 0
+    errs = []
+    for f in files:
+        name = _clean(f.filename)
+        raw = f.read()
+        try:
+            db.session.add(
+                save_consigna_archivo(raw, name, row, current_user.id, origen="detalle")
+            )
+            ok += 1
+        except ValueError as ex:
+            errs.append(f"{name}: {ex}")
+    if ok:
+        db.session.commit()
+        flash(f"Se adjuntaron {ok} archivo(s) al oficio.", "success")
+    if errs:
+        flash(" ".join(errs), "warning" if ok else "danger")
+    return redirect(url_for("oficios_judiciales.detalle", consigna_id=row.id))
+
+
+@bp.route("/archivos/<int:archivo_id>")
+def ver_archivo(archivo_id: int):
+    if not _can_view():
+        abort(403)
+    ar = ConsignaArchivo.query.get_or_404(archivo_id)
+    _q_base().filter(ConsignaJudicial.id == ar.consigna_id).first_or_404()
+    path = abs_path(ar.ruta_relativa)
+    if not os.path.isfile(path):
+        abort(404)
+    as_attachment = request.args.get("dl") == "1"
+    return send_file(
+        path,
+        mimetype=ar.mime_type or "application/octet-stream",
+        download_name=ar.nombre_original,
+        as_attachment=as_attachment,
+    )
+
+
+@bp.route("/archivos/<int:archivo_id>/eliminar", methods=["POST"])
+def eliminar_archivo(archivo_id: int):
+    if not _can_upload():
+        abort(403)
+    ar = ConsignaArchivo.query.get_or_404(archivo_id)
+    row = _q_base().filter(ConsignaJudicial.id == ar.consigna_id).first_or_404()
+    delete_archivo_record(ar)
+    db.session.delete(ar)
+    db.session.commit()
+    flash("Archivo eliminado.", "success")
+    return redirect(url_for("oficios_judiciales.detalle", consigna_id=row.id))
 
 
 @bp.route("/export.csv")

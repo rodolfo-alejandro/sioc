@@ -94,6 +94,37 @@ class ConsignaJudicial(db.Model):
     )
     motivo_indeterminada = db.relationship("CatalogoMotivoIndeterminada", backref=db.backref("consignas", lazy="dynamic"))
     estado_expediente = db.relationship("CatalogoEstadoExpediente", backref=db.backref("consignas", lazy="dynamic"))
+    archivos = db.relationship(
+        "ConsignaArchivo",
+        backref="consigna",
+        lazy="dynamic",
+        cascade="all, delete-orphan",
+    )
+
+
+class ConsignaArchivo(db.Model):
+    """PDF o imagen del oficio adjunto a una consigna."""
+
+    __tablename__ = "oficios_consigna_archivos"
+
+    id = db.Column(db.Integer, primary_key=True)
+    consigna_id = db.Column(
+        db.Integer,
+        db.ForeignKey("oficios_consignas.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    unidad_id = db.Column(db.Integer, db.ForeignKey("unidades.id"), nullable=False, index=True)
+    subido_por = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)
+    nombre_original = db.Column(db.String(255), nullable=False)
+    nombre_almacenado = db.Column(db.String(255), nullable=False)
+    ruta_relativa = db.Column(db.String(500), nullable=False)
+    mime_type = db.Column(db.String(120), nullable=True)
+    size_bytes = db.Column(db.Integer, nullable=True)
+    origen = db.Column(db.String(30), nullable=False, default="detalle", index=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+    usuario = db.relationship("User", backref="oficios_consigna_archivos")
 
 
 class CatalogoEstadoExpediente(db.Model):
