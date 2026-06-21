@@ -98,7 +98,9 @@
 {% elif pestana == 'departamento' %}
   {{ tabla_territorial('Estadística por departamento operativo', cuadros.tabla_dep, cuadros.totales_dep) }}
 {% elif pestana == 'distrito' %}
-  {{ tabla_territorial('Estadística por distrito de prevención', cuadros.tabla_distrito, cuadros.totales_distrito) }}
+  {{ tabla_territorial('Distrito de prevención — TOTAL (Micro + Macro + Cód. ad.)', cuadros.tabla_distrito, cuadros.totales_distrito) }}
+  {{ tabla_territorial('Distrito de prevención — solo MICRO', cuadros.tabla_distrito_micro, cuadros.totales_distrito_micro) }}
+  {{ tabla_territorial('Distrito de prevención — solo MACRO', cuadros.tabla_distrito_macro, cuadros.totales_distrito_macro) }}
 {% elif pestana == 'clasificacion' %}
 <div class="card mb-4">
   <div class="card-header">Progresivo por escala operativa (Micro / Macro / Cód. aduanero)</div>

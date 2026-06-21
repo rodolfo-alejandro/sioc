@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 from collections import defaultdict
 from datetime import date, datetime, time
 from io import BytesIO, StringIO
@@ -317,6 +318,8 @@ def _cuadros_data(rows: list[AnalisisIntervencion]) -> dict:
     by_sinar: dict[str, dict] = defaultdict(_new_cuadros_agg)
     by_dep: dict[str, dict] = defaultdict(_new_cuadros_agg)
     by_distrito: dict[str, dict] = defaultdict(_new_cuadros_agg)
+    by_distrito_micro: dict[str, dict] = defaultdict(_new_cuadros_agg)
+    by_distrito_macro: dict[str, dict] = defaultdict(_new_cuadros_agg)
     b_micro = _new_cuadros_agg()
     b_macro = _new_cuadros_agg()
     b_cod = _new_cuadros_agg()
@@ -338,8 +341,10 @@ def _cuadros_data(rows: list[AnalisisIntervencion]) -> dict:
             _cuadros_agg_add_row(b_cod, row)
         elif bucket == "macro":
             _cuadros_agg_add_row(b_macro, row)
+            _cuadros_agg_add_row(by_distrito_macro[distrito], row)
         else:
             _cuadros_agg_add_row(b_micro, row)
+            _cuadros_agg_add_row(by_distrito_micro[distrito], row)
         y = _to_int(row.anio) or (row.interv_fecha.year if row.interv_fecha else None)
         if y:
             _cuadros_agg_add_row(by_year_bucket[y][bucket], row)
@@ -355,10 +360,25 @@ def _cuadros_data(rows: list[AnalisisIntervencion]) -> dict:
             out.append(d)
         return out
 
+    def _distrito_orden_key(label: str) -> tuple:
+        m = re.search(r"(\d+)", label or "")
+        num = int(m.group(1)) if m else 10**9
+        return (num, (label or "").lower())
+
+    def finalize_map_distrito(m: dict[str, dict]) -> list[dict]:
+        out = []
+        for label, raw in sorted(m.items(), key=lambda x: _distrito_orden_key(x[0])):
+            d = _cuadros_agg_finalize(raw)
+            d["label"] = label
+            out.append(d)
+        return out
+
     tabla_zona = finalize_map(by_zona)
     tabla_sinar = finalize_map(by_sinar)
     tabla_dep = finalize_map(by_dep)
-    tabla_distrito = finalize_map(by_distrito)
+    tabla_distrito = finalize_map_distrito(by_distrito)
+    tabla_distrito_micro = finalize_map_distrito(by_distrito_micro)
+    tabla_distrito_macro = finalize_map_distrito(by_distrito_macro)
 
     mic = _cuadros_agg_finalize(b_micro)
     mac = _cuadros_agg_finalize(b_macro)
@@ -521,6 +541,10 @@ def _cuadros_data(rows: list[AnalisisIntervencion]) -> dict:
         "totales_dep": _cuadros_sum_display_rows(tabla_dep),
         "tabla_distrito": tabla_distrito,
         "totales_distrito": _cuadros_sum_display_rows(tabla_distrito),
+        "tabla_distrito_micro": tabla_distrito_micro,
+        "totales_distrito_micro": _cuadros_sum_display_rows(tabla_distrito_micro),
+        "tabla_distrito_macro": tabla_distrito_macro,
+        "totales_distrito_macro": _cuadros_sum_display_rows(tabla_distrito_macro),
         "clasificacion_filas": clasificacion_filas,
         "comparativo_anios": comparativo_anios,
         "comparativo_filas": comparativo_filas,
