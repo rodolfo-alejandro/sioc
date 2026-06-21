@@ -316,6 +316,7 @@ def _cuadros_data(rows: list[AnalisisIntervencion]) -> dict:
     by_zona: dict[str, dict] = defaultdict(_new_cuadros_agg)
     by_sinar: dict[str, dict] = defaultdict(_new_cuadros_agg)
     by_dep: dict[str, dict] = defaultdict(_new_cuadros_agg)
+    by_distrito: dict[str, dict] = defaultdict(_new_cuadros_agg)
     b_micro = _new_cuadros_agg()
     b_macro = _new_cuadros_agg()
     b_cod = _new_cuadros_agg()
@@ -327,9 +328,11 @@ def _cuadros_data(rows: list[AnalisisIntervencion]) -> dict:
         zona = (row.zona or "Sin dato").strip() or "Sin dato"
         sinar = (row.dep_interviniente or "Sin dato").strip() or "Sin dato"
         depop = (row.departamento_operativo or "Sin dato").strip() or "Sin dato"
+        distrito = (row.distrito or "Sin dato").strip() or "Sin dato"
         _cuadros_agg_add_row(by_zona[zona], row)
         _cuadros_agg_add_row(by_sinar[sinar], row)
         _cuadros_agg_add_row(by_dep[depop], row)
+        _cuadros_agg_add_row(by_distrito[distrito], row)
         bucket = _row_escala_bucket(row)
         if bucket == "cod_ad":
             _cuadros_agg_add_row(b_cod, row)
@@ -355,6 +358,7 @@ def _cuadros_data(rows: list[AnalisisIntervencion]) -> dict:
     tabla_zona = finalize_map(by_zona)
     tabla_sinar = finalize_map(by_sinar)
     tabla_dep = finalize_map(by_dep)
+    tabla_distrito = finalize_map(by_distrito)
 
     mic = _cuadros_agg_finalize(b_micro)
     mac = _cuadros_agg_finalize(b_macro)
@@ -515,6 +519,8 @@ def _cuadros_data(rows: list[AnalisisIntervencion]) -> dict:
         "totales_sinar": _cuadros_sum_display_rows(tabla_sinar),
         "tabla_dep": tabla_dep,
         "totales_dep": _cuadros_sum_display_rows(tabla_dep),
+        "tabla_distrito": tabla_distrito,
+        "totales_distrito": _cuadros_sum_display_rows(tabla_distrito),
         "clasificacion_filas": clasificacion_filas,
         "comparativo_anios": comparativo_anios,
         "comparativo_filas": comparativo_filas,
@@ -1347,7 +1353,7 @@ def dashboard():
     )
 
 
-_CUADROS_PESTANAS = frozenset({"zona", "sinar", "departamento", "clasificacion", "comparativo"})
+_CUADROS_PESTANAS = frozenset({"zona", "sinar", "departamento", "distrito", "clasificacion", "comparativo"})
 
 
 @bp.route("/cuadros")

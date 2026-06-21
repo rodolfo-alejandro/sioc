@@ -27,6 +27,7 @@
   <li class="nav-item">{{ tablink('zona', 'Por DINAR (zona)') }}</li>
   <li class="nav-item">{{ tablink('sinar', 'Por SINAR / División') }}</li>
   <li class="nav-item">{{ tablink('departamento', 'Por dpto. operativo') }}</li>
+  <li class="nav-item">{{ tablink('distrito', 'Por distrito de prevención') }}</li>
   <li class="nav-item">{{ tablink('clasificacion', 'Micro / Macro / Cód. ad.') }}</li>
   <li class="nav-item">{{ tablink('comparativo', 'Comparativo por año') }}</li>
 </ul>
@@ -96,6 +97,8 @@
   {{ tabla_territorial('Estadística por SINAR / división interviniente', cuadros.tabla_sinar, cuadros.totales_sinar) }}
 {% elif pestana == 'departamento' %}
   {{ tabla_territorial('Estadística por departamento operativo', cuadros.tabla_dep, cuadros.totales_dep) }}
+{% elif pestana == 'distrito' %}
+  {{ tabla_territorial('Estadística por distrito de prevención', cuadros.tabla_distrito, cuadros.totales_distrito) }}
 {% elif pestana == 'clasificacion' %}
 <div class="card mb-4">
   <div class="card-header">Progresivo por escala operativa (Micro / Macro / Cód. aduanero)</div>
