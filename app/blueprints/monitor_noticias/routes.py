@@ -170,6 +170,75 @@ def bandeja():
     )
 
 
+def _guardar_candidatos(uid: int, tema_id, candidatos: list[dict]) -> tuple[int, int]:
+    nuevas = 0
+    dup = 0
+    for item in candidatos:
+        existe = _base_noticias().filter(Noticia.link_hash == item["link_hash"]).first()
+        if existe:
+            dup += 1
+            continue
+        db.session.add(
+            Noticia(
+                unidad_id=uid,
+                tema_id=tema_id,
+                titulo=item["titulo"][:600],
+                link=item["link"][:1000],
+                link_hash=item["link_hash"],
+                medio=(item.get("medio") or "")[:200] or None,
+                resumen=item.get("resumen") or None,
+                publicado_en=item.get("publicado_en"),
+                estado="nueva",
+                fuente_origen=item.get("fuente_origen"),
+            )
+        )
+        nuevas += 1
+    db.session.commit()
+    return nuevas, dup
+
+
+@bp.route("/buscar-libre", methods=["POST"])
+def buscar_libre():
+    if not _can_manage():
+        abort(403)
+    faltan = services.dependencias_faltantes()
+    if faltan:
+        flash(f"Faltan dependencias en el servidor: {', '.join(faltan)}. Instalá con pip install -r requirements.txt.", "danger")
+        return redirect(url_for("monitor_noticias.bandeja"))
+
+    texto = _clean(request.form.get("q_libre"))
+    if not texto:
+        flash("Escribí al menos una palabra para la búsqueda libre.", "warning")
+        return redirect(url_for("monitor_noticias.bandeja"))
+    region = _clean(request.form.get("region_libre"))
+
+    uid = current_user.unidad_id
+    fuentes = FuenteNoticia.query.filter_by(unidad_id=uid, activo=True, tipo="google_news").all()
+    if not fuentes:
+        fuentes = [FuenteNoticia(unidad_id=uid, nombre="Google News", tipo="google_news", activo=True)]
+
+    tema_tmp = TemaNoticia(
+        unidad_id=uid,
+        nombre="Búsqueda libre",
+        palabras_clave=texto,
+        palabras_excluir="",
+        region=region,
+        activo=True,
+    )
+    try:
+        candidatos = services.recolectar_para_tema(tema_tmp, fuentes)
+    except Exception as e:
+        flash(f"Error en la búsqueda libre: {e}", "danger")
+        return redirect(url_for("monitor_noticias.bandeja"))
+
+    nuevas, dup = _guardar_candidatos(uid, None, candidatos)
+    flash(
+        f"Búsqueda «{texto}»: {nuevas} noticia(s) nueva(s), {dup} ya existían.",
+        "success" if nuevas else "info",
+    )
+    return redirect(url_for("monitor_noticias.bandeja", q=texto))
+
+
 @bp.route("/buscar", methods=["POST"])
 def buscar():
     if not _can_manage():
@@ -202,31 +271,9 @@ def buscar():
         except Exception as e:
             flash(f"Error al buscar el tema «{tema.nombre}»: {e}", "danger")
             continue
-        for item in candidatos:
-            existe = (
-                _base_noticias()
-                .filter(Noticia.link_hash == item["link_hash"])
-                .first()
-            )
-            if existe:
-                total_dup += 1
-                continue
-            db.session.add(
-                Noticia(
-                    unidad_id=uid,
-                    tema_id=tema.id,
-                    titulo=item["titulo"][:600],
-                    link=item["link"][:1000],
-                    link_hash=item["link_hash"],
-                    medio=(item.get("medio") or "")[:200] or None,
-                    resumen=item.get("resumen") or None,
-                    publicado_en=item.get("publicado_en"),
-                    estado="nueva",
-                    fuente_origen=item.get("fuente_origen"),
-                )
-            )
-            total_nuevas += 1
-    db.session.commit()
+        n, d = _guardar_candidatos(uid, tema.id, candidatos)
+        total_nuevas += n
+        total_dup += d
     flash(
         f"Búsqueda completada: {total_nuevas} noticia(s) nueva(s), {total_dup} ya existían.",
         "success" if total_nuevas else "info",

@@ -16,17 +16,37 @@
 </div>
 {% endif %}
 
+{% if can_manage %}
+<div class="card card-body py-3 mb-3 bg-light-subtle">
+  <form method="POST" action="{{ url_for('monitor_noticias.buscar_libre') }}" class="row g-2 align-items-end">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="col-md-7">
+      <label class="form-label small mb-1 fw-semibold"><i class="bi bi-search"></i> Búsqueda libre (escribí lo que quieras)</label>
+      <input type="text" name="q_libre" class="form-control" placeholder="Ej: narcotráfico Orán, cocaína frontera, bunker..." required>
+      <div class="form-text">Separá con comas para buscar varias cosas a la vez (cada coma es un “o”). Usa Google News.</div>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label small mb-1">Región (opcional)</label>
+      <input type="text" name="region_libre" class="form-control" value="Salta" placeholder="Dejar vacío = todo el país">
+    </div>
+    <div class="col-md-2 d-grid">
+      <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i> Buscar</button>
+    </div>
+  </form>
+</div>
+{% endif %}
+
 <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
   {% if can_manage %}
   <form method="POST" action="{{ url_for('monitor_noticias.buscar') }}" class="d-flex gap-2 align-items-center">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <select name="tema_id" class="form-select form-select-sm" style="width:auto">
-      <option value="">Todos los temas</option>
+      <option value="">Todos los temas guardados</option>
       {% for t in temas %}
       <option value="{{ t.id }}" {% if not t.activo %}disabled{% endif %}>{{ t.nombre }}{% if not t.activo %} (inactivo){% endif %}</option>
       {% endfor %}
     </select>
-    <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search"></i> Buscar ahora</button>
+    <button type="submit" class="btn btn-outline-primary btn-sm"><i class="bi bi-arrow-repeat"></i> Buscar por tema</button>
   </form>
   {% endif %}
   {% if can_export %}
