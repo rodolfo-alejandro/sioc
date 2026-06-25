@@ -136,7 +136,7 @@ def bandeja():
         q = q.filter(Noticia.titulo.ilike(f"%{texto}%"))
 
     noticias = q.order_by(
-        Noticia.publicado_en.desc().nullslast(),
+        Noticia.publicado_en.desc(),
         Noticia.created_at.desc(),
     ).limit(500).all()
 
@@ -356,7 +356,7 @@ def export_xlsx():
     tema_id = _clean(request.args.get("tema"))
     if tema_id.isdigit():
         q = q.filter(Noticia.tema_id == int(tema_id))
-    rows = q.order_by(Noticia.publicado_en.desc().nullslast(), Noticia.created_at.desc()).all()
+    rows = q.order_by(Noticia.publicado_en.desc(), Noticia.created_at.desc()).all()
 
     wb = openpyxl.Workbook()
     ws = wb.active
