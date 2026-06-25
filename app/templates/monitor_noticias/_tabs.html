@@ -1,0 +1,17 @@
+<ul class="nav nav-tabs flex-wrap mb-3">
+  <li class="nav-item">
+    <a class="nav-link {% if active == 'bandeja' %}active{% endif %}" href="{{ url_for('monitor_noticias.bandeja') }}">
+      <i class="bi bi-inbox"></i> Bandeja
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if active == 'temas' %}active{% endif %}" href="{{ url_for('monitor_noticias.temas') }}">
+      <i class="bi bi-tags"></i> Temas
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if active == 'fuentes' %}active{% endif %}" href="{{ url_for('monitor_noticias.fuentes') }}">
+      <i class="bi bi-rss"></i> Fuentes
+    </a>
+  </li>
+</ul>

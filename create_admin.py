@@ -125,6 +125,10 @@ def create_seed_data():
             ('ANALISIS_INTERVENCIONES_IMPORT', 'Importar intervenciones desde CSV'),
             ('ANALISIS_INTERVENCIONES_EXPORT', 'Exportar intervenciones filtradas'),
             ('ANALISIS_INTERVENCIONES_DASHBOARD', 'Ver dashboard de intervenciones'),
+            # Monitor de noticias (media monitoring)
+            ('MONITOR_NOTICIAS_VIEW', 'Ver monitor de noticias'),
+            ('MONITOR_NOTICIAS_MANAGE', 'Buscar noticias y gestionar temas/fuentes'),
+            ('MONITOR_NOTICIAS_EXPORT', 'Exportar noticias del monitor'),
             # Capacitaciones / seminarios
             ('CAPACITACIONES_VIEW', 'Ver módulo de capacitaciones, padrón e informes'),
             ('CAPACITACIONES_ADMIN', 'Gestionar padrón, eventos, inscriptos y momentos de asistencia'),
@@ -190,6 +194,7 @@ def create_seed_data():
                           'LLAMADAS_SE_DASHBOARD', 'LLAMADAS_SE_MAPA',
                           'ANALISIS_INTERVENCIONES_VIEW', 'ANALISIS_INTERVENCIONES_IMPORT',
                           'ANALISIS_INTERVENCIONES_EXPORT', 'ANALISIS_INTERVENCIONES_DASHBOARD',
+                          'MONITOR_NOTICIAS_VIEW', 'MONITOR_NOTICIAS_MANAGE', 'MONITOR_NOTICIAS_EXPORT',
                           'CAPACITACIONES_VIEW', 'CAPACITACIONES_ADMIN', 'CAPACITACIONES_ASISTENCIA']
             for perm_code in admin_perms:
                 if perm_code in permisos_creados:
@@ -213,6 +218,7 @@ def create_seed_data():
                 'LLAMADAS_SE_DASHBOARD', 'LLAMADAS_SE_MAPA',
                 'ANALISIS_INTERVENCIONES_VIEW', 'ANALISIS_INTERVENCIONES_IMPORT',
                 'ANALISIS_INTERVENCIONES_EXPORT', 'ANALISIS_INTERVENCIONES_DASHBOARD',
+                'MONITOR_NOTICIAS_VIEW', 'MONITOR_NOTICIAS_MANAGE', 'MONITOR_NOTICIAS_EXPORT',
             ]
             for perm_code in analista_perms:
                 if perm_code in permisos_creados:

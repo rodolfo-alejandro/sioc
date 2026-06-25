@@ -86,6 +86,9 @@ def create_app(config_class=Config):
     from app.blueprints.analisis_intervenciones import bp as analisis_intervenciones_bp
     app.register_blueprint(analisis_intervenciones_bp)
 
+    from app.blueprints.monitor_noticias import bp as monitor_noticias_bp
+    app.register_blueprint(monitor_noticias_bp)
+
     from app.blueprints.capacitaciones import bp as capacitaciones_bp
     app.register_blueprint(capacitaciones_bp)
     from app.blueprints.capacitaciones.public_routes import bp_public as capacitaciones_public_bp

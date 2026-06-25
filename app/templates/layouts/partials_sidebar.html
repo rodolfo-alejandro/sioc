@@ -197,6 +197,21 @@
                 </li>
                 {% endif %}
 
+                <!-- Monitor de Noticias -->
+                {% if current_user.has_permission('MONITOR_NOTICIAS_VIEW') %}
+                <li class="nav-item">
+                    <a class="nav-link" href="#" data-bs-toggle="collapse" data-bs-target="#submenuMonitorNoticias">
+                        <i class="bi bi-newspaper"></i> Monitor de Noticias
+                        <i class="bi bi-chevron-down ms-auto"></i>
+                    </a>
+                    <ul class="nav flex-column collapse" id="submenuMonitorNoticias">
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('monitor_noticias.bandeja') }}"><i class="bi bi-inbox"></i> Bandeja</a></li>
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('monitor_noticias.temas') }}"><i class="bi bi-tags"></i> Temas</a></li>
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('monitor_noticias.fuentes') }}"><i class="bi bi-rss"></i> Fuentes</a></li>
+                    </ul>
+                </li>
+                {% endif %}
+
                 <!-- Capacitaciones -->
                 {% if current_user.has_permission('CAPACITACIONES_VIEW') or current_user.has_permission('CAPACITACIONES_ADMIN') or current_user.has_permission('CAPACITACIONES_ASISTENCIA') %}
                 <li class="nav-item">

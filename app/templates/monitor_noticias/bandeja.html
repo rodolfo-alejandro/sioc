@@ -1,0 +1,121 @@
+{% extends "layouts/base.html" %}
+{% block title %}Monitor de Noticias - SIOC{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-newspaper"></i> Monitor de Noticias</h1>
+  <p class="text-muted mb-0">Recopilación automática de noticias públicas por palabras clave (foco en Salta). Se guarda título, resumen y link a la fuente.</p>
+</div>
+
+{% with active='bandeja' %}{% include "monitor_noticias/_tabs.html" %}{% endwith %}
+
+{% if dep_faltantes %}
+<div class="alert alert-warning">
+  <i class="bi bi-exclamation-triangle"></i>
+  Faltan dependencias en el servidor: <strong>{{ dep_faltantes|join(', ') }}</strong>.
+  Ejecutá <code>pip install -r requirements.txt</code> y reiniciá el servicio.
+</div>
+{% endif %}
+
+<div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+  {% if can_manage %}
+  <form method="POST" action="{{ url_for('monitor_noticias.buscar') }}" class="d-flex gap-2 align-items-center">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <select name="tema_id" class="form-select form-select-sm" style="width:auto">
+      <option value="">Todos los temas</option>
+      {% for t in temas %}
+      <option value="{{ t.id }}" {% if not t.activo %}disabled{% endif %}>{{ t.nombre }}{% if not t.activo %} (inactivo){% endif %}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search"></i> Buscar ahora</button>
+  </form>
+  {% endif %}
+  {% if can_export %}
+  <a class="btn btn-outline-success btn-sm" href="{{ url_for('monitor_noticias.export_xlsx', **selected) }}"><i class="bi bi-file-earmark-excel"></i> Excel</a>
+  {% endif %}
+  <span class="ms-auto small text-muted">
+    Nuevas: <span class="badge text-bg-primary">{{ contadores.nueva }}</span>
+    Relevantes: <span class="badge text-bg-success">{{ contadores.relevante }}</span>
+    Descartadas: <span class="badge text-bg-secondary">{{ contadores.descartada }}</span>
+  </span>
+</div>
+
+<form method="get" class="card card-body py-2 mb-3">
+  <div class="row g-2 align-items-end">
+    <div class="col-md-3">
+      <label class="form-label small mb-1">Tema</label>
+      <select name="tema" class="form-select form-select-sm">
+        <option value="">Todos</option>
+        {% for t in temas %}
+        <option value="{{ t.id }}" {% if selected.tema == t.id|string %}selected{% endif %}>{{ t.nombre }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label small mb-1">Estado</label>
+      <select name="estado" class="form-select form-select-sm">
+        <option value="">Todos</option>
+        <option value="nueva" {% if selected.estado == 'nueva' %}selected{% endif %}>Nuevas</option>
+        <option value="relevante" {% if selected.estado == 'relevante' %}selected{% endif %}>Relevantes</option>
+        <option value="descartada" {% if selected.estado == 'descartada' %}selected{% endif %}>Descartadas</option>
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label small mb-1">Medio</label>
+      <input type="text" name="medio" value="{{ selected.medio }}" class="form-control form-control-sm" list="medios-list" placeholder="Cualquiera">
+      <datalist id="medios-list">{% for m in medios %}<option value="{{ m }}">{% endfor %}</datalist>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label small mb-1">Buscar en título</label>
+      <input type="text" name="q" value="{{ selected.q }}" class="form-control form-control-sm" placeholder="Palabra...">
+    </div>
+    <div class="col-md-1 d-grid">
+      <button type="submit" class="btn btn-outline-primary btn-sm">Filtrar</button>
+    </div>
+  </div>
+</form>
+
+<div class="card">
+  <div class="card-body p-0">
+    <div class="list-group list-group-flush">
+      {% for n in noticias %}
+      <div class="list-group-item">
+        <div class="d-flex justify-content-between align-items-start gap-2">
+          <div class="flex-grow-1">
+            <a href="{{ n.link }}" target="_blank" rel="noopener" class="fw-semibold text-decoration-none">
+              {{ n.titulo }}
+            </a>
+            <div class="small text-muted mt-1">
+              {% if n.medio %}<i class="bi bi-building"></i> {{ n.medio }} · {% endif %}
+              {% if n.publicado_en %}<i class="bi bi-calendar3"></i> {{ n.publicado_en|localtime('%d/%m/%Y %H:%M') }} · {% endif %}
+              {% if n.tema %}<span class="badge text-bg-light border">{{ n.tema.nombre }}</span>{% endif %}
+              {% if n.estado == 'relevante' %}<span class="badge text-bg-success">Relevante</span>
+              {% elif n.estado == 'descartada' %}<span class="badge text-bg-secondary">Descartada</span>
+              {% else %}<span class="badge text-bg-primary">Nueva</span>{% endif %}
+            </div>
+            {% if n.resumen %}<p class="small text-muted mb-0 mt-1">{{ n.resumen }}</p>{% endif %}
+          </div>
+          {% if can_manage %}
+          <div class="d-flex flex-column gap-1 text-nowrap">
+            <form method="POST" action="{{ url_for('monitor_noticias.cambiar_estado', noticia_id=n.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="estado" value="relevante">
+              <button class="btn btn-outline-success btn-sm w-100" {% if n.estado == 'relevante' %}disabled{% endif %}><i class="bi bi-star"></i> Relevante</button>
+            </form>
+            <form method="POST" action="{{ url_for('monitor_noticias.cambiar_estado', noticia_id=n.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="estado" value="descartada">
+              <button class="btn btn-outline-secondary btn-sm w-100" {% if n.estado == 'descartada' %}disabled{% endif %}><i class="bi bi-x-circle"></i> Descartar</button>
+            </form>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+      {% else %}
+      <div class="list-group-item text-center text-muted py-5">
+        No hay noticias todavía. {% if can_manage %}Apretá <strong>Buscar ahora</strong> para traer las primeras.{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

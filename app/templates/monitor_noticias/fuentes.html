@@ -1,0 +1,119 @@
+{% extends "layouts/base.html" %}
+{% block title %}Fuentes - Monitor de Noticias{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-newspaper"></i> Monitor de Noticias</h1>
+  <p class="text-muted mb-0">Orígenes de noticias. Google News cubre la mayoría de los medios; podés sumar feeds RSS directos.</p>
+</div>
+
+{% with active='fuentes' %}{% include "monitor_noticias/_tabs.html" %}{% endwith %}
+
+<div class="row g-3">
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header fw-semibold">Fuentes configuradas</div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm align-middle mb-0">
+            <thead class="table-light">
+              <tr><th>Nombre</th><th>Tipo</th><th>URL</th><th>Estado</th><th></th></tr>
+            </thead>
+            <tbody>
+              {% for f in fuentes %}
+              <tr>
+                <td class="fw-semibold">{{ f.nombre }}</td>
+                <td>{% if f.tipo == 'google_news' %}<span class="badge text-bg-info">Google News</span>{% else %}<span class="badge text-bg-light border">RSS</span>{% endif %}</td>
+                <td class="small text-muted text-truncate" style="max-width:280px">{{ f.url or '— (usa palabras del tema)' }}</td>
+                <td>{% if f.activo %}<span class="badge text-bg-success">Activa</span>{% else %}<span class="badge text-bg-secondary">Inactiva</span>{% endif %}</td>
+                <td class="text-end text-nowrap">
+                  {% if can_manage %}
+                  <button class="btn btn-outline-primary btn-sm"
+                          onclick='cargarFuente({{ {"id": f.id, "nombre": f.nombre, "tipo": f.tipo, "url": f.url or "", "activo": f.activo}|tojson }})'>
+                    <i class="bi bi-pencil"></i>
+                  </button>
+                  <form method="POST" action="{{ url_for('monitor_noticias.fuentes_eliminar', fuente_id=f.id) }}" class="d-inline" onsubmit="return confirm('¿Eliminar esta fuente?');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-outline-danger btn-sm"><i class="bi bi-trash"></i></button>
+                  </form>
+                  {% endif %}
+                </td>
+              </tr>
+              {% else %}
+              <tr><td colspan="5" class="text-center text-muted py-4">Sin fuentes.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <p class="small text-muted mt-2">
+      Ejemplos de feeds RSS de Salta: El Tribuno publica canales en <code>eltribuno.com/page-rss</code>.
+      Google News ya trae El Tribuno, HolaSalta, Prensa Policía de Salta y más.
+    </p>
+  </div>
+
+  {% if can_manage %}
+  <div class="col-lg-5">
+    <div class="card">
+      <div class="card-header fw-semibold" id="fuente-form-titulo">Nueva fuente</div>
+      <div class="card-body">
+        <form method="POST" action="{{ url_for('monitor_noticias.fuentes_guardar') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="id" id="fuente-id" value="">
+          <div class="mb-2">
+            <label class="form-label small mb-1">Nombre</label>
+            <input type="text" name="nombre" id="fuente-nombre" class="form-control form-control-sm" required>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small mb-1">Tipo</label>
+            <select name="tipo" id="fuente-tipo" class="form-select form-select-sm" onchange="toggleUrl()">
+              <option value="google_news">Google News (busca por palabras del tema)</option>
+              <option value="rss" selected>RSS directo (URL del feed)</option>
+            </select>
+          </div>
+          <div class="mb-2" id="fuente-url-wrap">
+            <label class="form-label small mb-1">URL del feed RSS</label>
+            <input type="url" name="url" id="fuente-url" class="form-control form-control-sm" placeholder="https://...">
+          </div>
+          <div class="form-check mb-3">
+            <input type="checkbox" name="activo" id="fuente-activo" class="form-check-input" value="1" checked>
+            <label class="form-check-label small" for="fuente-activo">Activa</label>
+          </div>
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-save"></i> Guardar</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="resetFuente()">Limpiar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+function toggleUrl() {
+  var tipo = document.getElementById('fuente-tipo').value;
+  document.getElementById('fuente-url-wrap').style.display = (tipo === 'rss') ? '' : 'none';
+}
+function cargarFuente(f) {
+  document.getElementById('fuente-id').value = f.id;
+  document.getElementById('fuente-nombre').value = f.nombre;
+  document.getElementById('fuente-tipo').value = f.tipo;
+  document.getElementById('fuente-url').value = f.url;
+  document.getElementById('fuente-activo').checked = !!f.activo;
+  document.getElementById('fuente-form-titulo').textContent = 'Editar fuente';
+  toggleUrl();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function resetFuente() {
+  document.getElementById('fuente-id').value = '';
+  document.getElementById('fuente-nombre').value = '';
+  document.getElementById('fuente-tipo').value = 'rss';
+  document.getElementById('fuente-url').value = '';
+  document.getElementById('fuente-activo').checked = true;
+  document.getElementById('fuente-form-titulo').textContent = 'Nueva fuente';
+  toggleUrl();
+}
+toggleUrl();
+</script>
+{% endblock %}

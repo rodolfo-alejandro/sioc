@@ -1,0 +1,111 @@
+{% extends "layouts/base.html" %}
+{% block title %}Temas - Monitor de Noticias{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-newspaper"></i> Monitor de Noticias</h1>
+  <p class="text-muted mb-0">Temas de búsqueda y sus palabras clave.</p>
+</div>
+
+{% with active='temas' %}{% include "monitor_noticias/_tabs.html" %}{% endwith %}
+
+<div class="row g-3">
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header fw-semibold">Temas configurados</div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm align-middle mb-0">
+            <thead class="table-light">
+              <tr><th>Tema</th><th>Palabras clave</th><th>Región</th><th>Estado</th><th></th></tr>
+            </thead>
+            <tbody>
+              {% for t in temas %}
+              <tr>
+                <td class="fw-semibold">{{ t.nombre }}</td>
+                <td class="small text-muted">{{ t.palabras_clave or '—' }}{% if t.palabras_excluir %}<br><span class="text-danger">excluye: {{ t.palabras_excluir }}</span>{% endif %}</td>
+                <td class="small">{{ t.region or '—' }}</td>
+                <td>{% if t.activo %}<span class="badge text-bg-success">Activo</span>{% else %}<span class="badge text-bg-secondary">Inactivo</span>{% endif %}</td>
+                <td class="text-end text-nowrap">
+                  {% if can_manage %}
+                  <button class="btn btn-outline-primary btn-sm"
+                          onclick='cargarTema({{ {"id": t.id, "nombre": t.nombre, "palabras_clave": t.palabras_clave or "", "palabras_excluir": t.palabras_excluir or "", "region": t.region or "Salta", "activo": t.activo}|tojson }})'>
+                    <i class="bi bi-pencil"></i>
+                  </button>
+                  <form method="POST" action="{{ url_for('monitor_noticias.temas_eliminar', tema_id=t.id) }}" class="d-inline" onsubmit="return confirm('¿Eliminar este tema?');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-outline-danger btn-sm"><i class="bi bi-trash"></i></button>
+                  </form>
+                  {% endif %}
+                </td>
+              </tr>
+              {% else %}
+              <tr><td colspan="5" class="text-center text-muted py-4">Sin temas.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% if can_manage %}
+  <div class="col-lg-5">
+    <div class="card">
+      <div class="card-header fw-semibold" id="tema-form-titulo">Nuevo tema</div>
+      <div class="card-body">
+        <form method="POST" action="{{ url_for('monitor_noticias.temas_guardar') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="id" id="tema-id" value="">
+          <div class="mb-2">
+            <label class="form-label small mb-1">Nombre</label>
+            <input type="text" name="nombre" id="tema-nombre" class="form-control form-control-sm" required>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small mb-1">Palabras clave (separadas por coma)</label>
+            <textarea name="palabras_clave" id="tema-claves" class="form-control form-control-sm" rows="3" placeholder="cocaína, allanamiento, narcomenudeo"></textarea>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small mb-1">Excluir (opcional, separadas por coma)</label>
+            <input type="text" name="palabras_excluir" id="tema-excluir" class="form-control form-control-sm" placeholder="fútbol, mundial">
+          </div>
+          <div class="mb-2">
+            <label class="form-label small mb-1">Región</label>
+            <input type="text" name="region" id="tema-region" class="form-control form-control-sm" value="Salta">
+          </div>
+          <div class="form-check mb-3">
+            <input type="checkbox" name="activo" id="tema-activo" class="form-check-input" value="1" checked>
+            <label class="form-check-label small" for="tema-activo">Activo</label>
+          </div>
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-save"></i> Guardar</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="resetTema()">Limpiar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+function cargarTema(t) {
+  document.getElementById('tema-id').value = t.id;
+  document.getElementById('tema-nombre').value = t.nombre;
+  document.getElementById('tema-claves').value = t.palabras_clave;
+  document.getElementById('tema-excluir').value = t.palabras_excluir;
+  document.getElementById('tema-region').value = t.region;
+  document.getElementById('tema-activo').checked = !!t.activo;
+  document.getElementById('tema-form-titulo').textContent = 'Editar tema';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function resetTema() {
+  document.getElementById('tema-id').value = '';
+  document.getElementById('tema-nombre').value = '';
+  document.getElementById('tema-claves').value = '';
+  document.getElementById('tema-excluir').value = '';
+  document.getElementById('tema-region').value = 'Salta';
+  document.getElementById('tema-activo').checked = true;
+  document.getElementById('tema-form-titulo').textContent = 'Nuevo tema';
+}
+</script>
+{% endblock %}
