@@ -3,7 +3,7 @@ Monitor de Noticias: bandeja, búsqueda manual, temas y fuentes.
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from io import BytesIO
 
 from flask import (
@@ -25,6 +25,14 @@ from app.models.monitor_noticias import FuenteNoticia, Noticia, TemaNoticia
 
 _schema_checked = False
 
+PROVINCIAS_AR = [
+    "Buenos Aires", "CABA", "Catamarca", "Chaco", "Chubut", "Córdoba",
+    "Corrientes", "Entre Ríos", "Formosa", "Jujuy", "La Pampa", "La Rioja",
+    "Mendoza", "Misiones", "Neuquén", "Río Negro", "Salta", "San Juan",
+    "San Luis", "Santa Cruz", "Santa Fe", "Santiago del Estero",
+    "Tierra del Fuego", "Tucumán",
+]
+
 _TEMAS_SEED = [
     {
         "nombre": "Droga - Resultados",
@@ -41,6 +49,18 @@ _TEMAS_SEED = [
 
 def _clean(v) -> str:
     return (v or "").strip() if isinstance(v, str) else ""
+
+
+def _parse_date(s: str):
+    s = _clean(s)
+    if not s:
+        return None
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(s, fmt).date()
+        except ValueError:
+            continue
+    return None
 
 
 def _is_superadmin() -> bool:
@@ -125,6 +145,9 @@ def bandeja():
     estado = _clean(request.args.get("estado"))
     medio = _clean(request.args.get("medio"))
     texto = _clean(request.args.get("q"))
+    fecha_desde = _clean(request.args.get("fecha_desde"))
+    fecha_hasta = _clean(request.args.get("fecha_hasta"))
+    dias = _clean(request.args.get("dias"))
 
     if tema_id.isdigit():
         q = q.filter(Noticia.tema_id == int(tema_id))
@@ -134,6 +157,16 @@ def bandeja():
         q = q.filter(Noticia.medio.ilike(f"%{medio}%"))
     if texto:
         q = q.filter(Noticia.titulo.ilike(f"%{texto}%"))
+
+    if dias.isdigit() and int(dias) > 0:
+        q = q.filter(Noticia.publicado_en >= datetime.utcnow() - timedelta(days=int(dias)))
+    else:
+        d1 = _parse_date(fecha_desde)
+        d2 = _parse_date(fecha_hasta)
+        if d1:
+            q = q.filter(Noticia.publicado_en >= datetime(d1.year, d1.month, d1.day))
+        if d2:
+            q = q.filter(Noticia.publicado_en <= datetime(d2.year, d2.month, d2.day, 23, 59, 59))
 
     noticias = q.order_by(
         Noticia.publicado_en.desc(),
@@ -163,7 +196,16 @@ def bandeja():
         temas=temas,
         medios=medios,
         contadores=contadores,
-        selected={"tema": tema_id, "estado": estado, "medio": medio, "q": texto},
+        selected={
+            "tema": tema_id,
+            "estado": estado,
+            "medio": medio,
+            "q": texto,
+            "fecha_desde": fecha_desde,
+            "fecha_hasta": fecha_hasta,
+            "dias": dias,
+        },
+        provincias=PROVINCIAS_AR,
         can_manage=_can_manage(),
         can_export=_can_export(),
         dep_faltantes=services.dependencias_faltantes(),
@@ -210,7 +252,8 @@ def buscar_libre():
     if not texto:
         flash("Escribí al menos una palabra para la búsqueda libre.", "warning")
         return redirect(url_for("monitor_noticias.bandeja"))
-    region = _clean(request.form.get("region_libre"))
+    regiones = [_clean(r) for r in request.form.getlist("regiones") if _clean(r)]
+    region = ", ".join(regiones)
 
     uid = current_user.unidad_id
     fuentes = FuenteNoticia.query.filter_by(unidad_id=uid, activo=True, tipo="google_news").all()
@@ -278,6 +321,27 @@ def buscar():
         f"Búsqueda completada: {total_nuevas} noticia(s) nueva(s), {total_dup} ya existían.",
         "success" if total_nuevas else "info",
     )
+    return redirect(url_for("monitor_noticias.bandeja"))
+
+
+@bp.route("/limpiar", methods=["POST"])
+def limpiar():
+    if not _can_manage():
+        abort(403)
+    modo = _clean(request.form.get("modo"))
+    q = _base_noticias()
+    if modo == "descartadas":
+        q = q.filter(Noticia.estado == "descartada")
+    elif modo == "no_relevantes":
+        q = q.filter(Noticia.estado != "relevante")
+    elif modo == "todas":
+        pass
+    else:
+        flash("Acción de limpieza no válida.", "warning")
+        return redirect(url_for("monitor_noticias.bandeja"))
+    n = q.delete(synchronize_session=False)
+    db.session.commit()
+    flash(f"Se eliminaron {n} noticia(s).", "success")
     return redirect(url_for("monitor_noticias.bandeja"))
 
 
@@ -403,6 +467,22 @@ def export_xlsx():
     tema_id = _clean(request.args.get("tema"))
     if tema_id.isdigit():
         q = q.filter(Noticia.tema_id == int(tema_id))
+    medio = _clean(request.args.get("medio"))
+    if medio:
+        q = q.filter(Noticia.medio.ilike(f"%{medio}%"))
+    texto = _clean(request.args.get("q"))
+    if texto:
+        q = q.filter(Noticia.titulo.ilike(f"%{texto}%"))
+    dias = _clean(request.args.get("dias"))
+    if dias.isdigit() and int(dias) > 0:
+        q = q.filter(Noticia.publicado_en >= datetime.utcnow() - timedelta(days=int(dias)))
+    else:
+        d1 = _parse_date(request.args.get("fecha_desde"))
+        d2 = _parse_date(request.args.get("fecha_hasta"))
+        if d1:
+            q = q.filter(Noticia.publicado_en >= datetime(d1.year, d1.month, d1.day))
+        if d2:
+            q = q.filter(Noticia.publicado_en <= datetime(d2.year, d2.month, d2.day, 23, 59, 59))
     rows = q.order_by(Noticia.publicado_en.desc(), Noticia.created_at.desc()).all()
 
     wb = openpyxl.Workbook()

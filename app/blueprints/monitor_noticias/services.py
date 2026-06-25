@@ -46,15 +46,20 @@ def _strip_html(texto: str, limite: int = 600) -> str:
 
 
 def build_google_news_url(claves: list[str], region: str = "Salta") -> str:
-    """Arma la URL de búsqueda de Google News RSS (es-AR)."""
-    términos = [t for t in claves if t]
-    if region:
-        términos = [region] + términos if "OR" in " ".join(términos) else términos
-    # Búsqueda: (clave1 OR clave2 ...) región
+    """
+    Arma la URL de búsqueda de Google News RSS (es-AR).
+    `region` puede traer varias provincias separadas por coma (se combinan con OR).
+    """
     grupo = " OR ".join(f'"{t}"' if " " in t else t for t in claves) if claves else ""
-    consulta = grupo
-    if region:
-        consulta = f"({grupo}) {region}" if grupo else region
+    regiones = [r.strip() for r in (region or "").split(",") if r.strip()]
+    if regiones:
+        if len(regiones) == 1:
+            reg_expr = regiones[0] if " " not in regiones[0] else f'"{regiones[0]}"'
+        else:
+            reg_expr = "(" + " OR ".join(f'"{r}"' if " " in r else r for r in regiones) + ")"
+        consulta = f"({grupo}) {reg_expr}" if grupo else reg_expr
+    else:
+        consulta = grupo
     q = quote_plus(consulta)
     return f"https://news.google.com/rss/search?q={q}&hl=es-419&gl=AR&ceid=AR:es-419"
 

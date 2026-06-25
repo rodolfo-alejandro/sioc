@@ -20,14 +20,33 @@
 <div class="card card-body py-3 mb-3 bg-light-subtle">
   <form method="POST" action="{{ url_for('monitor_noticias.buscar_libre') }}" class="row g-2 align-items-end">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="col-md-7">
+    <div class="col-md-6">
       <label class="form-label small mb-1 fw-semibold"><i class="bi bi-search"></i> Búsqueda libre (escribí lo que quieras)</label>
       <input type="text" name="q_libre" class="form-control" placeholder="Ej: narcotráfico Orán, cocaína frontera, bunker..." required>
-      <div class="form-text">Separá con comas para buscar varias cosas a la vez (cada coma es un “o”). Usa Google News.</div>
+      <div class="form-text mb-0">Separá con comas para buscar varias cosas a la vez (cada coma es un “o”). Usa Google News.</div>
     </div>
-    <div class="col-md-3">
-      <label class="form-label small mb-1">Región (opcional)</label>
-      <input type="text" name="region_libre" class="form-control" value="Salta" placeholder="Dejar vacío = todo el país">
+    <div class="col-md-4">
+      <label class="form-label small mb-1">Regiones (Argentina)</label>
+      <div class="dropdown">
+        <button class="btn btn-outline-secondary w-100 text-start dropdown-toggle" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" id="regiones-btn">Salta</button>
+        <div class="dropdown-menu p-2" style="max-height:340px; overflow:auto; min-width:260px">
+          <input type="text" class="form-control form-control-sm mb-2" placeholder="Buscar provincia..." id="regiones-search" onkeyup="filtrarRegiones(this.value)">
+          <div class="d-flex gap-2 mb-2">
+            <button type="button" class="btn btn-link btn-sm p-0" onclick="marcarRegiones(true)">Todas</button>
+            <span class="text-muted">·</span>
+            <button type="button" class="btn btn-link btn-sm p-0" onclick="marcarRegiones(false)">Ninguna</button>
+          </div>
+          <div id="regiones-list">
+            {% for prov in provincias %}
+            <div class="form-check region-item">
+              <input class="form-check-input region-check" type="checkbox" name="regiones" value="{{ prov }}" id="reg-{{ loop.index }}" {% if prov == 'Salta' %}checked{% endif %} onchange="actualizarRegionesBtn()">
+              <label class="form-check-label small" for="reg-{{ loop.index }}">{{ prov }}</label>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+      <div class="form-text mb-0">Sin selección = todo el país.</div>
     </div>
     <div class="col-md-2 d-grid">
       <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i> Buscar</button>
@@ -51,6 +70,35 @@
   {% endif %}
   {% if can_export %}
   <a class="btn btn-outline-success btn-sm" href="{{ url_for('monitor_noticias.export_xlsx', **selected) }}"><i class="bi bi-file-earmark-excel"></i> Excel</a>
+  {% endif %}
+  {% if can_manage %}
+  <div class="dropdown">
+    <button class="btn btn-outline-danger btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown"><i class="bi bi-trash"></i> Limpiar</button>
+    <ul class="dropdown-menu">
+      <li>
+        <form method="POST" action="{{ url_for('monitor_noticias.limpiar') }}" onsubmit="return confirm('¿Eliminar las noticias descartadas?');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="modo" value="descartadas">
+          <button class="dropdown-item" type="submit">Borrar descartadas</button>
+        </form>
+      </li>
+      <li>
+        <form method="POST" action="{{ url_for('monitor_noticias.limpiar') }}" onsubmit="return confirm('Se borrarán todas menos las marcadas como Relevante. ¿Continuar?');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="modo" value="no_relevantes">
+          <button class="dropdown-item" type="submit">Borrar todo menos relevantes</button>
+        </form>
+      </li>
+      <li><hr class="dropdown-divider"></li>
+      <li>
+        <form method="POST" action="{{ url_for('monitor_noticias.limpiar') }}" onsubmit="return confirm('Se vaciará TODA la bandeja (incluidas relevantes). ¿Seguro?');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="modo" value="todas">
+          <button class="dropdown-item text-danger" type="submit">Vaciar todo</button>
+        </form>
+      </li>
+    </ul>
+  </div>
   {% endif %}
   <span class="ms-auto small text-muted">
     Nuevas: <span class="badge text-bg-primary">{{ contadores.nueva }}</span>
@@ -84,15 +132,54 @@
       <input type="text" name="medio" value="{{ selected.medio }}" class="form-control form-control-sm" list="medios-list" placeholder="Cualquiera">
       <datalist id="medios-list">{% for m in medios %}<option value="{{ m }}">{% endfor %}</datalist>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2">
       <label class="form-label small mb-1">Buscar en título</label>
       <input type="text" name="q" value="{{ selected.q }}" class="form-control form-control-sm" placeholder="Palabra...">
     </div>
-    <div class="col-md-1 d-grid">
+    <div class="col-md-2">
+      <label class="form-label small mb-1">Publicadas (rápido)</label>
+      <select name="dias" class="form-select form-select-sm" onchange="if(this.value){this.form.fecha_desde.value='';this.form.fecha_hasta.value='';}">
+        <option value="">Cualquier fecha</option>
+        <option value="1" {% if selected.dias == '1' %}selected{% endif %}>Últimas 24 h</option>
+        <option value="7" {% if selected.dias == '7' %}selected{% endif %}>Últimos 7 días</option>
+        <option value="15" {% if selected.dias == '15' %}selected{% endif %}>Últimos 15 días</option>
+        <option value="30" {% if selected.dias == '30' %}selected{% endif %}>Últimos 30 días</option>
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label small mb-1">Rango de publicación</label>
+      <div class="input-group input-group-sm">
+        <input type="date" name="fecha_desde" value="{{ selected.fecha_desde }}" class="form-control form-control-sm">
+        <input type="date" name="fecha_hasta" value="{{ selected.fecha_hasta }}" class="form-control form-control-sm">
+      </div>
+    </div>
+    <div class="col-md-2 d-grid align-self-end">
       <button type="submit" class="btn btn-outline-primary btn-sm">Filtrar</button>
     </div>
   </div>
 </form>
+
+<script>
+function filtrarRegiones(txt) {
+  txt = (txt || '').toLowerCase();
+  document.querySelectorAll('#regiones-list .region-item').forEach(function (it) {
+    it.style.display = it.textContent.toLowerCase().indexOf(txt) >= 0 ? '' : 'none';
+  });
+}
+function actualizarRegionesBtn() {
+  var sel = Array.prototype.slice.call(document.querySelectorAll('.region-check:checked')).map(function (c) { return c.value; });
+  var btn = document.getElementById('regiones-btn');
+  if (!btn) return;
+  if (sel.length === 0) btn.textContent = 'Todo el país';
+  else if (sel.length === 1) btn.textContent = sel[0];
+  else btn.textContent = sel.length + ' provincias';
+}
+function marcarRegiones(val) {
+  document.querySelectorAll('.region-check').forEach(function (c) { c.checked = val; });
+  actualizarRegionesBtn();
+}
+actualizarRegionesBtn();
+</script>
 
 <div class="card">
   <div class="card-body p-0">
