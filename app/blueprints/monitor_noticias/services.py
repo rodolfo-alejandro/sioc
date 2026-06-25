@@ -45,10 +45,11 @@ def _strip_html(texto: str, limite: int = 600) -> str:
     return limpio[:limite]
 
 
-def build_google_news_url(claves: list[str], region: str = "Salta") -> str:
+def build_google_news_url(claves: list[str], region: str = "Salta", dias: int | None = None) -> str:
     """
     Arma la URL de búsqueda de Google News RSS (es-AR).
     `region` puede traer varias provincias separadas por coma (se combinan con OR).
+    `dias` limita la antigüedad (operador when:Nd de Google News).
     """
     grupo = " OR ".join(f'"{t}"' if " " in t else t for t in claves) if claves else ""
     regiones = [r.strip() for r in (region or "").split(",") if r.strip()]
@@ -60,6 +61,8 @@ def build_google_news_url(claves: list[str], region: str = "Salta") -> str:
         consulta = f"({grupo}) {reg_expr}" if grupo else reg_expr
     else:
         consulta = grupo
+    if dias and int(dias) > 0:
+        consulta = f"{consulta} when:{int(dias)}d".strip()
     q = quote_plus(consulta)
     return f"https://news.google.com/rss/search?q={q}&hl=es-419&gl=AR&ceid=AR:es-419"
 
@@ -130,10 +133,11 @@ def _excluido(texto: str, excluir: list[str]) -> bool:
     return any(c.lower() in t for c in excluir)
 
 
-def recolectar_para_tema(tema, fuentes) -> list[dict]:
+def recolectar_para_tema(tema, fuentes, dias: int | None = None) -> list[dict]:
     """
     Recorre las fuentes activas y devuelve items candidatos (ya filtrados por palabras del tema).
     No toca la base de datos: solo devuelve dicts.
+    `dias` acota la antigüedad en las fuentes Google News.
     """
     claves = tema.lista_claves
     excluir = tema.lista_excluir
@@ -145,7 +149,7 @@ def recolectar_para_tema(tema, fuentes) -> list[dict]:
         if not fuente.activo:
             continue
         if fuente.tipo == "google_news":
-            url = build_google_news_url(claves, region)
+            url = build_google_news_url(claves, region, dias)
             filtrar_claves = False  # Google News ya busca por las claves
         else:
             url = (fuente.url or "").strip()

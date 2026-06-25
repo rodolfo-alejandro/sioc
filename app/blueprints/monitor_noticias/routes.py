@@ -254,6 +254,8 @@ def buscar_libre():
         return redirect(url_for("monitor_noticias.bandeja"))
     regiones = [_clean(r) for r in request.form.getlist("regiones") if _clean(r)]
     region = ", ".join(regiones)
+    dias_libre = _clean(request.form.get("dias_libre"))
+    dias_int = int(dias_libre) if dias_libre.isdigit() and int(dias_libre) > 0 else None
 
     uid = current_user.unidad_id
     fuentes = FuenteNoticia.query.filter_by(unidad_id=uid, activo=True, tipo="google_news").all()
@@ -269,7 +271,7 @@ def buscar_libre():
         activo=True,
     )
     try:
-        candidatos = services.recolectar_para_tema(tema_tmp, fuentes)
+        candidatos = services.recolectar_para_tema(tema_tmp, fuentes, dias=dias_int)
     except Exception as e:
         flash(f"Error en la búsqueda libre: {e}", "danger")
         return redirect(url_for("monitor_noticias.bandeja"))
@@ -279,7 +281,7 @@ def buscar_libre():
         f"Búsqueda «{texto}»: {nuevas} noticia(s) nueva(s), {dup} ya existían.",
         "success" if nuevas else "info",
     )
-    return redirect(url_for("monitor_noticias.bandeja", q=texto))
+    return redirect(url_for("monitor_noticias.bandeja", dias=dias_libre or None))
 
 
 @bp.route("/buscar", methods=["POST"])

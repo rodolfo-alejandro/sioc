@@ -20,12 +20,12 @@
 <div class="card card-body py-3 mb-3 bg-light-subtle">
   <form method="POST" action="{{ url_for('monitor_noticias.buscar_libre') }}" class="row g-2 align-items-end">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="col-md-6">
+    <div class="col-md-5">
       <label class="form-label small mb-1 fw-semibold"><i class="bi bi-search"></i> Búsqueda libre (escribí lo que quieras)</label>
       <input type="text" name="q_libre" class="form-control" placeholder="Ej: narcotráfico Orán, cocaína frontera, bunker..." required>
-      <div class="form-text mb-0">Separá con comas para buscar varias cosas a la vez (cada coma es un “o”). Usa Google News.</div>
+      <div class="form-text mb-0">Texto + regiones + período se aplican <strong>juntos</strong>. Separá con comas para varios términos.</div>
     </div>
-    <div class="col-md-4">
+    <div class="col-md-3">
       <label class="form-label small mb-1">Regiones (Argentina)</label>
       <div class="dropdown">
         <button class="btn btn-outline-secondary w-100 text-start dropdown-toggle" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" id="regiones-btn">Salta</button>
@@ -47,6 +47,17 @@
         </div>
       </div>
       <div class="form-text mb-0">Sin selección = todo el país.</div>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label small mb-1">Período</label>
+      <select name="dias_libre" class="form-select">
+        <option value="">Cualquiera</option>
+        <option value="1">Últimas 24 h</option>
+        <option value="7" selected>Últimos 7 días</option>
+        <option value="15">Últimos 15 días</option>
+        <option value="30">Últimos 30 días</option>
+        <option value="90">Últimos 90 días</option>
+      </select>
     </div>
     <div class="col-md-2 d-grid">
       <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i> Buscar</button>
@@ -108,6 +119,7 @@
 </div>
 
 <form method="get" class="card card-body py-2 mb-3">
+  <div class="small text-muted mb-2"><i class="bi bi-funnel"></i> Filtrar las noticias ya guardadas (se combinan todos los filtros):</div>
   <div class="row g-2 align-items-end">
     <div class="col-md-3">
       <label class="form-label small mb-1">Tema</label>
