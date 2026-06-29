@@ -1,6 +1,10 @@
 {% extends "layouts/base.html" %}
 
 {% block title %}{{ action }} Usuario - SIOC{% endblock %}
+{% block extra_head %}
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+<style>.ts-perms .ts-control { min-height: 42px; }</style>
+{% endblock %}
 
 {% block content %}
 <div class="page-header">
@@ -72,9 +76,9 @@
 
             <div class="mb-3">
                 {{ form.permissions.label(class="form-label") }}
-                {{ form.permissions(class="form-select", multiple=True) }}
+                {{ form.permissions(class="form-select ts-perms", multiple=True, id="permissions-select") }}
                 <small class="form-text text-muted">
-                    Estos permisos se suman a los del rol seleccionado (no los reemplazan).
+                    Escribí para buscar (ej. «DUNACC») y seleccioná los permisos. Se suman a los del rol seleccionado (no los reemplazan).
                 </small>
             </div>
             
@@ -105,5 +109,22 @@
         </form>
     </div>
 </div>
+{% endblock %}
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+<script>
+(function () {
+    var el = document.getElementById('permissions-select');
+    if (el && typeof TomSelect !== 'undefined') {
+        new TomSelect(el, {
+            plugins: ['remove_button'],
+            maxOptions: null,
+            hideSelected: true,
+            placeholder: 'Buscar permisos (ej. DUNACC)…',
+            searchField: ['text'],
+        });
+    }
+})();
+</script>
 {% endblock %}
 

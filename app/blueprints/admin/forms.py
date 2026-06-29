@@ -32,8 +32,11 @@ class UserForm(FlaskForm):
         ]
         # Cargar opciones de roles
         self.role_id.choices = [(r.id, r.name) for r in Role.query.order_by(Role.name).all()]
-        # Cargar opciones de permisos adicionales
-        self.permissions.choices = [(p.id, p.code) for p in Permission.query.order_by(Permission.code).all()]
+        # Cargar opciones de permisos adicionales (descripción + código para que sean legibles)
+        self.permissions.choices = [
+            (p.id, f"{p.description} ({p.code})" if p.description else p.code)
+            for p in Permission.query.order_by(Permission.code).all()
+        ]
 
 
 class UnidadForm(FlaskForm):
