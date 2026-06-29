@@ -128,6 +128,8 @@ class DunaccComisariaAlias(db.Model):
     unidad_id = db.Column(db.Integer, db.ForeignKey("unidades.id"), nullable=False, index=True)
     origen = db.Column(db.String(255), nullable=False, index=True)
     canonico = db.Column(db.String(255), nullable=False)
+    # DDP asignado manualmente a esta comisaría (se aplica a futuras importaciones).
+    ddp = db.Column(db.String(40), nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
 

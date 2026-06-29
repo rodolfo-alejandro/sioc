@@ -96,6 +96,9 @@ def _ensure_schema():
                 ("ddp", "VARCHAR(40)"),
                 ("comisaria_norm", "VARCHAR(255)"),
             ],
+            "dunacc_comisaria_alias": [
+                ("ddp", "VARCHAR(40)"),
+            ],
         }
         agrego_comisaria = False
         for tabla, cols in nuevas_cols.items():
@@ -230,6 +233,18 @@ def _alias_map():
     return {
         a.origen: a.canonico
         for a in DunaccComisariaAlias.query.filter_by(unidad_id=current_user.unidad_id).all()
+    }
+
+
+def _ddp_map():
+    """Diccionario {comisaria_canonica: ddp} asignados manualmente en el catálogo."""
+    return {
+        a.canonico: a.ddp
+        for a in DunaccComisariaAlias.query.filter(
+            DunaccComisariaAlias.unidad_id == current_user.unidad_id,
+            DunaccComisariaAlias.ddp.isnot(None),
+        ).all()
+        if a.ddp
     }
 
 
@@ -513,10 +528,13 @@ def comisarias():
         .order_by(DunaccRegistro.comisaria_norm)
         .all()
     )
-    # Variantes crudas (dependencia) por cada comisaría normalizada.
+    # Variantes crudas (dependencia) y DDPs por cada comisaría normalizada.
     variantes = {}
-    for norm, dep in (
-        db.session.query(DunaccRegistro.comisaria_norm, DunaccRegistro.dependencia)
+    ddps_comi = {}
+    for norm, dep, ddp in (
+        db.session.query(
+            DunaccRegistro.comisaria_norm, DunaccRegistro.dependencia, DunaccRegistro.ddp
+        )
         .filter(
             DunaccRegistro.unidad_id == current_user.unidad_id,
             DunaccRegistro.comisaria_norm.isnot(None),
@@ -526,11 +544,14 @@ def comisarias():
     ):
         if dep:
             variantes.setdefault(norm, set()).add(dep)
+        if ddp:
+            ddps_comi.setdefault(norm, set()).add(ddp)
     comis = [
         {
             "nombre": norm,
             "registros": n,
             "variantes": sorted(variantes.get(norm, [])),
+            "ddps": sorted(ddps_comi.get(norm, [])),
         }
         for norm, n in rows
     ]
@@ -579,6 +600,45 @@ def comisarias_fusionar():
         ).update({"canonico": destino}, synchronize_session=False)
     db.session.commit()
     flash(f"{actualizados} registro(s) reasignado(s) a «{destino}».", "success")
+    return redirect(url_for("dunacc.comisarias"))
+
+
+@bp.route("/comisarias/asignar-ddp", methods=["POST"])
+def comisarias_ddp():
+    if not _can_manage():
+        abort(403)
+    origenes = [o for o in request.form.getlist("origenes") if _clean(o)]
+    ddp_raw = _clean(request.form.get("ddp"))
+    if not origenes or not ddp_raw:
+        flash("Elegí al menos una comisaría y un DDP.", "warning")
+        return redirect(url_for("dunacc.comisarias"))
+    # Normalizar el DDP a formato "DDP<n>".
+    m = re.search(r"(\d+)", ddp_raw)
+    ddp = f"DDP{m.group(1)}" if m else ddp_raw.upper().replace(" ", "")
+
+    actualizados = 0
+    for nombre in origenes:
+        n = (
+            DunaccRegistro.query.filter(
+                DunaccRegistro.unidad_id == current_user.unidad_id,
+                DunaccRegistro.comisaria_norm == nombre,
+            ).update({"ddp": ddp}, synchronize_session=False)
+        )
+        actualizados += n
+        # Persistir el DDP para futuras importaciones (alias canónico = mismo nombre).
+        alias = DunaccComisariaAlias.query.filter_by(
+            unidad_id=current_user.unidad_id, origen=nombre
+        ).first()
+        if alias:
+            alias.ddp = ddp
+            if not alias.canonico:
+                alias.canonico = nombre
+        else:
+            db.session.add(DunaccComisariaAlias(
+                unidad_id=current_user.unidad_id, origen=nombre, canonico=nombre, ddp=ddp
+            ))
+    db.session.commit()
+    flash(f"{ddp} asignado a {len(origenes)} comisaría(s) ({actualizados} registro(s)).", "success")
     return redirect(url_for("dunacc.comisarias"))
 
 
@@ -652,6 +712,14 @@ def subir():
             cn = reg.get("comisaria_norm")
             if cn and cn in alias:
                 reg["comisaria_norm"] = alias[cn]
+    # Aplicar DDP asignado manualmente a cada comisaría (si la fila no trae DDP).
+    ddp_por_comisaria = _ddp_map()
+    if ddp_por_comisaria:
+        for reg in registros:
+            if not reg.get("ddp"):
+                cn = reg.get("comisaria_norm")
+                if cn and cn in ddp_por_comisaria:
+                    reg["ddp"] = ddp_por_comisaria[cn]
 
     # Fuente predominante de la planilla (DUNACC denuncias o CCO911 llamadas).
     fuentes = [r.get("fuente") for r in registros if r.get("fuente")]
