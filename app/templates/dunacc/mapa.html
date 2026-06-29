@@ -25,6 +25,17 @@
 </div>
 
 <div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span class="text-muted small"><i class="bi bi-pin-map"></i> {{ puntos|length }} punto(s) en el mapa</span>
+        <div class="btn-group btn-group-sm" role="group" aria-label="Tipo de mapa">
+            <input type="radio" class="btn-check" name="tipomapa" id="tm-puntos" autocomplete="off" checked>
+            <label class="btn btn-outline-primary" for="tm-puntos"><i class="bi bi-geo-alt-fill"></i> Puntos</label>
+            <input type="radio" class="btn-check" name="tipomapa" id="tm-calor" autocomplete="off">
+            <label class="btn btn-outline-danger" for="tm-calor"><i class="bi bi-fire"></i> Calor</label>
+            <input type="radio" class="btn-check" name="tipomapa" id="tm-ambos" autocomplete="off">
+            <label class="btn btn-outline-secondary" for="tm-ambos"><i class="bi bi-layers"></i> Ambos</label>
+        </div>
+    </div>
     <div class="card-body p-0">
         <div id="mapa-dunacc" style="height: 70vh; min-height: 420px;"></div>
     </div>
@@ -32,12 +43,16 @@
 {% endblock %}
 {% block extra_scripts %}
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 <script>
 (function () {
     var puntos = {{ puntos|tojson }};
     var map = L.map('mapa-dunacc').setView([-24.79, -65.41], 11);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(map);
+
     var bounds = [];
+    var puntosLayer = L.layerGroup();
+    var heatData = [];
     puntos.forEach(function (p) {
         if (!p.lat || !p.lng) return;
         var txt = '<strong>N° AP:</strong> ' + p.numero_ap + '<br>' +
@@ -45,11 +60,29 @@
             '<strong>Fecha:</strong> ' + p.fecha + '<br>' +
             '<strong>Dependencia:</strong> ' + p.dependencia + '<br>' +
             '<strong>Lugar:</strong> ' + p.lugar + '<br>' +
-            '<a href="{{ url_for("dunacc.registro_coords", registro_id=0) }}'.replace('/0/', '/' + p.id + '/') + '">Editar ubicación</a>';
+            '<a href="{{ url_for("dunacc.registro_detalle", registro_id=0) }}'.replace('/registro/0', '/registro/' + p.id) + '">Ver detalle</a>';
         L.circleMarker([p.lat, p.lng], { radius: 7, color: '#0d6efd', weight: 2, fillColor: '#0d6efd', fillOpacity: 0.8 })
-            .addTo(map).bindPopup(txt);
+            .bindPopup(txt).addTo(puntosLayer);
+        heatData.push([p.lat, p.lng, 0.8]);
         bounds.push([p.lat, p.lng]);
     });
+
+    var heatLayer = (typeof L.heatLayer === 'function')
+        ? L.heatLayer(heatData, { radius: 25, blur: 18, maxZoom: 17 })
+        : null;
+
+    function render(modo) {
+        map.removeLayer(puntosLayer);
+        if (heatLayer) map.removeLayer(heatLayer);
+        if (modo === 'puntos' || modo === 'ambos') puntosLayer.addTo(map);
+        if ((modo === 'calor' || modo === 'ambos') && heatLayer) heatLayer.addTo(map);
+    }
+    render('puntos');
+
+    document.getElementById('tm-puntos').addEventListener('change', function () { render('puntos'); });
+    document.getElementById('tm-calor').addEventListener('change', function () { render('calor'); });
+    document.getElementById('tm-ambos').addEventListener('change', function () { render('ambos'); });
+
     if (bounds.length) map.fitBounds(bounds, { padding: [30, 30] });
 })();
 </script>

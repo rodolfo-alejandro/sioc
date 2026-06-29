@@ -112,6 +112,40 @@ def _base_registros():
     return DunaccRegistro.query.filter(cond)
 
 
+def _lotes_info():
+    """Devuelve (lotes_info, todas_las_planillas) propias + compartidas conmigo."""
+    own_lotes = (
+        DunaccLote.query.filter_by(unidad_id=current_user.unidad_id)
+        .order_by(DunaccLote.created_at.desc())
+        .all()
+    )
+    shared_ids = _shared_lote_ids()
+    shared_lotes = []
+    if shared_ids:
+        shared_lotes = (
+            DunaccLote.query.filter(DunaccLote.id.in_(shared_ids))
+            .order_by(DunaccLote.created_at.desc())
+            .all()
+        )
+    share_counts = {}
+    if own_lotes:
+        for lid, cnt in (
+            db.session.query(DunaccLoteCompartido.lote_id, db.func.count())
+            .filter(DunaccLoteCompartido.lote_id.in_([l.id for l in own_lotes]))
+            .group_by(DunaccLoteCompartido.lote_id)
+            .all()
+        ):
+            share_counts[lid] = cnt
+    lotes_info = [
+        {"lote": l, "propio": True, "owner": None, "shares": share_counts.get(l.id, 0)}
+        for l in own_lotes
+    ] + [
+        {"lote": l, "propio": False, "owner": (l.unidad.nombre if l.unidad else "Otra área"), "shares": 0}
+        for l in shared_lotes
+    ]
+    return lotes_info, own_lotes + shared_lotes
+
+
 def _upload_dir(unidad_id=None) -> str:
     base_dir = current_app.config.get("UPLOAD_FOLDER", "instance/uploads")
     if not os.path.isabs(base_dir):
@@ -184,35 +218,7 @@ def listado():
         .all()
         if r[0]
     ]
-    own_lotes = (
-        DunaccLote.query.filter_by(unidad_id=current_user.unidad_id)
-        .order_by(DunaccLote.created_at.desc())
-        .all()
-    )
-    shared_ids = _shared_lote_ids()
-    shared_lotes = []
-    if shared_ids:
-        shared_lotes = (
-            DunaccLote.query.filter(DunaccLote.id.in_(shared_ids))
-            .order_by(DunaccLote.created_at.desc())
-            .all()
-        )
-    share_counts = {}
-    if own_lotes:
-        for lid, cnt in (
-            db.session.query(DunaccLoteCompartido.lote_id, db.func.count())
-            .filter(DunaccLoteCompartido.lote_id.in_([l.id for l in own_lotes]))
-            .group_by(DunaccLoteCompartido.lote_id)
-            .all()
-        ):
-            share_counts[lid] = cnt
-    lotes_info = [
-        {"lote": l, "propio": True, "owner": None, "shares": share_counts.get(l.id, 0)}
-        for l in own_lotes
-    ] + [
-        {"lote": l, "propio": False, "owner": (l.unidad.nombre if l.unidad else "Otra área"), "shares": 0}
-        for l in shared_lotes
-    ]
+    lotes_info, all_lotes = _lotes_info()
 
     return render_template(
         "dunacc/listado.html",
@@ -222,7 +228,7 @@ def listado():
         con_coords=total - sin_coords,
         anios=anios,
         lotes_info=lotes_info,
-        lotes=own_lotes + shared_lotes,
+        lotes=all_lotes,
         selected={
             "q": texto,
             "dependencia": dependencia,
@@ -236,6 +242,16 @@ def listado():
         can_manage=_can_manage(),
         can_export=_can_export(),
         dep_faltantes=services.dependencias_faltantes(),
+    )
+
+
+@bp.route("/planillas")
+def planillas():
+    lotes_info, _ = _lotes_info()
+    return render_template(
+        "dunacc/planillas.html",
+        lotes_info=lotes_info,
+        can_manage=_can_manage(),
     )
 
 

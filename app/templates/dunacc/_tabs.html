@@ -1,5 +1,6 @@
 <ul class="nav nav-tabs mb-3">
     <li class="nav-item"><a class="nav-link {{ 'active' if active == 'listado' else '' }}" href="{{ url_for('dunacc.listado') }}"><i class="bi bi-list-ul"></i> Registros</a></li>
+    <li class="nav-item"><a class="nav-link {{ 'active' if active == 'planillas' else '' }}" href="{{ url_for('dunacc.planillas') }}"><i class="bi bi-paperclip"></i> Planillas</a></li>
     {% if can_manage %}
     <li class="nav-item"><a class="nav-link {{ 'active' if active == 'subir' else '' }}" href="{{ url_for('dunacc.subir') }}"><i class="bi bi-cloud-upload"></i> Subir planilla</a></li>
     {% endif %}
