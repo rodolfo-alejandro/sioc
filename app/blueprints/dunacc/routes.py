@@ -642,6 +642,44 @@ def comisarias_ddp():
     return redirect(url_for("dunacc.comisarias"))
 
 
+# ---------------------- Coincidencias DUNACC <-> 911 ----------------------
+
+@bp.route("/coincidencias")
+def coincidencias():
+    dias_tol = min(7, max(0, request.args.get("dias", type=int) if request.args.get("dias") is not None else 1))
+    umbral_pct = min(80, max(5, request.args.get("umbral", type=int) or 18))
+    fecha_desde = _clean(request.args.get("fecha_desde"))
+    fecha_hasta = _clean(request.args.get("fecha_hasta"))
+
+    base = _base_registros()
+    d1 = _parse_date(fecha_desde)
+    d2 = _parse_date(fecha_hasta)
+    if d1:
+        base = base.filter(DunaccRegistro.fecha >= d1)
+    if d2:
+        base = base.filter(DunaccRegistro.fecha <= d2)
+
+    dunacc_regs = base.filter(DunaccRegistro.fuente == "DUNACC").all()
+    cco_regs = base.filter(DunaccRegistro.fuente == "CCO911").all()
+
+    pares = services.buscar_coincidencias(
+        dunacc_regs, cco_regs, dias_tol=dias_tol, umbral=umbral_pct / 100.0
+    )
+
+    return render_template(
+        "dunacc/coincidencias.html",
+        pares=pares,
+        n_dunacc=len(dunacc_regs),
+        n_cco=len(cco_regs),
+        selected={
+            "dias": dias_tol,
+            "umbral": umbral_pct,
+            "fecha_desde": fecha_desde,
+            "fecha_hasta": fecha_hasta,
+        },
+    )
+
+
 # ---------------------- Subir / importar ----------------------
 
 @bp.route("/subir", methods=["GET", "POST"])

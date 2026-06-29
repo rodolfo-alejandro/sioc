@@ -423,6 +423,89 @@ def normalizar_comisaria(raw: str) -> tuple[str | None, str | None]:
     return clave, etiqueta
 
 
+def _tokens_set(textos) -> set:
+    s = set()
+    for t in textos:
+        s.update(_tokens(t or ""))
+    return s
+
+
+def _haversine_m(lat1, lon1, lat2, lon2) -> float:
+    """Distancia aproximada en metros entre dos coordenadas."""
+    import math
+    r = 6371000.0
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dl = math.radians(lon2 - lon1)
+    a = math.sin(dphi / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * r * math.asin(min(1.0, math.sqrt(a)))
+
+
+def buscar_coincidencias(dunacc_regs, cco_regs, dias_tol=1, umbral=0.18, limite=400):
+    """
+    Cruza denuncias DUNACC con llamadas 911 (CCO) y devuelve los pares que
+    probablemente sean el mismo hecho. Cada `reg` es un objeto DunaccRegistro.
+
+    Score = similitud de texto/lugar (Jaccard) + bonus por fecha y por cercanía
+    geográfica (si ambos tienen coordenadas).
+    """
+    # Precalcular tokens, fecha y coords de cada lado.
+    def _prep(regs):
+        out = []
+        for r in regs:
+            if not r.fecha:
+                continue
+            toks = _tokens_set([r.lugar, r.caratula, r.relato])
+            if not toks:
+                continue
+            out.append((r, toks, r.fecha, r.lat, r.lon))
+        return out
+
+    izq = _prep(dunacc_regs)
+    der = _prep(cco_regs)
+
+    # Indexar el lado derecho (CCO) por día ordinal para acotar comparaciones.
+    por_dia = {}
+    for item in der:
+        por_dia.setdefault(item[2].toordinal(), []).append(item)
+
+    pares = []
+    for r1, t1, f1, la1, lo1 in izq:
+        base = f1.toordinal()
+        for delta in range(-dias_tol, dias_tol + 1):
+            for r2, t2, f2, la2, lo2 in por_dia.get(base + delta, []):
+                inter = t1 & t2
+                if not inter:
+                    continue
+                union = t1 | t2
+                jacc = len(inter) / len(union) if union else 0.0
+                if jacc < umbral:
+                    continue
+                score = jacc
+                ddias = abs((f1 - f2).days)
+                # Bonus por fecha cercana.
+                score += 0.15 if ddias == 0 else (0.07 if ddias == 1 else 0.0)
+                # Bonus por cercanía geográfica.
+                dist = None
+                if None not in (la1, lo1, la2, lo2):
+                    dist = _haversine_m(la1, lo1, la2, lo2)
+                    if dist <= 150:
+                        score += 0.2
+                    elif dist <= 500:
+                        score += 0.1
+                pares.append({
+                    "dunacc": r1,
+                    "cco": r2,
+                    "score": round(min(score, 1.0) * 100),
+                    "dias": ddias,
+                    "dist": round(dist) if dist is not None else None,
+                    "comunes": sorted(inter)[:12],
+                })
+
+    pares.sort(key=lambda p: p["score"], reverse=True)
+    return pares[:limite]
+
+
 def hora_a_int(v) -> int | None:
     """Extrae la hora (0-23) de un texto tipo '09:40' o '18.45'."""
     if not v:
