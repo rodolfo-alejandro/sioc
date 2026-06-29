@@ -32,6 +32,26 @@ class DunaccLote(db.Model):
     user = db.relationship("User", backref="dunacc_lotes")
 
 
+class DunaccLoteCompartido(db.Model):
+    """Comparte una planilla (lote) con otra área/unidad para ver y editar coordenadas."""
+
+    __tablename__ = "dunacc_lotes_compartidos"
+    __table_args__ = (
+        db.UniqueConstraint("lote_id", "unidad_destino_id", name="uq_dunacc_lote_compartido"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    lote_id = db.Column(
+        db.Integer, db.ForeignKey("dunacc_lotes.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    unidad_destino_id = db.Column(db.Integer, db.ForeignKey("unidades.id"), nullable=False, index=True)
+    compartido_por = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    lote = db.relationship("DunaccLote", backref=db.backref("compartidos", passive_deletes=True))
+    unidad_destino = db.relationship("Unidad")
+
+
 class DunaccRegistro(db.Model):
     """Una fila de la planilla DUNACC, georreferenciable."""
 

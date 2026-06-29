@@ -1,0 +1,59 @@
+{% extends "layouts/base.html" %}
+{% block title %}DUNACC - Compartir planilla{% endblock %}
+{% block extra_head %}
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+{% endblock %}
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <h1 class="h3 mb-0"><i class="bi bi-share"></i> Compartir planilla</h1>
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('dunacc.listado') }}"><i class="bi bi-arrow-left"></i> Volver</a>
+</div>
+
+<div class="row">
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-header"><i class="bi bi-file-earmark-excel text-success"></i> {{ lote.nombre_original or lote.nombre_archivo }} <span class="text-muted">({{ lote.total_registros }} registros)</span></div>
+            <div class="card-body">
+                <form method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <label class="form-label">Áreas con las que compartir</label>
+                    <select id="unidades-select" name="unidades" class="form-select" multiple placeholder="Buscar área (ej. Ciberseguridad)…">
+                        {% for u in unidades %}
+                        <option value="{{ u.id }}" {{ 'selected' if u.id in compartidas else '' }}>{{ u.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text mb-3">
+                        Las áreas seleccionadas podrán <strong>ver y editar las coordenadas</strong> de esta planilla.
+                        No podrán borrar la planilla ni sus registros (eso queda solo para tu área).
+                    </div>
+                    <button class="btn btn-primary" type="submit"><i class="bi bi-check-lg"></i> Guardar</button>
+                    <a class="btn btn-outline-secondary" href="{{ url_for('dunacc.listado') }}">Cancelar</a>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-5">
+        <div class="card bg-light">
+            <div class="card-body">
+                <h6 class="card-title"><i class="bi bi-info-circle"></i> Cómo funciona</h6>
+                <ul class="small mb-0 ps-3">
+                    <li>Compartís <strong>por planilla</strong>: cada archivo se comparte con las áreas que elijas.</li>
+                    <li>Los usuarios de esas áreas necesitan el permiso <code>DUNACC_VIEW</code> (y <code>DUNACC_MANAGE</code> para editar coordenadas).</li>
+                    <li>Para dejar de compartir, quitá el área de la lista y guardá.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+<script>
+(function () {
+    var el = document.getElementById('unidades-select');
+    if (el && typeof TomSelect !== 'undefined') {
+        new TomSelect(el, { plugins: ['remove_button'], maxOptions: null, hideSelected: true, searchField: ['text'] });
+    }
+})();
+</script>
+{% endblock %}

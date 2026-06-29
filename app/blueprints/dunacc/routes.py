@@ -27,7 +27,8 @@ from werkzeug.utils import secure_filename
 from app.blueprints.dunacc import bp
 from app.blueprints.dunacc import services
 from app.extensions import db
-from app.models.dunacc import DunaccLote, DunaccRegistro
+from app.models.dunacc import DunaccLote, DunaccLoteCompartido, DunaccRegistro
+from app.models.unidad import Unidad
 
 _schema_checked = False
 
@@ -76,7 +77,7 @@ def _ensure_schema():
     try:
         insp = inspect(db.engine)
         existing = set(insp.get_table_names())
-        for model in (DunaccLote, DunaccRegistro):
+        for model in (DunaccLote, DunaccRegistro, DunaccLoteCompartido):
             if model.__tablename__ not in existing:
                 model.__table__.create(bind=db.engine)
         _schema_checked = True
@@ -92,15 +93,30 @@ def _gate():
     _ensure_schema()
 
 
+def _shared_lote_ids():
+    """IDs de planillas (lotes) compartidas con el área del usuario actual."""
+    rows = (
+        db.session.query(DunaccLoteCompartido.lote_id)
+        .filter(DunaccLoteCompartido.unidad_destino_id == current_user.unidad_id)
+        .all()
+    )
+    return [r[0] for r in rows]
+
+
 def _base_registros():
-    return DunaccRegistro.query.filter(DunaccRegistro.unidad_id == current_user.unidad_id)
+    """Registros de mi área + los de planillas compartidas conmigo."""
+    shared = _shared_lote_ids()
+    cond = DunaccRegistro.unidad_id == current_user.unidad_id
+    if shared:
+        cond = or_(cond, DunaccRegistro.lote_id.in_(shared))
+    return DunaccRegistro.query.filter(cond)
 
 
-def _upload_dir() -> str:
+def _upload_dir(unidad_id=None) -> str:
     base_dir = current_app.config.get("UPLOAD_FOLDER", "instance/uploads")
     if not os.path.isabs(base_dir):
         base_dir = os.path.join(current_app.root_path, base_dir)
-    target = os.path.join(base_dir, "dunacc", str(current_user.unidad_id))
+    target = os.path.join(base_dir, "dunacc", str(unidad_id or current_user.unidad_id))
     os.makedirs(target, exist_ok=True)
     return target
 
@@ -168,11 +184,35 @@ def listado():
         .all()
         if r[0]
     ]
-    lotes = (
+    own_lotes = (
         DunaccLote.query.filter_by(unidad_id=current_user.unidad_id)
         .order_by(DunaccLote.created_at.desc())
         .all()
     )
+    shared_ids = _shared_lote_ids()
+    shared_lotes = []
+    if shared_ids:
+        shared_lotes = (
+            DunaccLote.query.filter(DunaccLote.id.in_(shared_ids))
+            .order_by(DunaccLote.created_at.desc())
+            .all()
+        )
+    share_counts = {}
+    if own_lotes:
+        for lid, cnt in (
+            db.session.query(DunaccLoteCompartido.lote_id, db.func.count())
+            .filter(DunaccLoteCompartido.lote_id.in_([l.id for l in own_lotes]))
+            .group_by(DunaccLoteCompartido.lote_id)
+            .all()
+        ):
+            share_counts[lid] = cnt
+    lotes_info = [
+        {"lote": l, "propio": True, "owner": None, "shares": share_counts.get(l.id, 0)}
+        for l in own_lotes
+    ] + [
+        {"lote": l, "propio": False, "owner": (l.unidad.nombre if l.unidad else "Otra área"), "shares": 0}
+        for l in shared_lotes
+    ]
 
     return render_template(
         "dunacc/listado.html",
@@ -181,7 +221,8 @@ def listado():
         sin_coords=sin_coords,
         con_coords=total - sin_coords,
         anios=anios,
-        lotes=lotes,
+        lotes_info=lotes_info,
+        lotes=own_lotes + shared_lotes,
         selected={
             "q": texto,
             "dependencia": dependencia,
@@ -332,6 +373,12 @@ def subir():
 
 # ---------------------- Coordenadas ----------------------
 
+@bp.route("/registro/<int:registro_id>")
+def registro_detalle(registro_id: int):
+    reg = _base_registros().filter(DunaccRegistro.id == registro_id).first_or_404()
+    return render_template("dunacc/detalle.html", reg=reg, can_manage=_can_manage())
+
+
 @bp.route("/registro/<int:registro_id>/coords", methods=["GET", "POST"])
 def registro_coords(registro_id: int):
     if not _can_manage():
@@ -389,6 +436,9 @@ def registro_eliminar(registro_id: int):
     if not _can_manage():
         abort(403)
     reg = _base_registros().filter(DunaccRegistro.id == registro_id).first_or_404()
+    if reg.unidad_id != current_user.unidad_id:
+        flash("Solo el área dueña de la planilla puede eliminar registros.", "warning")
+        return redirect(request.referrer or url_for("dunacc.listado"))
     db.session.delete(reg)
     db.session.commit()
     flash("Registro eliminado.", "success")
@@ -453,11 +503,11 @@ def mapa():
     sin_coords = _base_registros().filter(
         or_(DunaccRegistro.lat.is_(None), DunaccRegistro.lon.is_(None))
     ).count()
-    lotes = (
-        DunaccLote.query.filter_by(unidad_id=current_user.unidad_id)
-        .order_by(DunaccLote.created_at.desc())
-        .all()
-    )
+    shared_ids = _shared_lote_ids()
+    lote_cond = DunaccLote.unidad_id == current_user.unidad_id
+    if shared_ids:
+        lote_cond = or_(lote_cond, DunaccLote.id.in_(shared_ids))
+    lotes = DunaccLote.query.filter(lote_cond).order_by(DunaccLote.created_at.desc()).all()
 
     return render_template(
         "dunacc/mapa.html",
@@ -471,14 +521,69 @@ def mapa():
 
 # ---------------------- Lotes (archivos) ----------------------
 
+def _lote_accesible(lote_id: int):
+    """Devuelve el lote si es de mi área o está compartido conmigo; si no, 404."""
+    lote = DunaccLote.query.filter_by(id=lote_id).first_or_404()
+    if lote.unidad_id == current_user.unidad_id:
+        return lote
+    if lote.id in _shared_lote_ids():
+        return lote
+    abort(404)
+
+
 @bp.route("/lote/<int:lote_id>/descargar")
 def lote_descargar(lote_id: int):
-    lote = DunaccLote.query.filter_by(id=lote_id, unidad_id=current_user.unidad_id).first_or_404()
-    path = os.path.join(_upload_dir(), lote.nombre_archivo)
+    lote = _lote_accesible(lote_id)
+    path = os.path.join(_upload_dir(lote.unidad_id), lote.nombre_archivo)
     if not os.path.exists(path):
         flash("El archivo original ya no está disponible en el servidor.", "warning")
         return redirect(url_for("dunacc.listado"))
     return send_file(path, as_attachment=True, download_name=lote.nombre_original or lote.nombre_archivo)
+
+
+@bp.route("/lote/<int:lote_id>/compartir", methods=["GET", "POST"])
+def lote_compartir(lote_id: int):
+    if not _can_manage():
+        abort(403)
+    lote = DunaccLote.query.filter_by(id=lote_id, unidad_id=current_user.unidad_id).first_or_404()
+
+    if request.method == "POST":
+        seleccionadas = {
+            int(x) for x in request.form.getlist("unidades") if str(x).isdigit()
+        }
+        seleccionadas.discard(current_user.unidad_id)
+        actuales = {
+            c.unidad_destino_id: c
+            for c in DunaccLoteCompartido.query.filter_by(lote_id=lote.id).all()
+        }
+        # Agregar nuevas
+        for uid in seleccionadas - set(actuales):
+            db.session.add(DunaccLoteCompartido(
+                lote_id=lote.id,
+                unidad_destino_id=uid,
+                compartido_por=current_user.id,
+            ))
+        # Quitar las que ya no están
+        for uid in set(actuales) - seleccionadas:
+            db.session.delete(actuales[uid])
+        db.session.commit()
+        flash("Compartición actualizada.", "success")
+        return redirect(url_for("dunacc.listado"))
+
+    unidades = (
+        Unidad.query.filter(Unidad.activo.is_(True), Unidad.id != current_user.unidad_id)
+        .order_by(Unidad.nombre)
+        .all()
+    )
+    compartidas = {
+        c.unidad_destino_id for c in DunaccLoteCompartido.query.filter_by(lote_id=lote.id).all()
+    }
+    return render_template(
+        "dunacc/compartir.html",
+        lote=lote,
+        unidades=unidades,
+        compartidas=compartidas,
+    )
 
 
 @bp.route("/lote/<int:lote_id>/eliminar", methods=["POST"])

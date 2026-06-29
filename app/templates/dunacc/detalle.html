@@ -1,0 +1,72 @@
+{% extends "layouts/base.html" %}
+{% block title %}DUNACC - Detalle del registro{% endblock %}
+{% block extra_head %}
+{% if reg.tiene_coords %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+{% endif %}
+{% endblock %}
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <h1 class="h3 mb-0"><i class="bi bi-file-text"></i> Registro DUNACC</h1>
+    <div class="d-flex gap-2">
+        <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('dunacc.listado') }}"><i class="bi bi-arrow-left"></i> Volver</a>
+        {% if can_manage %}
+        <a class="btn {{ 'btn-outline-primary' if reg.tiene_coords else 'btn-warning' }} btn-sm" href="{{ url_for('dunacc.registro_coords', registro_id=reg.id) }}"><i class="bi bi-geo-alt"></i> {{ 'Editar ubicación' if reg.tiene_coords else 'Cargar coordenadas' }}</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-{{ 7 if reg.tiene_coords else 12 }}">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-card-list"></i> {{ reg.caratula or 'Sin carátula' }}</span>
+                {% if reg.tiene_coords %}
+                <span class="badge bg-success"><i class="bi bi-geo-alt-fill"></i> Georreferenciado</span>
+                {% else %}
+                <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle"></i> Sin coordenadas</span>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-3">N°</dt><dd class="col-sm-9">{{ reg.numero or '-' }}</dd>
+                    <dt class="col-sm-3">N° AP</dt><dd class="col-sm-9">{{ reg.numero_ap or '-' }}</dd>
+                    <dt class="col-sm-3">Dependencia</dt><dd class="col-sm-9">{{ reg.dependencia or '-' }}</dd>
+                    <dt class="col-sm-3">Carátula</dt><dd class="col-sm-9">{{ reg.caratula or '-' }}</dd>
+                    <dt class="col-sm-3">Fecha</dt><dd class="col-sm-9">{{ reg.fecha.strftime('%d/%m/%Y') if reg.fecha else '-' }}{% if reg.anio %} <span class="text-muted">(Año {{ reg.anio }})</span>{% endif %}</dd>
+                    <dt class="col-sm-3">Hora</dt><dd class="col-sm-9">{{ reg.hora or '-' }}</dd>
+                    <dt class="col-sm-3">Lugar</dt><dd class="col-sm-9">{{ reg.lugar or '-' }}</dd>
+                    <dt class="col-sm-3">Informante</dt><dd class="col-sm-9">{{ reg.informante or '-' }}</dd>
+                    <dt class="col-sm-3">Acusado</dt><dd class="col-sm-9">{{ reg.acusado or '-' }}</dd>
+                    <dt class="col-sm-3">Coordenadas</dt><dd class="col-sm-9">{% if reg.tiene_coords %}{{ '%.6f, %.6f'|format(reg.lat, reg.lon) }} <small class="text-muted">({{ reg.geo_origen or 'manual' }})</small>{% else %}<span class="text-muted">No cargadas</span>{% endif %}</dd>
+                </dl>
+                <hr>
+                <h6 class="text-muted"><i class="bi bi-text-paragraph"></i> Breve relato</h6>
+                <p class="mb-0" style="white-space: pre-wrap;">{{ reg.relato or 'Sin relato.' }}</p>
+            </div>
+        </div>
+    </div>
+    {% if reg.tiene_coords %}
+    <div class="col-lg-5">
+        <div class="card h-100">
+            <div class="card-body p-0">
+                <div id="mapDet" style="height: 100%; min-height: 360px; border-radius: .375rem;"></div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+{% block extra_scripts %}
+{% if reg.tiene_coords %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+(function () {
+    var map = L.map('mapDet').setView([{{ reg.lat }}, {{ reg.lon }}], 16);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(map);
+    L.marker([{{ reg.lat }}, {{ reg.lon }}]).addTo(map);
+    setTimeout(function () { map.invalidateSize(); }, 200);
+})();
+</script>
+{% endif %}
+{% endblock %}
