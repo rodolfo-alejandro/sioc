@@ -66,7 +66,7 @@ from app.models.oficios_judiciales import (
 from app.models.analisis_llamadas_se import LlamadaSE
 from app.models.analisis_intervenciones import AnalisisIntervencion
 from app.models.monitor_noticias import TemaNoticia, FuenteNoticia, Noticia
-from app.models.dunacc import DunaccLote, DunaccRegistro, DunaccLoteCompartido
+from app.models.dunacc import DunaccLote, DunaccRegistro, DunaccLoteCompartido, DunaccComisariaAlias
 
 __all__ = [
     'User', 'Role', 'Permission', 'Unidad', 'AuditLog', 'Dataset', 'DenunciaWeb',
@@ -92,6 +92,6 @@ __all__ = [
     'ConsignaJudicial', 'ConsignaPersona', 'ConsignaDomicilio', 'ConsignaMedidaDetalle',
     'LlamadaSE', 'AnalisisIntervencion',
     'TemaNoticia', 'FuenteNoticia', 'Noticia',
-    'DunaccLote', 'DunaccRegistro', 'DunaccLoteCompartido',
+    'DunaccLote', 'DunaccRegistro', 'DunaccLoteCompartido', 'DunaccComisariaAlias',
 ]
 

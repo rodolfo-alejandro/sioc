@@ -30,7 +30,8 @@
     <div class="card-body">
         <form method="GET" class="row g-2">
             <div class="col-md-4"><label class="form-label form-label-sm mb-1"><i class="bi bi-search"></i> Buscar</label><input class="form-control form-control-sm" name="q" value="{{ selected.q }}" placeholder="Carátula, lugar, dependencia, acusado…"></div>
-            <div class="col-md-3"><label class="form-label form-label-sm mb-1"><i class="bi bi-building"></i> Dependencia</label><input class="form-control form-control-sm" name="dependencia" value="{{ selected.dependencia }}"></div>
+            <div class="col-md-3"><label class="form-label form-label-sm mb-1"><i class="bi bi-shield"></i> Comisaría</label><select class="form-select form-select-sm" name="comisaria"><option value="">Todas</option>{% for c in comisarias %}<option value="{{ c }}" {{ 'selected' if selected.comisaria == c else '' }}>{{ c }}</option>{% endfor %}</select></div>
+            <div class="col-md-2"><label class="form-label form-label-sm mb-1"><i class="bi bi-diagram-3"></i> DDP</label><select class="form-select form-select-sm" name="ddp"><option value="">Todos</option>{% for d in ddps %}<option value="{{ d }}" {{ 'selected' if selected.ddp == d else '' }}>{{ d }}</option>{% endfor %}</select></div>
             <div class="col-md-2"><label class="form-label form-label-sm mb-1"><i class="bi bi-collection"></i> Fuente</label><select class="form-select form-select-sm" name="fuente"><option value="">Todas</option>{% for code, label in fuentes.items() %}<option value="{{ code }}" {{ 'selected' if selected.fuente == code else '' }}>{{ label }}</option>{% endfor %}</select></div>
             <div class="col-md-2"><label class="form-label form-label-sm mb-1"><i class="bi bi-calendar3"></i> Año</label><select class="form-select form-select-sm" name="anio"><option value="">Todos</option>{% for a in anios %}<option value="{{ a }}" {{ 'selected' if selected.anio == a|string else '' }}>{{ a }}</option>{% endfor %}</select></div>
             <div class="col-md-3"><label class="form-label form-label-sm mb-1"><i class="bi bi-geo"></i> Coordenadas</label><select class="form-select form-select-sm" name="geo"><option value="">Todas</option><option value="con" {{ 'selected' if selected.geo == 'con' else '' }}>Con coordenadas</option><option value="sin" {{ 'selected' if selected.geo == 'sin' else '' }}>Sin coordenadas</option></select></div>
@@ -51,7 +52,8 @@
                         <th>Fuente</th>
                         <th>N° AP</th>
                         <th>Fecha</th>
-                        <th>Dependencia</th>
+                        <th>Comisaría</th>
+                        <th>DDP</th>
                         <th>Carátula</th>
                         <th>Lugar</th>
                         <th class="text-center">Ubicación</th>
@@ -64,7 +66,8 @@
                         <td><span class="badge {{ 'bg-primary' if r.fuente == 'DUNACC' else 'bg-info text-dark' }}">{{ r.fuente_label }}</span></td>
                         <td><a href="{{ url_for('dunacc.registro_detalle', registro_id=r.id) }}" class="fw-semibold text-decoration-none">{{ r.numero_ap or '-' }}</a></td>
                         <td class="text-nowrap">{{ r.fecha.strftime('%d/%m/%Y') if r.fecha else '-' }}{% if r.hora %}<br><small class="text-muted">{{ r.hora }}</small>{% endif %}</td>
-                        <td><small>{{ r.dependencia or '-' }}</small></td>
+                        <td><small title="{{ r.dependencia or '' }}">{{ r.comisaria_norm or r.dependencia or '-' }}</small></td>
+                        <td>{% if r.ddp %}<span class="badge bg-light text-dark border">{{ r.ddp }}</span>{% else %}<small class="text-muted">-</small>{% endif %}</td>
                         <td><small>{{ r.caratula or '-' }}</small></td>
                         <td><small class="text-muted" title="{{ r.lugar or '' }}">{{ (r.lugar or '-')|truncate(60) }}</small></td>
                         <td class="text-center">
@@ -86,12 +89,44 @@
                         {% endif %}
                     </tr>
                     {% else %}
-                    <tr><td colspan="{{ 8 if can_manage else 7 }}" class="text-center text-muted py-4">No hay registros. {% if can_manage %}<a href="{{ url_for('dunacc.subir') }}">Subí una planilla</a>.{% endif %}</td></tr>
+                    <tr><td colspan="{{ 9 if can_manage else 8 }}" class="text-center text-muted py-4">No hay registros. {% if can_manage %}<a href="{{ url_for('dunacc.subir') }}">Subí una planilla</a>.{% endif %}</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
     </div>
+</div>
+
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-2">
+    <small class="text-muted">
+        {% if total_filtrado %}
+        Mostrando {{ (page - 1) * per_page + 1 }}–{{ [page * per_page, total_filtrado]|min }} de {{ total_filtrado }} registros{% if total_filtrado != total %} (filtrados de {{ total }}){% endif %}.
+        {% else %}Sin resultados.{% endif %}
+    </small>
+    <nav>
+        <ul class="pagination pagination-sm mb-0">
+            <li class="page-item {% if page <= 1 %}disabled{% endif %}">
+                <a class="page-link" href="?{{ qs_no_page }}{% if qs_no_page %}&{% endif %}page=1" title="Primera">«</a>
+            </li>
+            <li class="page-item {% if page <= 1 %}disabled{% endif %}">
+                <a class="page-link" href="?{{ qs_no_page }}{% if qs_no_page %}&{% endif %}page={{ page - 1 }}">Anterior</a>
+            </li>
+            <li class="page-item disabled"><span class="page-link">Página {{ page }} / {{ pages }}</span></li>
+            <li class="page-item {% if page >= pages %}disabled{% endif %}">
+                <a class="page-link" href="?{{ qs_no_page }}{% if qs_no_page %}&{% endif %}page={{ page + 1 }}">Siguiente</a>
+            </li>
+            <li class="page-item {% if page >= pages %}disabled{% endif %}">
+                <a class="page-link" href="?{{ qs_no_page }}{% if qs_no_page %}&{% endif %}page={{ pages }}" title="Última">»</a>
+            </li>
+        </ul>
+    </nav>
+    <form method="GET" class="d-flex align-items-center gap-1">
+        {% for k, vals in selected.items() %}{% if vals %}<input type="hidden" name="{{ k }}" value="{{ vals }}">{% endif %}{% endfor %}
+        <label class="form-label form-label-sm mb-0 text-muted">Por página</label>
+        <select class="form-select form-select-sm" name="per_page" style="width:auto" onchange="this.form.submit()">
+            {% for n in [25, 50, 100, 200] %}<option value="{{ n }}" {{ 'selected' if per_page == n else '' }}>{{ n }}</option>{% endfor %}
+        </select>
+    </form>
 </div>
 
 {% if lotes_info %}

@@ -1,0 +1,61 @@
+{% extends "layouts/base.html" %}
+{% block title %}Cruce DUNACC / 911 - Comisarías{% endblock %}
+{% block content %}
+<div class="page-header"><h1><i class="bi bi-shield"></i> Cruce DUNACC / 911 — Catálogo de comisarías</h1></div>
+
+{% with active='comisarias' %}{% include "dunacc/_tabs.html" %}{% endwith %}
+
+<div class="alert alert-info py-2 small">
+    <i class="bi bi-info-circle"></i> El sistema agrupa automáticamente las variantes de cada comisaría.
+    Acá podés <strong>fusionar a mano</strong> las que quedaron separadas (ej. «Subcomisaría Huaico» y «Subcomisaría El Huaico»):
+    marcá las que sean la misma, escribí el nombre definitivo y presioná <strong>Fusionar</strong>.
+    Los cambios se aplican a los registros actuales y a las próximas importaciones.
+</div>
+
+{% if can_manage %}
+<form method="POST" action="{{ url_for('dunacc.comisarias_fusionar') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+{% endif %}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="text-muted small">{{ comisarias|length }} comisaría(s) distinta(s)</span>
+        {% if can_manage %}
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <input class="form-control form-control-sm" name="destino" list="nombres-comisarias" placeholder="Nombre definitivo…" style="min-width:260px" required>
+            <datalist id="nombres-comisarias">{% for n in nombres %}<option value="{{ n }}">{% endfor %}</datalist>
+            <button class="btn btn-primary btn-sm" type="submit"><i class="bi bi-union"></i> Fusionar seleccionadas</button>
+        </div>
+        {% endif %}
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        {% if can_manage %}<th style="width:36px"></th>{% endif %}
+                        <th>Comisaría (normalizada)</th>
+                        <th class="text-end">Registros</th>
+                        <th>Variantes detectadas</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in comisarias %}
+                    <tr>
+                        {% if can_manage %}<td><input class="form-check-input" type="checkbox" name="origenes" value="{{ c.nombre }}"></td>{% endif %}
+                        <td><a href="{{ url_for('dunacc.listado', comisaria=c.nombre) }}" class="fw-semibold text-decoration-none">{{ c.nombre }}</a></td>
+                        <td class="text-end">{{ c.registros }}</td>
+                        <td><small class="text-muted">{{ c.variantes|join(' · ') }}</small></td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="{{ 4 if can_manage else 3 }}" class="text-center text-muted py-4">Todavía no hay comisarías cargadas.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% if can_manage %}
+    <p class="form-text mt-2"><i class="bi bi-lightbulb"></i> Para <strong>renombrar</strong> una sola comisaría, marcá únicamente esa y escribí el nuevo nombre en «Nombre definitivo».</p>
+</form>
+{% endif %}
+{% endblock %}

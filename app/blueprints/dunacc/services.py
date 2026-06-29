@@ -255,6 +255,14 @@ def importar_excel(path: str) -> tuple[list[dict], list[str]]:
             if coords_combinadas is not None and reg["lat"] is None and reg["lon"] is None:
                 reg["lat"], reg["lon"] = _parse_coords(coords_combinadas)
 
+            # DDP embebido en la dependencia (ej. "CRIA. 4TA. EL BORDO (DDP 7)").
+            if not reg.get("ddp") and reg.get("dependencia"):
+                mddp = re.search(r"ddp\s*n?\s*(\d+)", reg["dependencia"], re.IGNORECASE)
+                if mddp:
+                    reg["ddp"] = f"DDP{mddp.group(1)}"
+            # Nombre canónico de comisaría para agrupar variantes.
+            reg["comisaria_norm"] = normalizar_comisaria(reg.get("dependencia"))[1]
+
             # Saltar filas vacías o de subtítulo (sin contenido real).
             if not any([reg["numero_ap"], reg["caratula"], reg["lugar"], reg["relato"], reg["dependencia"]]):
                 continue
@@ -323,6 +331,96 @@ def analizar_texto(textos: list[str], top: int = 25) -> dict:
         "palabras": uni.most_common(top),
         "bigramas": bi.most_common(top),
     }
+
+
+# --- Normalización de nombres de comisarías -------------------------------
+# Mapea ordinales abreviados a número.
+_ORDINALES = {
+    "1ra": 1, "2da": 2, "3ra": 3, "3era": 3, "4ta": 4, "5ta": 5, "6ta": 6,
+    "7ma": 7, "8va": 8, "9na": 9, "10ma": 10,
+    "primera": 1, "segunda": 2, "tercera": 3, "cuarta": 4, "quinta": 5,
+    "sexta": 6, "septima": 7, "octava": 8, "novena": 9, "decima": 10,
+}
+# Expansión de abreviaturas frecuentes de localidad/barrio.
+_ABREV_LOCALIDAD = [
+    (r"\bv\b", "villa"),
+    (r"\bgral\b", "general"),
+    (r"\bcnel\b", "coronel"),
+    (r"\bh\b", "hipolito"),
+    (r"\br\b de lerma", "rosario de lerma"),
+    (r"\bc\b del milagro", "ciudad del milagro"),
+    (r"\bsta\b", "santa"),
+    (r"\bsto\b", "santo"),
+    (r"\bpque\b", "parque"),
+]
+
+
+def _solo_norm(s: str) -> str:
+    # Reemplazar símbolos de grado ANTES de normalizar: 'º' (U+00BA) se
+    # descompone a 'o' en NFKD y rompería 'N°'->'no', 'B°'->'bo'.
+    s = (s or "").replace("°", " ").replace("º", " ").replace("\u00ba", " ").replace("\u00b0", " ")
+    s = unicodedata.normalize("NFKD", s.lower())
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    s = s.replace(".", " ")
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def normalizar_comisaria(raw: str) -> tuple[str | None, str | None]:
+    """
+    Devuelve (clave, etiqueta) canónica para agrupar comisarías escritas de
+    distintas formas. Ej: 'CRIA 1 B° CENTRO' y 'Comisaria N° 1 B° Centro'
+    -> ('comisaria|1|centro', 'Comisaría 1 - Centro').
+    Para subcomisarías usa el nombre (sin número): 'SUB CRIA EL HUAICO'
+    -> ('subcomisaria|el huaico', 'Subcomisaría El Huaico').
+    Si no parece una comisaría, devuelve (None, etiqueta=texto saneado).
+    """
+    if not raw or not raw.strip():
+        return None, None
+    s = _solo_norm(raw)
+    # Quitar "(ddp n)" embebido.
+    s = re.sub(r"\(?\s*ddp\s*n?\s*\d+\s*\)?", " ", s)
+    s = re.sub(r"\s+", " ", s).strip()
+
+    es_sub = bool(re.match(r"^sub", s))
+    # Quitar el prefijo (sub) cria/comisaria.
+    resto = re.sub(r"^(sub\s*)?(comisaria|cria|cr a|cri a)\s*", "", s).strip()
+    # Quitar 'n' / 'nro' suelto (de 'N° 8', 'Nro 8').
+    resto = re.sub(r"^n(ro)?\s+", "", resto).strip()
+
+    numero = None
+    # Número con o sin ordinal pegado: '8', '8va', '1ra', '4ta'…
+    m = re.match(r"^(\d{1,2})(?:ra|da|ta|era|ma|va|na|do|to)?(?=\s|$|[a-z])", resto)
+    if m:
+        numero = int(m.group(1))
+        resto = resto[m.end():].strip()
+    else:
+        m = re.match(r"^([a-z]+)\b", resto)
+        if m and m.group(1) in _ORDINALES:
+            numero = _ORDINALES[m.group(1)]
+            resto = resto[m.end():].strip()
+
+    # Localidad/barrio: quitar prefijos b / barrio / bo.
+    loc = re.sub(r"^(b|bo|barrio)\s+", "", resto).strip()
+    for pat, rep in _ABREV_LOCALIDAD:
+        loc = re.sub(pat, rep, loc)
+    loc = re.sub(r"\s+", " ", loc).strip()
+
+    if es_sub:
+        clave = f"subcomisaria|{loc}" if loc else (f"subcomisaria|{numero}" if numero else None)
+        etiqueta = f"Subcomisaría {loc.title()}".strip() if loc else (f"Subcomisaría {numero}" if numero else "Subcomisaría")
+        return clave, etiqueta
+
+    if numero is None and not loc:
+        return None, raw.strip()
+
+    clave = f"comisaria|{numero or ''}|{loc}"
+    if numero and loc:
+        etiqueta = f"Comisaría {numero} - {loc.title()}"
+    elif numero:
+        etiqueta = f"Comisaría {numero}"
+    else:
+        etiqueta = f"Comisaría {loc.title()}"
+    return clave, etiqueta
 
 
 def hora_a_int(v) -> int | None:

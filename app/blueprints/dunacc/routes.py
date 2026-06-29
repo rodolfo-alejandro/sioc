@@ -5,8 +5,10 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 from datetime import datetime
 from io import BytesIO
+from urllib.parse import urlencode
 
 from flask import (
     Response,
@@ -29,6 +31,7 @@ from app.blueprints.dunacc import services
 from app.extensions import db
 from app.models.dunacc import (
     FUENTE_LABELS,
+    DunaccComisariaAlias,
     DunaccLote,
     DunaccLoteCompartido,
     DunaccRegistro,
@@ -82,7 +85,7 @@ def _ensure_schema():
     try:
         insp = inspect(db.engine)
         existing = set(insp.get_table_names())
-        for model in (DunaccLote, DunaccRegistro, DunaccLoteCompartido):
+        for model in (DunaccLote, DunaccRegistro, DunaccLoteCompartido, DunaccComisariaAlias):
             if model.__tablename__ not in existing:
                 model.__table__.create(bind=db.engine)
         # Columnas agregadas luego de la creación inicial (multi-fuente).
@@ -91,8 +94,10 @@ def _ensure_schema():
             "dunacc_registros": [
                 ("fuente", "VARCHAR(20) NOT NULL DEFAULT 'DUNACC'"),
                 ("ddp", "VARCHAR(40)"),
+                ("comisaria_norm", "VARCHAR(255)"),
             ],
         }
+        agrego_comisaria = False
         for tabla, cols in nuevas_cols.items():
             try:
                 presentes = {c["name"] for c in insp.get_columns(tabla)}
@@ -103,8 +108,31 @@ def _ensure_schema():
                     db.session.execute(
                         db.text(f"ALTER TABLE {tabla} ADD COLUMN {nombre} {ddl}")
                     )
+                    if nombre == "comisaria_norm":
+                        agrego_comisaria = True
         db.session.commit()
+        if agrego_comisaria:
+            _backfill_comisaria_norm()
         _schema_checked = True
+    except Exception:
+        db.session.rollback()
+
+
+def _backfill_comisaria_norm():
+    """Calcula comisaria_norm (y DDP embebido) para los registros ya existentes."""
+    try:
+        rows = (
+            db.session.query(DunaccRegistro)
+            .filter(DunaccRegistro.comisaria_norm.is_(None), DunaccRegistro.dependencia.isnot(None))
+            .all()
+        )
+        for r in rows:
+            r.comisaria_norm = services.normalizar_comisaria(r.dependencia)[1]
+            if not r.ddp and r.dependencia:
+                m = re.search(r"ddp\s*n?\s*(\d+)", r.dependencia, re.IGNORECASE)
+                if m:
+                    r.ddp = f"DDP{m.group(1)}"
+        db.session.commit()
     except Exception:
         db.session.rollback()
 
@@ -170,6 +198,41 @@ def _lotes_info():
     return lotes_info, own_lotes + shared_lotes
 
 
+def _opciones_comisaria_ddp():
+    """Listas ordenadas de comisarías normalizadas y DDP accesibles para filtros."""
+    shared = _shared_lote_ids()
+    cond = DunaccRegistro.unidad_id == current_user.unidad_id
+    if shared:
+        cond = or_(cond, DunaccRegistro.lote_id.in_(shared))
+    comisarias = [
+        r[0]
+        for r in db.session.query(DunaccRegistro.comisaria_norm)
+        .filter(cond, DunaccRegistro.comisaria_norm.isnot(None))
+        .distinct()
+        .order_by(DunaccRegistro.comisaria_norm)
+        .all()
+        if r[0]
+    ]
+    ddps = [
+        r[0]
+        for r in db.session.query(DunaccRegistro.ddp)
+        .filter(cond, DunaccRegistro.ddp.isnot(None))
+        .distinct()
+        .order_by(DunaccRegistro.ddp)
+        .all()
+        if r[0]
+    ]
+    return comisarias, ddps
+
+
+def _alias_map():
+    """Diccionario {origen: canonico} del catálogo de comisarías de mi área."""
+    return {
+        a.origen: a.canonico
+        for a in DunaccComisariaAlias.query.filter_by(unidad_id=current_user.unidad_id).all()
+    }
+
+
 def _upload_dir(unidad_id=None) -> str:
     base_dir = current_app.config.get("UPLOAD_FOLDER", "instance/uploads")
     if not os.path.isabs(base_dir):
@@ -187,6 +250,8 @@ def listado():
 
     texto = _clean(request.args.get("q"))
     dependencia = _clean(request.args.get("dependencia"))
+    comisaria = _clean(request.args.get("comisaria"))
+    ddp = _clean(request.args.get("ddp"))
     caratula = _clean(request.args.get("caratula"))
     anio = _clean(request.args.get("anio"))
     geo = _clean(request.args.get("geo"))  # con | sin
@@ -197,10 +262,21 @@ def listado():
 
     q = _aplicar_filtros(q, request.args)
 
-    registros = q.order_by(
-        DunaccRegistro.fecha.desc(),
-        DunaccRegistro.created_at.desc(),
-    ).limit(1000).all()
+    page = max(1, request.args.get("page", type=int) or 1)
+    per_page = min(200, max(10, request.args.get("per_page", type=int) or 50))
+    total_filtrado = q.count()
+    pages = max(1, (total_filtrado + per_page - 1) // per_page)
+    if page > pages:
+        page = pages
+    registros = (
+        q.order_by(DunaccRegistro.fecha.desc(), DunaccRegistro.created_at.desc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+    args_no_page = request.args.to_dict(flat=False)
+    args_no_page.pop("page", None)
+    qs_no_page = urlencode(args_no_page, doseq=True)
 
     total = _base_registros().count()
     sin_coords = _base_registros().filter(
@@ -216,20 +292,30 @@ def listado():
         if r[0]
     ]
     lotes_info, all_lotes = _lotes_info()
+    comisarias, ddps = _opciones_comisaria_ddp()
 
     return render_template(
         "dunacc/listado.html",
         registros=registros,
         total=total,
+        total_filtrado=total_filtrado,
+        page=page,
+        per_page=per_page,
+        pages=pages,
+        qs_no_page=qs_no_page,
         sin_coords=sin_coords,
         con_coords=total - sin_coords,
         anios=anios,
         lotes_info=lotes_info,
         lotes=all_lotes,
         fuentes=FUENTE_LABELS,
+        comisarias=comisarias,
+        ddps=ddps,
         selected={
             "q": texto,
             "dependencia": dependencia,
+            "comisaria": comisaria,
+            "ddp": ddp,
             "caratula": caratula,
             "anio": anio,
             "geo": geo,
@@ -261,6 +347,12 @@ def _aplicar_filtros(q, args):
     dependencia = _clean(args.get("dependencia"))
     if dependencia:
         q = q.filter(DunaccRegistro.dependencia.ilike(f"%{dependencia}%"))
+    comisaria = _clean(args.get("comisaria"))
+    if comisaria:
+        q = q.filter(DunaccRegistro.comisaria_norm == comisaria)
+    ddp = _clean(args.get("ddp"))
+    if ddp:
+        q = q.filter(DunaccRegistro.ddp == ddp)
     caratula = _clean(args.get("caratula"))
     if caratula:
         q = q.filter(DunaccRegistro.caratula.ilike(f"%{caratula}%"))
@@ -298,6 +390,7 @@ def patrones():
     meses = [0] * 12
     anios = {}
     deps = {}
+    ddps = {}
     cars = {}
     fuentes_cnt = {}
     con_hora = 0
@@ -314,9 +407,12 @@ def patrones():
         if h is not None:
             horas[h] += 1
             con_hora += 1
-        if r.dependencia:
-            d = r.dependencia.strip()
-            deps[d] = deps.get(d, 0) + 1
+        # Agrupar por comisaría normalizada (cae a la dependencia cruda si falta).
+        comi = r.comisaria_norm or (r.dependencia.strip() if r.dependencia else None)
+        if comi:
+            deps[comi] = deps.get(comi, 0) + 1
+        if r.ddp:
+            ddps[r.ddp] = ddps.get(r.ddp, 0) + 1
         if r.caratula:
             c = r.caratula.strip()
             cars[c] = cars.get(c, 0) + 1
@@ -325,6 +421,7 @@ def patrones():
         textos.append(f"{r.caratula or ''} {r.relato or ''}")
 
     deps_orden = sorted(deps.items(), key=lambda x: x[1], reverse=True)
+    ddps_orden = sorted(ddps.items(), key=lambda x: (int(re.sub(r"\D", "", x[0]) or 0)))
     cars_orden = sorted(cars.items(), key=lambda x: x[1], reverse=True)
     anios_orden = sorted(anios.items())
 
@@ -345,6 +442,7 @@ def patrones():
         if r[0]
     ]
     _, all_lotes = _lotes_info()
+    comisarias_filtro, ddps_filtro = _opciones_comisaria_ddp()
     fuentes_orden = sorted(fuentes_cnt.items(), key=lambda x: x[1], reverse=True)
 
     charts = {
@@ -353,6 +451,7 @@ def patrones():
         "meses": {"labels": mes_labels, "values": meses},
         "anios": {"labels": [str(a) for a, _ in anios_orden], "values": [c for _, c in anios_orden]},
         "deps": {"labels": [d for d, _ in deps_orden[:20]], "values": [c for _, c in deps_orden[:20]]},
+        "ddps": {"labels": [d for d, _ in ddps_orden], "values": [n for _, n in ddps_orden]},
         "cars": {"labels": [c for c, _ in cars_orden[:15]], "values": [n for _, n in cars_orden[:15]]},
         "fuentes": {"labels": [f for f, _ in fuentes_orden], "values": [n for _, n in fuentes_orden]},
     }
@@ -369,9 +468,13 @@ def patrones():
         anios=anios_filtro,
         lotes=all_lotes,
         fuentes=FUENTE_LABELS,
+        comisarias=comisarias_filtro,
+        ddps_opts=ddps_filtro,
         selected={
             "q": _clean(request.args.get("q")),
             "dependencia": _clean(request.args.get("dependencia")),
+            "comisaria": _clean(request.args.get("comisaria")),
+            "ddp": _clean(request.args.get("ddp")),
             "caratula": _clean(request.args.get("caratula")),
             "anio": _clean(request.args.get("anio")),
             "geo": _clean(request.args.get("geo")),
@@ -391,6 +494,92 @@ def planillas():
         lotes_info=lotes_info,
         can_manage=_can_manage(),
     )
+
+
+# ---------------------- Catálogo de comisarías ----------------------
+
+@bp.route("/comisarias")
+def comisarias():
+    rows = (
+        db.session.query(
+            DunaccRegistro.comisaria_norm,
+            db.func.count(DunaccRegistro.id),
+        )
+        .filter(
+            DunaccRegistro.unidad_id == current_user.unidad_id,
+            DunaccRegistro.comisaria_norm.isnot(None),
+        )
+        .group_by(DunaccRegistro.comisaria_norm)
+        .order_by(DunaccRegistro.comisaria_norm)
+        .all()
+    )
+    # Variantes crudas (dependencia) por cada comisaría normalizada.
+    variantes = {}
+    for norm, dep in (
+        db.session.query(DunaccRegistro.comisaria_norm, DunaccRegistro.dependencia)
+        .filter(
+            DunaccRegistro.unidad_id == current_user.unidad_id,
+            DunaccRegistro.comisaria_norm.isnot(None),
+        )
+        .distinct()
+        .all()
+    ):
+        if dep:
+            variantes.setdefault(norm, set()).add(dep)
+    comis = [
+        {
+            "nombre": norm,
+            "registros": n,
+            "variantes": sorted(variantes.get(norm, [])),
+        }
+        for norm, n in rows
+    ]
+    return render_template(
+        "dunacc/comisarias.html",
+        comisarias=comis,
+        nombres=[c["nombre"] for c in comis],
+        can_manage=_can_manage(),
+    )
+
+
+@bp.route("/comisarias/fusionar", methods=["POST"])
+def comisarias_fusionar():
+    if not _can_manage():
+        abort(403)
+    origenes = [o for o in request.form.getlist("origenes") if _clean(o)]
+    destino = _clean(request.form.get("destino"))
+    if not origenes or not destino:
+        flash("Elegí al menos una comisaría de origen y un nombre destino.", "warning")
+        return redirect(url_for("dunacc.comisarias"))
+
+    actualizados = 0
+    for origen in origenes:
+        if origen == destino:
+            continue
+        n = (
+            DunaccRegistro.query.filter(
+                DunaccRegistro.unidad_id == current_user.unidad_id,
+                DunaccRegistro.comisaria_norm == origen,
+            ).update({"comisaria_norm": destino}, synchronize_session=False)
+        )
+        actualizados += n
+        # Guardar/actualizar el alias para futuras importaciones.
+        alias = DunaccComisariaAlias.query.filter_by(
+            unidad_id=current_user.unidad_id, origen=origen
+        ).first()
+        if alias:
+            alias.canonico = destino
+        else:
+            db.session.add(DunaccComisariaAlias(
+                unidad_id=current_user.unidad_id, origen=origen, canonico=destino
+            ))
+        # Reapuntar alias previos que apuntaban al origen ahora renombrado.
+        DunaccComisariaAlias.query.filter_by(
+            unidad_id=current_user.unidad_id, canonico=origen
+        ).update({"canonico": destino}, synchronize_session=False)
+    db.session.commit()
+    flash(f"{actualizados} registro(s) reasignado(s) a «{destino}».", "success")
+    return redirect(url_for("dunacc.comisarias"))
 
 
 # ---------------------- Subir / importar ----------------------
@@ -456,6 +645,14 @@ def subir():
         flash(msg, "warning")
         return redirect(url_for("dunacc.subir"))
 
+    # Aplicar catálogo de comisarías (fusiones manuales) a los nombres normalizados.
+    alias = _alias_map()
+    if alias:
+        for reg in registros:
+            cn = reg.get("comisaria_norm")
+            if cn and cn in alias:
+                reg["comisaria_norm"] = alias[cn]
+
     # Fuente predominante de la planilla (DUNACC denuncias o CCO911 llamadas).
     fuentes = [r.get("fuente") for r in registros if r.get("fuente")]
     fuente_lote = max(set(fuentes), key=fuentes.count) if fuentes else "DUNACC"
@@ -501,6 +698,7 @@ def subir():
             numero=reg.get("numero"),
             numero_ap=reg.get("numero_ap"),
             dependencia=reg.get("dependencia"),
+            comisaria_norm=reg.get("comisaria_norm"),
             ddp=reg.get("ddp"),
             caratula=reg.get("caratula"),
             fecha=reg.get("fecha"),
@@ -629,6 +827,8 @@ def mapa():
     q = _aplicar_filtros(q, request.args)
     anio = _clean(request.args.get("anio"))
     dependencia = _clean(request.args.get("dependencia"))
+    comisaria = _clean(request.args.get("comisaria"))
+    ddp = _clean(request.args.get("ddp"))
     caratula = _clean(request.args.get("caratula"))
     lote = _clean(request.args.get("lote"))
     fuente = _clean(request.args.get("fuente"))
@@ -665,6 +865,7 @@ def mapa():
     if shared_ids:
         lote_cond = or_(lote_cond, DunaccLote.id.in_(shared_ids))
     lotes = DunaccLote.query.filter(lote_cond).order_by(DunaccLote.created_at.desc()).all()
+    comisarias, ddps = _opciones_comisaria_ddp()
 
     return render_template(
         "dunacc/mapa.html",
@@ -672,10 +873,14 @@ def mapa():
         anios=anios,
         lotes=lotes,
         fuentes=FUENTE_LABELS,
+        comisarias=comisarias,
+        ddps=ddps,
         sin_coords=sin_coords,
         selected={
             "anio": anio,
             "dependencia": dependencia,
+            "comisaria": comisaria,
+            "ddp": ddp,
             "caratula": caratula,
             "lote": lote,
             "fuente": fuente,

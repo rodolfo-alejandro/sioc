@@ -33,6 +33,7 @@
                     <dt class="col-sm-3">N°</dt><dd class="col-sm-9">{{ reg.numero or '-' }}</dd>
                     <dt class="col-sm-3">N° AP</dt><dd class="col-sm-9">{{ reg.numero_ap or '-' }}</dd>
                     <dt class="col-sm-3">Dependencia</dt><dd class="col-sm-9">{{ reg.dependencia or '-' }}{% if reg.ddp %} <span class="text-muted">({{ reg.ddp }})</span>{% endif %}</dd>
+                    {% if reg.comisaria_norm %}<dt class="col-sm-3">Comisaría</dt><dd class="col-sm-9"><a href="{{ url_for('dunacc.listado', comisaria=reg.comisaria_norm) }}" class="text-decoration-none">{{ reg.comisaria_norm }}</a></dd>{% endif %}
                     <dt class="col-sm-3">Carátula</dt><dd class="col-sm-9">{{ reg.caratula or '-' }}</dd>
                     <dt class="col-sm-3">Fecha</dt><dd class="col-sm-9">{{ reg.fecha.strftime('%d/%m/%Y') if reg.fecha else '-' }}{% if reg.anio %} <span class="text-muted">(Año {{ reg.anio }})</span>{% endif %}</dd>
                     <dt class="col-sm-3">Hora</dt><dd class="col-sm-9">{{ reg.hora or '-' }}</dd>

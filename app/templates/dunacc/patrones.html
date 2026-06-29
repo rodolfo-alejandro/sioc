@@ -9,7 +9,8 @@
     <div class="card-body">
         <form method="GET" class="row g-2">
             <div class="col-md-3"><label class="form-label form-label-sm mb-1"><i class="bi bi-search"></i> Buscar</label><input class="form-control form-control-sm" name="q" value="{{ selected.q }}" placeholder="Texto en carátula/lugar/relato…"></div>
-            <div class="col-md-3"><label class="form-label form-label-sm mb-1"><i class="bi bi-building"></i> Comisaría / Dependencia</label><input class="form-control form-control-sm" name="dependencia" value="{{ selected.dependencia }}"></div>
+            <div class="col-md-3"><label class="form-label form-label-sm mb-1"><i class="bi bi-shield"></i> Comisaría</label><select class="form-select form-select-sm" name="comisaria"><option value="">Todas</option>{% for c in comisarias %}<option value="{{ c }}" {{ 'selected' if selected.comisaria == c else '' }}>{{ c }}</option>{% endfor %}</select></div>
+            <div class="col-md-2"><label class="form-label form-label-sm mb-1"><i class="bi bi-diagram-3"></i> DDP</label><select class="form-select form-select-sm" name="ddp"><option value="">Todos</option>{% for d in ddps_opts %}<option value="{{ d }}" {{ 'selected' if selected.ddp == d else '' }}>{{ d }}</option>{% endfor %}</select></div>
             <div class="col-md-2"><label class="form-label form-label-sm mb-1"><i class="bi bi-card-list"></i> Carátula</label><input class="form-control form-control-sm" name="caratula" value="{{ selected.caratula }}"></div>
             <div class="col-md-2"><label class="form-label form-label-sm mb-1"><i class="bi bi-calendar3"></i> Año</label><select class="form-select form-select-sm" name="anio"><option value="">Todos</option>{% for a in anios %}<option value="{{ a }}" {{ 'selected' if selected.anio == a|string else '' }}>{{ a }}</option>{% endfor %}</select></div>
             <div class="col-md-2"><label class="form-label form-label-sm mb-1"><i class="bi bi-collection"></i> Fuente</label><select class="form-select form-select-sm" name="fuente"><option value="">Todas</option>{% for code, label in fuentes.items() %}<option value="{{ code }}" {{ 'selected' if selected.fuente == code else '' }}>{{ label }}</option>{% endfor %}</select></div>
@@ -34,8 +35,9 @@
     <div class="col-md-6"><div class="card"><div class="card-header"><i class="bi bi-clock"></i> Por hora del día</div><div class="card-body"><div id="ch-horas" style="height:300px;"></div></div></div></div>
     <div class="col-md-6"><div class="card"><div class="card-header"><i class="bi bi-calendar3"></i> Por mes</div><div class="card-body"><div id="ch-meses" style="height:300px;"></div></div></div></div>
     <div class="col-md-6"><div class="card"><div class="card-header"><i class="bi bi-bar-chart"></i> Por año</div><div class="card-body"><div id="ch-anios" style="height:300px;"></div></div></div></div>
-    <div class="col-12"><div class="card"><div class="card-header"><i class="bi bi-building"></i> Por comisaría / dependencia (top 20)</div><div class="card-body"><div id="ch-deps" style="height:380px;"></div></div></div></div>
-    <div class="col-12"><div class="card"><div class="card-header"><i class="bi bi-card-list"></i> Por carátula (top 15)</div><div class="card-body"><div id="ch-cars" style="height:340px;"></div></div></div></div>
+    <div class="col-md-6"><div class="card"><div class="card-header"><i class="bi bi-diagram-3"></i> Por DDP</div><div class="card-body"><div id="ch-ddps" style="height:300px;"></div></div></div></div>
+    <div class="col-12"><div class="card"><div class="card-header"><i class="bi bi-shield"></i> Por comisaría (normalizada, top 20)</div><div class="card-body"><div id="ch-deps" style="height:420px;"></div></div></div></div>
+    <div class="col-12"><div class="card"><div class="card-header"><i class="bi bi-card-list"></i> Por carátula / tipificación (top 15)</div><div class="card-body"><div id="ch-cars" style="height:340px;"></div></div></div></div>
 </div>
 
 <div class="row g-3 mt-1">
@@ -68,14 +70,14 @@
 </div>
 
 <div class="card mt-3">
-    <div class="card-header"><i class="bi bi-table"></i> Cantidad por comisaría / dependencia</div>
+    <div class="card-header"><i class="bi bi-table"></i> Cantidad por comisaría (normalizada)</div>
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-sm table-hover mb-0">
-                <thead class="table-light"><tr><th>Comisaría / Dependencia</th><th class="text-end">Cantidad</th></tr></thead>
+                <thead class="table-light"><tr><th>Comisaría</th><th class="text-end">Cantidad</th></tr></thead>
                 <tbody>
                     {% for d, n in deps_tabla %}
-                    <tr><td><a href="{{ url_for('dunacc.listado', dependencia=d) }}" class="text-decoration-none">{{ d }}</a></td><td class="text-end">{{ n }}</td></tr>
+                    <tr><td><a href="{{ url_for('dunacc.listado', comisaria=d) }}" class="text-decoration-none">{{ d }}</a></td><td class="text-end">{{ n }}</td></tr>
                     {% else %}
                     <tr><td colspan="2" class="text-center text-muted py-3">Sin datos.</td></tr>
                     {% endfor %}
@@ -115,6 +117,7 @@
     bar('ch-horas', charts.horas, '#dc3545');
     bar('ch-meses', charts.meses, '#198754');
     bar('ch-anios', charts.anios, '#6f42c1');
+    bar('ch-ddps', charts.ddps, '#20c997');
     bar('ch-deps', charts.deps, '#0dcaf0', true);
     bar('ch-cars', charts.cars, '#fd7e14', true);
 })();

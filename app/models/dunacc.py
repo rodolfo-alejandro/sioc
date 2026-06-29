@@ -75,6 +75,8 @@ class DunaccRegistro(db.Model):
     numero = db.Column(db.String(40), nullable=True)
     numero_ap = db.Column(db.String(60), nullable=True, index=True)
     dependencia = db.Column(db.String(255), nullable=True, index=True)
+    # Nombre canónico de la comisaría (normalizado para agrupar variantes).
+    comisaria_norm = db.Column(db.String(255), nullable=True, index=True)
     ddp = db.Column(db.String(40), nullable=True, index=True)
     caratula = db.Column(db.String(255), nullable=True, index=True)
     fecha = db.Column(db.Date, nullable=True, index=True)
@@ -107,6 +109,26 @@ class DunaccRegistro(db.Model):
     @property
     def fuente_label(self) -> str:
         return FUENTE_LABELS.get(self.fuente or "DUNACC", self.fuente or "DUNACC")
+
+
+class DunaccComisariaAlias(db.Model):
+    """Catálogo editable: mapea una variante de comisaría a un nombre canónico.
+
+    Permite fusionar a mano las variantes que el normalizador automático no une
+    (ej. 'Subcomisaría Huaico' -> 'Subcomisaría El Huaico'). Se aplica en las
+    importaciones futuras y al fusionar se actualizan los registros existentes.
+    """
+
+    __tablename__ = "dunacc_comisaria_alias"
+    __table_args__ = (
+        db.UniqueConstraint("unidad_id", "origen", name="uq_dunacc_comisaria_alias"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    unidad_id = db.Column(db.Integer, db.ForeignKey("unidades.id"), nullable=False, index=True)
+    origen = db.Column(db.String(255), nullable=False, index=True)
+    canonico = db.Column(db.String(255), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
 
 # Etiquetas legibles de cada fuente de datos del módulo.
