@@ -64,7 +64,7 @@
                     {% for r in registros %}
                     <tr>
                         <td><span class="badge {{ 'bg-primary' if r.fuente == 'DUNACC' else 'bg-info text-dark' }}">{{ r.fuente_label }}</span></td>
-                        <td><a href="{{ url_for('dunacc.registro_detalle', registro_id=r.id) }}" class="fw-semibold text-decoration-none">{{ r.numero_ap or '-' }}</a></td>
+                        <td><a href="{{ url_for('dunacc.registro_detalle', registro_id=r.id, next=request.full_path) }}" class="fw-semibold text-decoration-none">{{ r.numero_ap or '-' }}</a></td>
                         <td class="text-nowrap">{{ r.fecha.strftime('%d/%m/%Y') if r.fecha else '-' }}{% if r.hora %}<br><small class="text-muted">{{ r.hora }}</small>{% endif %}</td>
                         <td><small title="{{ r.dependencia or '' }}">{{ r.comisaria_norm or r.dependencia or '-' }}</small></td>
                         <td>{% if r.ddp %}<span class="badge bg-light text-dark border">{{ r.ddp }}</span>{% else %}<small class="text-muted">-</small>{% endif %}</td>
@@ -79,8 +79,8 @@
                         </td>
                         {% if can_manage %}
                         <td class="text-end text-nowrap">
-                            <a class="btn btn-sm btn-outline-primary" href="{{ url_for('dunacc.registro_detalle', registro_id=r.id) }}" title="Ver detalle"><i class="bi bi-eye"></i></a>
-                            <a class="btn btn-sm {{ 'btn-outline-secondary' if r.tiene_coords else 'btn-warning' }}" href="{{ url_for('dunacc.registro_coords', registro_id=r.id) }}" title="Cargar/editar coordenadas"><i class="bi bi-geo-alt"></i> {{ 'Editar' if r.tiene_coords else 'Cargar' }}</a>
+                            <a class="btn btn-sm btn-outline-primary" href="{{ url_for('dunacc.registro_detalle', registro_id=r.id, next=request.full_path) }}" title="Ver detalle"><i class="bi bi-eye"></i></a>
+                            <a class="btn btn-sm {{ 'btn-outline-secondary' if r.tiene_coords else 'btn-warning' }}" href="{{ url_for('dunacc.registro_coords', registro_id=r.id, next=request.full_path) }}" title="Cargar/editar coordenadas"><i class="bi bi-geo-alt"></i> {{ 'Editar' if r.tiene_coords else 'Cargar' }}</a>
                             <form method="POST" action="{{ url_for('dunacc.registro_eliminar', registro_id=r.id) }}" class="d-inline" onsubmit="return confirm('¿Eliminar este registro?');">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <button class="btn btn-sm btn-outline-danger" title="Eliminar"><i class="bi bi-trash"></i></button>

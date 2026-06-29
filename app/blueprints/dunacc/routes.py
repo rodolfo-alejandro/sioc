@@ -8,7 +8,7 @@ import os
 import re
 from datetime import datetime
 from io import BytesIO
-from urllib.parse import urlencode
+from urllib.parse import parse_qsl, urlencode, urlparse
 
 from flask import (
     Response,
@@ -24,6 +24,7 @@ from flask import (
 )
 from flask_login import current_user, login_required
 from sqlalchemy import inspect, or_
+from werkzeug.datastructures import MultiDict
 from werkzeug.utils import secure_filename
 
 from app.blueprints.dunacc import bp
@@ -64,6 +65,22 @@ def _can_export() -> bool:
 
 def _clean(v) -> str:
     return v.strip() if isinstance(v, str) else ""
+
+
+def _safe_next(n) -> str:
+    """Devuelve una URL interna segura (evita open-redirect) o cadena vacía."""
+    n = _clean(n)
+    if n.startswith("/dunacc") and not n.startswith("//"):
+        return n
+    return ""
+
+
+def _args_from_next(next_url):
+    """Reconstruye los filtros (querystring) de la URL de retorno como MultiDict."""
+    try:
+        return MultiDict(parse_qsl(urlparse(next_url).query, keep_blank_values=False))
+    except Exception:
+        return MultiDict()
 
 
 def _parse_date(s: str):
@@ -841,7 +858,12 @@ def subir():
 @bp.route("/registro/<int:registro_id>")
 def registro_detalle(registro_id: int):
     reg = _base_registros().filter(DunaccRegistro.id == registro_id).first_or_404()
-    return render_template("dunacc/detalle.html", reg=reg, can_manage=_can_manage())
+    return render_template(
+        "dunacc/detalle.html",
+        reg=reg,
+        can_manage=_can_manage(),
+        next_url=_safe_next(request.args.get("next")),
+    )
 
 
 @bp.route("/registro/<int:registro_id>/coords", methods=["GET", "POST"])
@@ -856,7 +878,11 @@ def registro_coords(registro_id: int):
             DunaccRegistro.lat.isnot(None), DunaccRegistro.lon.isnot(None)
         ).first()
         centro = {"lat": ref.lat, "lon": ref.lon} if ref else {"lat": -24.7859, "lon": -65.4114}
-        return render_template("dunacc/coords.html", reg=reg, centro=centro)
+        next_url = _safe_next(request.args.get("next"))
+        return render_template("dunacc/coords.html", reg=reg, centro=centro, next_url=next_url)
+
+    next_url = _safe_next(request.form.get("next"))
+    destino = next_url or url_for("dunacc.listado")
 
     lat = services._parse_float(request.form.get("lat"))
     lon = services._parse_float(request.form.get("lon"))
@@ -865,7 +891,7 @@ def registro_coords(registro_id: int):
         lat, lon = services._parse_coords(request.form.get("coords"))
     if not services._coords_validas(lat, lon):
         flash("Coordenadas inválidas. Revisá latitud y longitud.", "warning")
-        return redirect(url_for("dunacc.registro_coords", registro_id=reg.id))
+        return redirect(url_for("dunacc.registro_coords", registro_id=reg.id, next=next_url or None))
 
     reg.lat = lat
     reg.lon = lon
@@ -874,13 +900,16 @@ def registro_coords(registro_id: int):
     flash("Coordenadas guardadas.", "success")
     siguiente = request.form.get("siguiente") == "1"
     if siguiente:
-        prox = _base_registros().filter(
+        # Buscar el próximo registro sin coordenadas respetando los filtros activos.
+        prox_q = _base_registros().filter(
             or_(DunaccRegistro.lat.is_(None), DunaccRegistro.lon.is_(None))
-        ).order_by(DunaccRegistro.fecha.desc()).first()
+        )
+        prox_q = _aplicar_filtros(prox_q, _args_from_next(next_url))
+        prox = prox_q.order_by(DunaccRegistro.fecha.desc()).first()
         if prox:
-            return redirect(url_for("dunacc.registro_coords", registro_id=prox.id))
-        flash("¡No quedan registros sin coordenadas!", "info")
-    return redirect(url_for("dunacc.listado"))
+            return redirect(url_for("dunacc.registro_coords", registro_id=prox.id, next=next_url or None))
+        flash("¡No quedan registros sin coordenadas con este filtro!", "info")
+    return redirect(destino)
 
 
 @bp.route("/registro/<int:registro_id>/quitar-coords", methods=["POST"])
