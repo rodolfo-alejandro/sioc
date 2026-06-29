@@ -1,10 +1,10 @@
 {% extends "layouts/base.html" %}
-{% block title %}DUNACC - Mapa{% endblock %}
+{% block title %}Cruce DUNACC / 911 - Mapa{% endblock %}
 {% block extra_head %}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 {% endblock %}
 {% block content %}
-<div class="page-header"><h1><i class="bi bi-geo-alt"></i> DUNACC — Mapa</h1></div>
+    <div class="page-header"><h1><i class="bi bi-geo-alt"></i> Cruce DUNACC / 911 — Mapa</h1></div>
 
 {% with active='mapa' %}{% include "dunacc/_tabs.html" %}{% endwith %}
 
@@ -17,6 +17,7 @@
         <form method="GET" class="row g-2">
             <div class="col-md-4"><label class="form-label form-label-sm mb-1"><i class="bi bi-file-earmark-excel"></i> Planilla</label><select class="form-select form-select-sm" name="lote"><option value="">Todas las planillas</option>{% for l in lotes %}<option value="{{ l.id }}" {{ 'selected' if selected.lote == l.id|string else '' }}>{{ (l.nombre_original or l.nombre_archivo)|truncate(40) }} ({{ l.total_registros }})</option>{% endfor %}</select></div>
             <div class="col-md-2"><label class="form-label form-label-sm mb-1">Año</label><select class="form-select form-select-sm" name="anio"><option value="">Todos</option>{% for a in anios %}<option value="{{ a }}" {{ 'selected' if selected.anio == a|string else '' }}>{{ a }}</option>{% endfor %}</select></div>
+            <div class="col-md-2"><label class="form-label form-label-sm mb-1">Fuente</label><select class="form-select form-select-sm" name="fuente"><option value="">Todas</option>{% for code, label in fuentes.items() %}<option value="{{ code }}" {{ 'selected' if selected.fuente == code else '' }}>{{ label }}</option>{% endfor %}</select></div>
             <div class="col-md-3"><label class="form-label form-label-sm mb-1">Dependencia</label><input class="form-control form-control-sm" name="dependencia" value="{{ selected.dependencia }}"></div>
             <div class="col-md-3"><label class="form-label form-label-sm mb-1">Carátula</label><input class="form-control form-control-sm" name="caratula" value="{{ selected.caratula }}"></div>
             <div class="col-12 d-flex gap-2"><button class="btn btn-outline-primary btn-sm" type="submit">Aplicar</button><a class="btn btn-outline-secondary btn-sm" href="{{ url_for('dunacc.mapa') }}">Limpiar</a></div>
@@ -26,7 +27,9 @@
 
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <span class="text-muted small"><i class="bi bi-pin-map"></i> {{ puntos|length }} punto(s) en el mapa</span>
+        <span class="text-muted small"><i class="bi bi-pin-map"></i> {{ puntos|length }} punto(s) en el mapa
+            &nbsp;·&nbsp; <span class="badge bg-primary">DUNACC</span> <span class="badge bg-info text-dark">CCO 911</span>
+        </span>
         <div class="btn-group btn-group-sm" role="group" aria-label="Tipo de mapa">
             <input type="radio" class="btn-check" name="tipomapa" id="tm-puntos" autocomplete="off" checked>
             <label class="btn btn-outline-primary" for="tm-puntos"><i class="bi bi-geo-alt-fill"></i> Puntos</label>
@@ -55,13 +58,15 @@
     var heatData = [];
     puntos.forEach(function (p) {
         if (!p.lat || !p.lng) return;
-        var txt = '<strong>N° AP:</strong> ' + p.numero_ap + '<br>' +
+        var txt = '<strong>Fuente:</strong> ' + (p.fuente_label || '-') + '<br>' +
+            '<strong>N° AP:</strong> ' + p.numero_ap + '<br>' +
             '<strong>Carátula:</strong> ' + p.caratula + '<br>' +
             '<strong>Fecha:</strong> ' + p.fecha + '<br>' +
             '<strong>Dependencia:</strong> ' + p.dependencia + '<br>' +
             '<strong>Lugar:</strong> ' + p.lugar + '<br>' +
             '<a href="{{ url_for("dunacc.registro_detalle", registro_id=0) }}'.replace('/registro/0', '/registro/' + p.id) + '">Ver detalle</a>';
-        L.circleMarker([p.lat, p.lng], { radius: 7, color: '#0d6efd', weight: 2, fillColor: '#0d6efd', fillOpacity: 0.8 })
+        var color = (p.fuente === 'CCO911') ? '#0dcaf0' : '#0d6efd';
+        L.circleMarker([p.lat, p.lng], { radius: 7, color: color, weight: 2, fillColor: color, fillOpacity: 0.8 })
             .bindPopup(txt).addTo(puntosLayer);
         heatData.push([p.lat, p.lng, 0.8]);
         bounds.push([p.lat, p.lng]);

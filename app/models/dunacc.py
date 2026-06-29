@@ -25,6 +25,8 @@ class DunaccLote(db.Model):
     sha1 = db.Column(db.String(64), nullable=True, index=True)
     size_bytes = db.Column(db.Integer, nullable=True)
     total_registros = db.Column(db.Integer, nullable=False, default=0)
+    # Origen de los datos: DUNACC (denuncias) | CCO911 (llamadas 911)
+    fuente = db.Column(db.String(20), nullable=False, default="DUNACC", index=True)
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
 
@@ -67,9 +69,13 @@ class DunaccRegistro(db.Model):
     )
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
 
+    # Origen de los datos: DUNACC (denuncias) | CCO911 (llamadas 911)
+    fuente = db.Column(db.String(20), nullable=False, default="DUNACC", index=True)
+
     numero = db.Column(db.String(40), nullable=True)
     numero_ap = db.Column(db.String(60), nullable=True, index=True)
     dependencia = db.Column(db.String(255), nullable=True, index=True)
+    ddp = db.Column(db.String(40), nullable=True, index=True)
     caratula = db.Column(db.String(255), nullable=True, index=True)
     fecha = db.Column(db.Date, nullable=True, index=True)
     hora = db.Column(db.String(20), nullable=True)
@@ -97,3 +103,14 @@ class DunaccRegistro(db.Model):
     @property
     def tiene_coords(self) -> bool:
         return self.lat is not None and self.lon is not None
+
+    @property
+    def fuente_label(self) -> str:
+        return FUENTE_LABELS.get(self.fuente or "DUNACC", self.fuente or "DUNACC")
+
+
+# Etiquetas legibles de cada fuente de datos del módulo.
+FUENTE_LABELS = {
+    "DUNACC": "DUNACC (denuncias)",
+    "CCO911": "CCO 911 (llamadas)",
+}

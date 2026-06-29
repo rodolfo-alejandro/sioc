@@ -45,6 +45,14 @@ _COLMAP = {
     "acusado": "acusado",
     "breve relato": "relato",
     "relato": "relato",
+    # --- Columnas de la planilla del CCO 911 ---
+    "fecha y hora": "fecha_hora",
+    "tipificacion": "caratula",
+    "comentario alertante": "relato",
+    "comentario": "relato",
+    "ddp": "ddp",
+    "ano": "anio",
+    "anio": "anio",
     "lat": "lat",
     "latitud": "lat",
     "long": "lon",
@@ -149,28 +157,33 @@ def _coords_validas(lat, lon) -> bool:
 def _dedupe_hash(reg: dict) -> str:
     base = "|".join(
         _norm(reg.get(k))
-        for k in ("numero_ap", "fecha", "caratula", "lugar", "dependencia")
+        for k in ("numero_ap", "fecha", "hora", "caratula", "lugar", "dependencia")
     )
     return hashlib.sha1(base.encode("utf-8", "ignore")).hexdigest()
 
 
 def _detectar_header(rows):
-    """Devuelve (indice_fila_header, {indice_columna: campo}) o (None, None)."""
+    """Devuelve (indice_fila_header, {indice_columna: campo}, fuente) o (None, None, None)."""
     for idx, row in enumerate(rows[:15]):
         mapeo = {}
         encontrados = set()
+        keys = set()
         for col_idx, cell in enumerate(row):
             key = _norm(cell)
+            if key:
+                keys.add(key)
             if key in _COLMAP:
                 campo = _COLMAP[key]
                 mapeo[col_idx] = campo
                 encontrados.add(campo)
-        if {"dependencia", "caratula"}.issubset(encontrados) or {
-            "caratula",
-            "lugar",
-        }.issubset(encontrados):
-            return idx, mapeo
-    return None, None
+        es_cco = bool(keys & {"fecha y hora", "tipificacion", "comentario alertante"})
+        if (
+            {"dependencia", "caratula"}.issubset(encontrados)
+            or {"caratula", "lugar"}.issubset(encontrados)
+            or (es_cco and "fecha_hora" in encontrados)
+        ):
+            return idx, mapeo, ("CCO911" if es_cco else "DUNACC")
+    return None, None, None
 
 
 def _anio_de_hoja(titulo_hoja: str, filas_previas) -> int | None:
@@ -197,7 +210,7 @@ def importar_excel(path: str) -> tuple[list[dict], list[str]]:
         rows = list(ws.iter_rows(values_only=True))
         if not rows:
             continue
-        header_idx, mapeo = _detectar_header(rows)
+        header_idx, mapeo, fuente = _detectar_header(rows)
         if header_idx is None:
             advertencias.append(f"Hoja «{ws.title}»: no se encontró la fila de encabezados; se omitió.")
             continue
@@ -206,9 +219,10 @@ def importar_excel(path: str) -> tuple[list[dict], list[str]]:
 
         for row in rows[header_idx + 1:]:
             reg = {campo: None for campo in (
-                "numero", "numero_ap", "dependencia", "caratula", "fecha", "hora",
-                "lugar", "informante", "acusado", "relato", "lat", "lon",
+                "numero", "numero_ap", "dependencia", "ddp", "caratula", "fecha", "hora",
+                "lugar", "informante", "acusado", "relato", "anio", "lat", "lon",
             )}
+            reg["fuente"] = fuente
             coords_combinadas = None
             for col_idx, campo in mapeo.items():
                 if col_idx >= len(row):
@@ -216,10 +230,21 @@ def importar_excel(path: str) -> tuple[list[dict], list[str]]:
                 val = row[col_idx]
                 if campo == "coords":
                     coords_combinadas = val
+                elif campo == "fecha_hora":
+                    reg["fecha"] = _parse_fecha(val)
+                    h = _parse_hora(val)
+                    if h:
+                        reg["hora"] = h
                 elif campo == "fecha":
                     reg["fecha"] = _parse_fecha(val)
                 elif campo == "hora":
                     reg["hora"] = _parse_hora(val) or None
+                elif campo == "anio":
+                    m = re.search(r"(20\d{2})", _to_str(val))
+                    if m:
+                        reg["anio"] = int(m.group(1))
+                elif campo == "ddp":
+                    reg["ddp"] = (_to_str(val)[:40] or None)
                 elif campo in ("lat", "lon"):
                     reg[campo] = _parse_float(val)
                 elif campo in ("lugar", "relato"):
@@ -243,7 +268,7 @@ def importar_excel(path: str) -> tuple[list[dict], list[str]]:
 
             if reg["fecha"] is not None:
                 reg["anio"] = reg["fecha"].year
-            else:
+            elif reg.get("anio") is None:
                 reg["anio"] = anio_hoja
 
             reg["dedupe_hash"] = _dedupe_hash(reg)

@@ -1,5 +1,5 @@
 {% extends "layouts/base.html" %}
-{% block title %}DUNACC - Detalle del registro{% endblock %}
+{% block title %}Cruce DUNACC / 911 - Detalle del registro{% endblock %}
 {% block extra_head %}
 {% if reg.tiene_coords %}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
@@ -7,7 +7,7 @@
 {% endblock %}
 {% block content %}
 <div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-2">
-    <h1 class="h3 mb-0"><i class="bi bi-file-text"></i> Registro DUNACC</h1>
+    <h1 class="h3 mb-0"><i class="bi bi-file-text"></i> Detalle del registro</h1>
     <div class="d-flex gap-2">
         <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('dunacc.listado') }}"><i class="bi bi-arrow-left"></i> Volver</a>
         {% if can_manage %}
@@ -29,9 +29,10 @@
             </div>
             <div class="card-body">
                 <dl class="row mb-0">
+                    <dt class="col-sm-3">Fuente</dt><dd class="col-sm-9"><span class="badge {{ 'bg-primary' if reg.fuente == 'DUNACC' else 'bg-info text-dark' }}">{{ reg.fuente_label }}</span></dd>
                     <dt class="col-sm-3">N°</dt><dd class="col-sm-9">{{ reg.numero or '-' }}</dd>
                     <dt class="col-sm-3">N° AP</dt><dd class="col-sm-9">{{ reg.numero_ap or '-' }}</dd>
-                    <dt class="col-sm-3">Dependencia</dt><dd class="col-sm-9">{{ reg.dependencia or '-' }}</dd>
+                    <dt class="col-sm-3">Dependencia</dt><dd class="col-sm-9">{{ reg.dependencia or '-' }}{% if reg.ddp %} <span class="text-muted">({{ reg.ddp }})</span>{% endif %}</dd>
                     <dt class="col-sm-3">Carátula</dt><dd class="col-sm-9">{{ reg.caratula or '-' }}</dd>
                     <dt class="col-sm-3">Fecha</dt><dd class="col-sm-9">{{ reg.fecha.strftime('%d/%m/%Y') if reg.fecha else '-' }}{% if reg.anio %} <span class="text-muted">(Año {{ reg.anio }})</span>{% endif %}</dd>
                     <dt class="col-sm-3">Hora</dt><dd class="col-sm-9">{{ reg.hora or '-' }}</dd>

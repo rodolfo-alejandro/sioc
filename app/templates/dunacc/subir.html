@@ -1,7 +1,7 @@
 {% extends "layouts/base.html" %}
-{% block title %}DUNACC - Subir planilla{% endblock %}
+{% block title %}Cruce DUNACC / 911 - Subir planilla{% endblock %}
 {% block content %}
-<div class="page-header"><h1><i class="bi bi-cloud-upload"></i> DUNACC — Subir planilla</h1></div>
+<div class="page-header"><h1><i class="bi bi-cloud-upload"></i> Cruce DUNACC / 911 — Subir planilla</h1></div>
 
 {% with active='subir', can_manage=True %}{% include "dunacc/_tabs.html" %}{% endwith %}
 
@@ -16,9 +16,9 @@
                 <form method="POST" enctype="multipart/form-data">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="mb-3">
-                        <label class="form-label">Archivo Excel de DUNACC (.xlsx)</label>
+                        <label class="form-label">Archivo Excel (DUNACC o 911/CCO) (.xlsx)</label>
                         <input class="form-control" type="file" name="archivo" accept=".xlsx,.xlsm" required>
-                        <div class="form-text">Se importa cada fila como un registro. Si la planilla trae columnas <strong>Latitud</strong> y <strong>Longitud</strong> se cargan automáticamente; si no, podrás cargarlas después desde el listado.</div>
+                        <div class="form-text">El sistema <strong>detecta automáticamente</strong> si es una planilla de <strong>DUNACC</strong> (denuncias) o del <strong>CCO 911</strong> (llamadas) según sus columnas. Se importa cada fila como un registro. Si trae columnas <strong>Latitud</strong> y <strong>Longitud</strong> se cargan automáticamente; si no, podrás cargarlas después desde el listado.</div>
                     </div>
                     <div class="form-check mb-3">
                         <input class="form-check-input" type="checkbox" name="omitir_duplicados" value="1" id="omitir" checked>
@@ -33,11 +33,13 @@
     <div class="col-lg-5">
         <div class="card bg-light">
             <div class="card-body">
-                <h6 class="card-title"><i class="bi bi-info-circle"></i> Formato esperado</h6>
-                <p class="small mb-2">El importador detecta automáticamente la fila de encabezados y reconoce estas columnas:</p>
-                <p class="small mb-0"><code>N°</code>, <code>N° AP</code>, <code>DEPENDENCIA</code>, <code>CARÁTULA</code>, <code>FECHA</code>, <code>HORA</code>, <code>LUGAR</code>, <code>INFORMANTE</code>, <code>ACUSADO</code>, <code>BREVE RELATO</code> y, si existen, <code>LATITUD</code> / <code>LONGITUD</code>.</p>
+                <h6 class="card-title"><i class="bi bi-info-circle"></i> Formatos reconocidos</h6>
+                <p class="small mb-1"><span class="badge bg-primary">DUNACC</span> (denuncias):</p>
+                <p class="small mb-2"><code>N°</code>, <code>N° AP</code>, <code>DEPENDENCIA</code>, <code>CARÁTULA</code>, <code>FECHA</code>, <code>HORA</code>, <code>LUGAR</code>, <code>INFORMANTE</code>, <code>ACUSADO</code>, <code>BREVE RELATO</code> y, si existen, <code>LATITUD</code> / <code>LONGITUD</code>.</p>
+                <p class="small mb-1"><span class="badge bg-info text-dark">CCO 911</span> (llamadas):</p>
+                <p class="small mb-0"><code>FECHA Y HORA</code>, <code>TIPIFICACIÓN</code>, <code>COMENTARIO ALERTANTE</code>, <code>DOMICILIO</code>, <code>DDP</code>, <code>DEPENDENCIA</code>, <code>AÑO</code>.</p>
                 <hr>
-                <p class="small mb-0 text-muted">Soporta varias hojas (por ejemplo «AÑO 2026» y «AÑO 2025»): se importan todas.</p>
+                <p class="small mb-0 text-muted">Detecta la fila de encabezados y la fuente automáticamente. Soporta varias hojas (por ejemplo «AÑO 2026» y «AÑO 2025»): se importan todas.</p>
             </div>
         </div>
     </div>

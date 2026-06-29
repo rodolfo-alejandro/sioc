@@ -27,7 +27,12 @@ from werkzeug.utils import secure_filename
 from app.blueprints.dunacc import bp
 from app.blueprints.dunacc import services
 from app.extensions import db
-from app.models.dunacc import DunaccLote, DunaccLoteCompartido, DunaccRegistro
+from app.models.dunacc import (
+    FUENTE_LABELS,
+    DunaccLote,
+    DunaccLoteCompartido,
+    DunaccRegistro,
+)
 from app.models.unidad import Unidad
 
 _schema_checked = False
@@ -80,6 +85,25 @@ def _ensure_schema():
         for model in (DunaccLote, DunaccRegistro, DunaccLoteCompartido):
             if model.__tablename__ not in existing:
                 model.__table__.create(bind=db.engine)
+        # Columnas agregadas luego de la creación inicial (multi-fuente).
+        nuevas_cols = {
+            "dunacc_lotes": [("fuente", "VARCHAR(20) NOT NULL DEFAULT 'DUNACC'")],
+            "dunacc_registros": [
+                ("fuente", "VARCHAR(20) NOT NULL DEFAULT 'DUNACC'"),
+                ("ddp", "VARCHAR(40)"),
+            ],
+        }
+        for tabla, cols in nuevas_cols.items():
+            try:
+                presentes = {c["name"] for c in insp.get_columns(tabla)}
+            except Exception:
+                presentes = set()
+            for nombre, ddl in cols:
+                if nombre not in presentes:
+                    db.session.execute(
+                        db.text(f"ALTER TABLE {tabla} ADD COLUMN {nombre} {ddl}")
+                    )
+        db.session.commit()
         _schema_checked = True
     except Exception:
         db.session.rollback()
@@ -167,38 +191,11 @@ def listado():
     anio = _clean(request.args.get("anio"))
     geo = _clean(request.args.get("geo"))  # con | sin
     lote = _clean(request.args.get("lote"))
+    fuente = _clean(request.args.get("fuente"))
     fecha_desde = _clean(request.args.get("fecha_desde"))
     fecha_hasta = _clean(request.args.get("fecha_hasta"))
 
-    if lote.isdigit():
-        q = q.filter(DunaccRegistro.lote_id == int(lote))
-    if texto:
-        like = f"%{texto}%"
-        q = q.filter(or_(
-            DunaccRegistro.caratula.ilike(like),
-            DunaccRegistro.lugar.ilike(like),
-            DunaccRegistro.dependencia.ilike(like),
-            DunaccRegistro.informante.ilike(like),
-            DunaccRegistro.acusado.ilike(like),
-            DunaccRegistro.numero_ap.ilike(like),
-            DunaccRegistro.relato.ilike(like),
-        ))
-    if dependencia:
-        q = q.filter(DunaccRegistro.dependencia.ilike(f"%{dependencia}%"))
-    if caratula:
-        q = q.filter(DunaccRegistro.caratula.ilike(f"%{caratula}%"))
-    if anio.isdigit():
-        q = q.filter(DunaccRegistro.anio == int(anio))
-    if geo == "con":
-        q = q.filter(DunaccRegistro.lat.isnot(None), DunaccRegistro.lon.isnot(None))
-    elif geo == "sin":
-        q = q.filter(or_(DunaccRegistro.lat.is_(None), DunaccRegistro.lon.is_(None)))
-    d1 = _parse_date(fecha_desde)
-    d2 = _parse_date(fecha_hasta)
-    if d1:
-        q = q.filter(DunaccRegistro.fecha >= d1)
-    if d2:
-        q = q.filter(DunaccRegistro.fecha <= d2)
+    q = _aplicar_filtros(q, request.args)
 
     registros = q.order_by(
         DunaccRegistro.fecha.desc(),
@@ -229,6 +226,7 @@ def listado():
         anios=anios,
         lotes_info=lotes_info,
         lotes=all_lotes,
+        fuentes=FUENTE_LABELS,
         selected={
             "q": texto,
             "dependencia": dependencia,
@@ -236,6 +234,7 @@ def listado():
             "anio": anio,
             "geo": geo,
             "lote": lote,
+            "fuente": fuente,
             "fecha_desde": fecha_desde,
             "fecha_hasta": fecha_hasta,
         },
@@ -276,6 +275,9 @@ def _aplicar_filtros(q, args):
     lote = _clean(args.get("lote"))
     if lote.isdigit():
         q = q.filter(DunaccRegistro.lote_id == int(lote))
+    fuente = _clean(args.get("fuente"))
+    if fuente in FUENTE_LABELS:
+        q = q.filter(DunaccRegistro.fuente == fuente)
     d1 = _parse_date(args.get("fecha_desde"))
     d2 = _parse_date(args.get("fecha_hasta"))
     if d1:
@@ -297,6 +299,7 @@ def patrones():
     anios = {}
     deps = {}
     cars = {}
+    fuentes_cnt = {}
     con_hora = 0
     con_fecha = 0
     textos = []
@@ -317,6 +320,8 @@ def patrones():
         if r.caratula:
             c = r.caratula.strip()
             cars[c] = cars.get(c, 0) + 1
+        fl = r.fuente_label
+        fuentes_cnt[fl] = fuentes_cnt.get(fl, 0) + 1
         textos.append(f"{r.caratula or ''} {r.relato or ''}")
 
     deps_orden = sorted(deps.items(), key=lambda x: x[1], reverse=True)
@@ -340,6 +345,7 @@ def patrones():
         if r[0]
     ]
     _, all_lotes = _lotes_info()
+    fuentes_orden = sorted(fuentes_cnt.items(), key=lambda x: x[1], reverse=True)
 
     charts = {
         "dow": {"labels": dow_labels, "values": dow},
@@ -348,6 +354,7 @@ def patrones():
         "anios": {"labels": [str(a) for a, _ in anios_orden], "values": [c for _, c in anios_orden]},
         "deps": {"labels": [d for d, _ in deps_orden[:20]], "values": [c for _, c in deps_orden[:20]]},
         "cars": {"labels": [c for c, _ in cars_orden[:15]], "values": [n for _, n in cars_orden[:15]]},
+        "fuentes": {"labels": [f for f, _ in fuentes_orden], "values": [n for _, n in fuentes_orden]},
     }
 
     return render_template(
@@ -361,6 +368,7 @@ def patrones():
         n_dependencias=len(deps),
         anios=anios_filtro,
         lotes=all_lotes,
+        fuentes=FUENTE_LABELS,
         selected={
             "q": _clean(request.args.get("q")),
             "dependencia": _clean(request.args.get("dependencia")),
@@ -368,6 +376,7 @@ def patrones():
             "anio": _clean(request.args.get("anio")),
             "geo": _clean(request.args.get("geo")),
             "lote": _clean(request.args.get("lote")),
+            "fuente": _clean(request.args.get("fuente")),
             "fecha_desde": _clean(request.args.get("fecha_desde")),
             "fecha_hasta": _clean(request.args.get("fecha_hasta")),
         },
@@ -447,6 +456,10 @@ def subir():
         flash(msg, "warning")
         return redirect(url_for("dunacc.subir"))
 
+    # Fuente predominante de la planilla (DUNACC denuncias o CCO911 llamadas).
+    fuentes = [r.get("fuente") for r in registros if r.get("fuente")]
+    fuente_lote = max(set(fuentes), key=fuentes.count) if fuentes else "DUNACC"
+
     lote = DunaccLote(
         unidad_id=current_user.unidad_id,
         user_id=current_user.id,
@@ -455,6 +468,7 @@ def subir():
         sha1=sha1.hexdigest(),
         size_bytes=os.path.getsize(path),
         total_registros=0,
+        fuente=fuente_lote,
     )
     db.session.add(lote)
     db.session.flush()
@@ -483,9 +497,11 @@ def subir():
             unidad_id=current_user.unidad_id,
             lote_id=lote.id,
             user_id=current_user.id,
+            fuente=reg.get("fuente") or fuente_lote,
             numero=reg.get("numero"),
             numero_ap=reg.get("numero_ap"),
             dependencia=reg.get("dependencia"),
+            ddp=reg.get("ddp"),
             caratula=reg.get("caratula"),
             fecha=reg.get("fecha"),
             hora=reg.get("hora"),
@@ -610,18 +626,12 @@ def mapa():
     q = _base_registros().filter(
         DunaccRegistro.lat.isnot(None), DunaccRegistro.lon.isnot(None)
     )
+    q = _aplicar_filtros(q, request.args)
     anio = _clean(request.args.get("anio"))
-    if anio.isdigit():
-        q = q.filter(DunaccRegistro.anio == int(anio))
     dependencia = _clean(request.args.get("dependencia"))
-    if dependencia:
-        q = q.filter(DunaccRegistro.dependencia.ilike(f"%{dependencia}%"))
     caratula = _clean(request.args.get("caratula"))
-    if caratula:
-        q = q.filter(DunaccRegistro.caratula.ilike(f"%{caratula}%"))
     lote = _clean(request.args.get("lote"))
-    if lote.isdigit():
-        q = q.filter(DunaccRegistro.lote_id == int(lote))
+    fuente = _clean(request.args.get("fuente"))
 
     puntos = []
     for r in q.limit(3000).all():
@@ -629,6 +639,8 @@ def mapa():
             "id": r.id,
             "lat": r.lat,
             "lng": r.lon,
+            "fuente": r.fuente or "DUNACC",
+            "fuente_label": r.fuente_label,
             "caratula": r.caratula or "-",
             "fecha": r.fecha.strftime("%d/%m/%Y") if r.fecha else "-",
             "dependencia": r.dependencia or "-",
@@ -659,8 +671,15 @@ def mapa():
         puntos=puntos,
         anios=anios,
         lotes=lotes,
+        fuentes=FUENTE_LABELS,
         sin_coords=sin_coords,
-        selected={"anio": anio, "dependencia": dependencia, "caratula": caratula, "lote": lote},
+        selected={
+            "anio": anio,
+            "dependencia": dependencia,
+            "caratula": caratula,
+            "lote": lote,
+            "fuente": fuente,
+        },
     )
 
 
@@ -765,36 +784,7 @@ def export_xlsx():
         abort(403)
     import openpyxl
 
-    q = _base_registros()
-    texto = _clean(request.args.get("q"))
-    if texto:
-        like = f"%{texto}%"
-        q = q.filter(or_(
-            DunaccRegistro.caratula.ilike(like),
-            DunaccRegistro.lugar.ilike(like),
-            DunaccRegistro.dependencia.ilike(like),
-            DunaccRegistro.informante.ilike(like),
-            DunaccRegistro.acusado.ilike(like),
-            DunaccRegistro.numero_ap.ilike(like),
-            DunaccRegistro.relato.ilike(like),
-        ))
-    anio = _clean(request.args.get("anio"))
-    if anio.isdigit():
-        q = q.filter(DunaccRegistro.anio == int(anio))
-    lote = _clean(request.args.get("lote"))
-    if lote.isdigit():
-        q = q.filter(DunaccRegistro.lote_id == int(lote))
-    geo = _clean(request.args.get("geo"))
-    if geo == "con":
-        q = q.filter(DunaccRegistro.lat.isnot(None), DunaccRegistro.lon.isnot(None))
-    elif geo == "sin":
-        q = q.filter(or_(DunaccRegistro.lat.is_(None), DunaccRegistro.lon.is_(None)))
-    d1 = _parse_date(request.args.get("fecha_desde"))
-    d2 = _parse_date(request.args.get("fecha_hasta"))
-    if d1:
-        q = q.filter(DunaccRegistro.fecha >= d1)
-    if d2:
-        q = q.filter(DunaccRegistro.fecha <= d2)
+    q = _aplicar_filtros(_base_registros(), request.args)
 
     rows = q.order_by(DunaccRegistro.fecha.desc(), DunaccRegistro.created_at.desc()).all()
 
@@ -802,14 +792,16 @@ def export_xlsx():
     ws = wb.active
     ws.title = "DUNACC"
     ws.append([
-        "N°", "N° AP", "Dependencia", "Carátula", "Fecha", "Hora", "Lugar",
+        "Fuente", "N°", "N° AP", "Dependencia", "DDP", "Carátula", "Fecha", "Hora", "Lugar",
         "Informante", "Acusado", "Breve relato", "Latitud", "Longitud", "Año",
     ])
     for r in rows:
         ws.append([
+            r.fuente_label,
             r.numero or "",
             r.numero_ap or "",
             r.dependencia or "",
+            r.ddp or "",
             r.caratula or "",
             r.fecha.strftime("%d/%m/%Y") if r.fecha else "",
             r.hora or "",

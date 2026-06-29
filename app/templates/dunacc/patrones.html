@@ -1,7 +1,7 @@
 {% extends "layouts/base.html" %}
-{% block title %}DUNACC - Patrones{% endblock %}
+{% block title %}Cruce DUNACC / 911 - Patrones{% endblock %}
 {% block content %}
-<div class="page-header"><h1><i class="bi bi-graph-up"></i> DUNACC — Patrones y análisis</h1></div>
+    <div class="page-header"><h1><i class="bi bi-graph-up"></i> Cruce DUNACC / 911 — Patrones y análisis</h1></div>
 
 {% with active='patrones' %}{% include "dunacc/_tabs.html" %}{% endwith %}
 
@@ -12,6 +12,7 @@
             <div class="col-md-3"><label class="form-label form-label-sm mb-1"><i class="bi bi-building"></i> Comisaría / Dependencia</label><input class="form-control form-control-sm" name="dependencia" value="{{ selected.dependencia }}"></div>
             <div class="col-md-2"><label class="form-label form-label-sm mb-1"><i class="bi bi-card-list"></i> Carátula</label><input class="form-control form-control-sm" name="caratula" value="{{ selected.caratula }}"></div>
             <div class="col-md-2"><label class="form-label form-label-sm mb-1"><i class="bi bi-calendar3"></i> Año</label><select class="form-select form-select-sm" name="anio"><option value="">Todos</option>{% for a in anios %}<option value="{{ a }}" {{ 'selected' if selected.anio == a|string else '' }}>{{ a }}</option>{% endfor %}</select></div>
+            <div class="col-md-2"><label class="form-label form-label-sm mb-1"><i class="bi bi-collection"></i> Fuente</label><select class="form-select form-select-sm" name="fuente"><option value="">Todas</option>{% for code, label in fuentes.items() %}<option value="{{ code }}" {{ 'selected' if selected.fuente == code else '' }}>{{ label }}</option>{% endfor %}</select></div>
             <div class="col-md-2"><label class="form-label form-label-sm mb-1"><i class="bi bi-file-earmark-excel"></i> Planilla</label><select class="form-select form-select-sm" name="lote"><option value="">Todas</option>{% for l in lotes %}<option value="{{ l.id }}" {{ 'selected' if selected.lote == l.id|string else '' }}>{{ (l.nombre_original or l.nombre_archivo)|truncate(30) }}</option>{% endfor %}</select></div>
             <div class="col-md-3"><label class="form-label form-label-sm mb-1"><i class="bi bi-calendar3"></i> Fecha desde</label><input class="form-control form-control-sm" type="date" name="fecha_desde" value="{{ selected.fecha_desde }}"></div>
             <div class="col-md-3"><label class="form-label form-label-sm mb-1"><i class="bi bi-calendar3"></i> Fecha hasta</label><input class="form-control form-control-sm" type="date" name="fecha_hasta" value="{{ selected.fecha_hasta }}"></div>
@@ -28,6 +29,7 @@
 </div>
 
 <div class="row g-3">
+    <div class="col-md-6"><div class="card"><div class="card-header"><i class="bi bi-collection"></i> Por fuente de datos</div><div class="card-body"><div id="ch-fuentes" style="height:300px;"></div></div></div></div>
     <div class="col-md-6"><div class="card"><div class="card-header"><i class="bi bi-calendar-week"></i> Por día de la semana</div><div class="card-body"><div id="ch-dow" style="height:300px;"></div></div></div></div>
     <div class="col-md-6"><div class="card"><div class="card-header"><i class="bi bi-clock"></i> Por hora del día</div><div class="card-body"><div id="ch-horas" style="height:300px;"></div></div></div></div>
     <div class="col-md-6"><div class="card"><div class="card-header"><i class="bi bi-calendar3"></i> Por mes</div><div class="card-body"><div id="ch-meses" style="height:300px;"></div></div></div></div>
@@ -100,6 +102,15 @@
             Plotly.newPlot(id, [trace], { margin: { l: 40, r: 10, t: 10, b: 60 }, xaxis: { type: 'category' } }, cfg);
         }
     }
+    (function () {
+        var el = document.getElementById('ch-fuentes');
+        if (el && window.Plotly && charts.fuentes && charts.fuentes.labels.length) {
+            Plotly.newPlot('ch-fuentes', [{
+                type: 'pie', labels: charts.fuentes.labels, values: charts.fuentes.values,
+                marker: { colors: ['#0d6efd', '#0dcaf0', '#198754', '#fd7e14'] }, hole: 0.4
+            }], { margin: { l: 10, r: 10, t: 10, b: 10 } }, cfg);
+        }
+    })();
     bar('ch-dow', charts.dow, '#0d6efd');
     bar('ch-horas', charts.horas, '#dc3545');
     bar('ch-meses', charts.meses, '#198754');
