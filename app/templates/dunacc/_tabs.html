@@ -1,0 +1,7 @@
+<ul class="nav nav-tabs mb-3">
+    <li class="nav-item"><a class="nav-link {{ 'active' if active == 'listado' else '' }}" href="{{ url_for('dunacc.listado') }}"><i class="bi bi-list-ul"></i> Registros</a></li>
+    {% if can_manage %}
+    <li class="nav-item"><a class="nav-link {{ 'active' if active == 'subir' else '' }}" href="{{ url_for('dunacc.subir') }}"><i class="bi bi-cloud-upload"></i> Subir planilla</a></li>
+    {% endif %}
+    <li class="nav-item"><a class="nav-link {{ 'active' if active == 'mapa' else '' }}" href="{{ url_for('dunacc.mapa') }}"><i class="bi bi-geo-alt"></i> Mapa</a></li>
+</ul>

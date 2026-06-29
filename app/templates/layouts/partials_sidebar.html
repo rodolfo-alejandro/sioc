@@ -212,6 +212,23 @@
                 </li>
                 {% endif %}
 
+                <!-- DUNACC -->
+                {% if current_user.has_permission('DUNACC_VIEW') %}
+                <li class="nav-item">
+                    <a class="nav-link" href="#" data-bs-toggle="collapse" data-bs-target="#submenuDunacc">
+                        <i class="bi bi-folder2-open"></i> DUNACC
+                        <i class="bi bi-chevron-down ms-auto"></i>
+                    </a>
+                    <ul class="nav flex-column collapse" id="submenuDunacc">
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('dunacc.listado') }}"><i class="bi bi-list-ul"></i> Registros</a></li>
+                        {% if current_user.has_permission('DUNACC_MANAGE') %}
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('dunacc.subir') }}"><i class="bi bi-cloud-upload"></i> Subir planilla</a></li>
+                        {% endif %}
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('dunacc.mapa') }}"><i class="bi bi-geo-alt"></i> Mapa</a></li>
+                    </ul>
+                </li>
+                {% endif %}
+
                 <!-- Capacitaciones -->
                 {% if current_user.has_permission('CAPACITACIONES_VIEW') or current_user.has_permission('CAPACITACIONES_ADMIN') or current_user.has_permission('CAPACITACIONES_ASISTENCIA') %}
                 <li class="nav-item">

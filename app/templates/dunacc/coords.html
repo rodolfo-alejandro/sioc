@@ -1,0 +1,165 @@
+{% extends "layouts/base.html" %}
+{% block title %}DUNACC - Cargar coordenadas{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<style>
+  #mapCoords { height: 70vh; min-height: 420px; width: 100%; border-radius: .375rem; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <h1 class="h3 mb-0"><i class="bi bi-geo-alt"></i> Cargar coordenadas</h1>
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('dunacc.listado') }}"><i class="bi bi-arrow-left"></i> Volver al listado</a>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-5">
+        <div class="card mb-3">
+            <div class="card-header"><i class="bi bi-file-text"></i> Registro</div>
+            <div class="card-body">
+                <dl class="row mb-0 small">
+                    <dt class="col-4">N° AP</dt><dd class="col-8">{{ reg.numero_ap or '-' }}</dd>
+                    <dt class="col-4">Fecha</dt><dd class="col-8">{{ reg.fecha.strftime('%d/%m/%Y') if reg.fecha else '-' }} {{ reg.hora or '' }}</dd>
+                    <dt class="col-4">Dependencia</dt><dd class="col-8">{{ reg.dependencia or '-' }}</dd>
+                    <dt class="col-4">Carátula</dt><dd class="col-8">{{ reg.caratula or '-' }}</dd>
+                    <dt class="col-4">Lugar</dt><dd class="col-8">{{ reg.lugar or '-' }}</dd>
+                </dl>
+            </div>
+        </div>
+
+        <form method="POST" id="coordsForm">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="origen" id="origen" value="manual">
+            <div class="card">
+                <div class="card-header"><i class="bi bi-pin-map"></i> Ubicación</div>
+                <div class="card-body">
+                    <div class="mb-2">
+                        <label class="form-label small mb-1">Buscar dirección (geocodificar)</label>
+                        <div class="input-group input-group-sm">
+                            <input class="form-control" id="geoQuery" value="{{ reg.lugar or '' }}" placeholder="Dirección a buscar">
+                            <button class="btn btn-outline-primary" type="button" id="btnGeocode"><i class="bi bi-search"></i> Buscar</button>
+                        </div>
+                        <div class="form-text" id="geoMsg"></div>
+                    </div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-6"><label class="form-label small mb-1">Latitud</label><input class="form-control form-control-sm" name="lat" id="lat" value="{{ '%.6f'|format(reg.lat) if reg.lat is not none else '' }}" autocomplete="off"></div>
+                        <div class="col-6"><label class="form-label small mb-1">Longitud</label><input class="form-control form-control-sm" name="lon" id="lon" value="{{ '%.6f'|format(reg.lon) if reg.lon is not none else '' }}" autocomplete="off"></div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small mb-1">…o pegá «lat, long» de una vez</label>
+                        <input class="form-control form-control-sm" name="coords" id="coords" placeholder="-24.785900, -65.411400" autocomplete="off">
+                    </div>
+                    <button class="btn btn-outline-dark btn-sm w-100 mb-2" type="button" id="btnGmaps"><i class="bi bi-box-arrow-up-right"></i> Abrir en Google Maps (copiar coordenadas)</button>
+                    <p class="form-text mb-2"><i class="bi bi-info-circle"></i> Tocá el mapa para fijar el punto, buscá la dirección o pegá las coordenadas desde Google Maps.</p>
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-primary" type="submit"><i class="bi bi-check-lg"></i> Guardar</button>
+                        <button class="btn btn-outline-primary" type="submit" name="siguiente" value="1"><i class="bi bi-skip-forward"></i> Guardar y siguiente sin coordenadas</button>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+    <div class="col-lg-7">
+        <div id="mapCoords"></div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_scripts %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+(function () {
+    var centro = {{ centro|tojson }};
+    var hasInicial = {{ 'true' if reg.tiene_coords else 'false' }};
+    var latIn = document.getElementById('lat');
+    var lonIn = document.getElementById('lon');
+    var coordsIn = document.getElementById('coords');
+    var origenIn = document.getElementById('origen');
+
+    var map = L.map('mapCoords').setView(
+        hasInicial ? [parseFloat(latIn.value), parseFloat(lonIn.value)] : [centro.lat, centro.lon],
+        hasInicial ? 16 : 13
+    );
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(map);
+
+    var marker = null;
+    function setMarker(la, ln, origen) {
+        if (isNaN(la) || isNaN(ln)) return;
+        if (marker) { map.removeLayer(marker); }
+        marker = L.marker([la, ln], { draggable: true }).addTo(map);
+        marker.on('dragend', function (e) {
+            var p = e.target.getLatLng();
+            writeInputs(p.lat, p.lng, 'mapa');
+        });
+        map.setView([la, ln], Math.max(map.getZoom(), 16));
+    }
+    function writeInputs(la, ln, origen) {
+        latIn.value = la.toFixed(6);
+        lonIn.value = ln.toFixed(6);
+        if (origen) origenIn.value = origen;
+        setMarker(la, ln, origen);
+    }
+
+    if (hasInicial) {
+        setMarker(parseFloat(latIn.value), parseFloat(lonIn.value), 'importada');
+    }
+
+    map.on('click', function (e) {
+        writeInputs(e.latlng.lat, e.latlng.lng, 'mapa');
+    });
+
+    // Inputs manuales
+    function fromInputs() {
+        var la = parseFloat(latIn.value), ln = parseFloat(lonIn.value);
+        if (!isNaN(la) && !isNaN(ln)) { origenIn.value = 'manual'; setMarker(la, ln, 'manual'); }
+    }
+    latIn.addEventListener('change', fromInputs);
+    lonIn.addEventListener('change', fromInputs);
+    coordsIn.addEventListener('input', function () {
+        var m = (coordsIn.value || '').match(/-?\d+\.?\d*/g);
+        if (m && m.length >= 2) {
+            var la = parseFloat(m[0]), ln = parseFloat(m[1]);
+            if (!isNaN(la) && !isNaN(ln)) writeInputs(la, ln, 'manual');
+        }
+    });
+
+    // Botón Google Maps externo
+    document.getElementById('btnGmaps').addEventListener('click', function () {
+        var la = parseFloat(latIn.value), ln = parseFloat(lonIn.value);
+        var url;
+        if (!isNaN(la) && !isNaN(ln)) {
+            url = 'https://www.google.com/maps/search/?api=1&query=' + la + ',' + ln;
+        } else {
+            var q = document.getElementById('geoQuery').value || '{{ (reg.lugar or "")|e }}';
+            url = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(q + ', Salta, Argentina');
+        }
+        window.open(url, '_blank');
+    });
+
+    // Geocodificar (Nominatim vía servidor)
+    var btnGeo = document.getElementById('btnGeocode');
+    var geoMsg = document.getElementById('geoMsg');
+    btnGeo.addEventListener('click', function () {
+        var q = (document.getElementById('geoQuery').value || '').trim();
+        if (!q) { geoMsg.textContent = 'Escribí una dirección para buscar.'; return; }
+        btnGeo.disabled = true;
+        var old = btnGeo.innerHTML;
+        btnGeo.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+        geoMsg.textContent = 'Buscando…';
+        fetch('{{ url_for("dunacc.api_geocodificar") }}?q=' + encodeURIComponent(q + ', Salta, Argentina'))
+            .then(function (r) { return r.json(); })
+            .then(function (resp) {
+                if (resp && resp.ok) {
+                    writeInputs(resp.lat, resp.lon, 'geocode');
+                    geoMsg.innerHTML = '<span class="text-success">Encontrado:</span> ' + (resp.display_name || '');
+                } else {
+                    geoMsg.innerHTML = '<span class="text-warning">Sin resultados. Probá afinar la dirección o marcá el punto en el mapa.</span>';
+                }
+            })
+            .catch(function () { geoMsg.innerHTML = '<span class="text-danger">Error al geocodificar.</span>'; })
+            .finally(function () { btnGeo.disabled = false; btnGeo.innerHTML = old; });
+    });
+
+    setTimeout(function () { map.invalidateSize(); }, 200);
+})();
+</script>
+{% endblock %}

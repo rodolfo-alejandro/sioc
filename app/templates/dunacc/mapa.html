@@ -1,0 +1,56 @@
+{% extends "layouts/base.html" %}
+{% block title %}DUNACC - Mapa{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+{% endblock %}
+{% block content %}
+<div class="page-header"><h1><i class="bi bi-geo-alt"></i> DUNACC — Mapa</h1></div>
+
+{% with active='mapa' %}{% include "dunacc/_tabs.html" %}{% endwith %}
+
+{% if sin_coords %}
+<div class="alert alert-warning py-2"><i class="bi bi-exclamation-triangle"></i> Hay <strong>{{ sin_coords }}</strong> registro(s) sin coordenadas (no se ven en el mapa). <a href="{{ url_for('dunacc.listado', geo='sin') }}">Cargalos acá</a>.</div>
+{% endif %}
+
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="GET" class="row g-2">
+            <div class="col-md-4"><label class="form-label form-label-sm mb-1"><i class="bi bi-file-earmark-excel"></i> Planilla</label><select class="form-select form-select-sm" name="lote"><option value="">Todas las planillas</option>{% for l in lotes %}<option value="{{ l.id }}" {{ 'selected' if selected.lote == l.id|string else '' }}>{{ (l.nombre_original or l.nombre_archivo)|truncate(40) }} ({{ l.total_registros }})</option>{% endfor %}</select></div>
+            <div class="col-md-2"><label class="form-label form-label-sm mb-1">Año</label><select class="form-select form-select-sm" name="anio"><option value="">Todos</option>{% for a in anios %}<option value="{{ a }}" {{ 'selected' if selected.anio == a|string else '' }}>{{ a }}</option>{% endfor %}</select></div>
+            <div class="col-md-3"><label class="form-label form-label-sm mb-1">Dependencia</label><input class="form-control form-control-sm" name="dependencia" value="{{ selected.dependencia }}"></div>
+            <div class="col-md-3"><label class="form-label form-label-sm mb-1">Carátula</label><input class="form-control form-control-sm" name="caratula" value="{{ selected.caratula }}"></div>
+            <div class="col-12 d-flex gap-2"><button class="btn btn-outline-primary btn-sm" type="submit">Aplicar</button><a class="btn btn-outline-secondary btn-sm" href="{{ url_for('dunacc.mapa') }}">Limpiar</a></div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div id="mapa-dunacc" style="height: 70vh; min-height: 420px;"></div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_scripts %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+(function () {
+    var puntos = {{ puntos|tojson }};
+    var map = L.map('mapa-dunacc').setView([-24.79, -65.41], 11);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(map);
+    var bounds = [];
+    puntos.forEach(function (p) {
+        if (!p.lat || !p.lng) return;
+        var txt = '<strong>N° AP:</strong> ' + p.numero_ap + '<br>' +
+            '<strong>Carátula:</strong> ' + p.caratula + '<br>' +
+            '<strong>Fecha:</strong> ' + p.fecha + '<br>' +
+            '<strong>Dependencia:</strong> ' + p.dependencia + '<br>' +
+            '<strong>Lugar:</strong> ' + p.lugar + '<br>' +
+            '<a href="{{ url_for("dunacc.registro_coords", registro_id=0) }}'.replace('/0/', '/' + p.id + '/') + '">Editar ubicación</a>';
+        L.circleMarker([p.lat, p.lng], { radius: 7, color: '#0d6efd', weight: 2, fillColor: '#0d6efd', fillOpacity: 0.8 })
+            .addTo(map).bindPopup(txt);
+        bounds.push([p.lat, p.lng]);
+    });
+    if (bounds.length) map.fitBounds(bounds, { padding: [30, 30] });
+})();
+</script>
+{% endblock %}

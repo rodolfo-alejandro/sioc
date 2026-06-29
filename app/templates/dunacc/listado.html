@@ -1,0 +1,124 @@
+{% extends "layouts/base.html" %}
+{% block title %}DUNACC - Registros{% endblock %}
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <h1><i class="bi bi-folder2-open"></i> DUNACC</h1>
+    <div class="d-flex gap-2">
+        {% if can_export %}
+        <a class="btn btn-outline-success btn-sm" href="{{ url_for('dunacc.export_xlsx', **selected) }}"><i class="bi bi-file-earmark-excel"></i> Exportar Excel</a>
+        {% endif %}
+        {% if can_manage %}
+        <a class="btn btn-primary btn-sm" href="{{ url_for('dunacc.subir') }}"><i class="bi bi-cloud-upload"></i> Subir planilla</a>
+        {% endif %}
+    </div>
+</div>
+
+{% with active='listado' %}{% include "dunacc/_tabs.html" %}{% endwith %}
+
+{% if dep_faltantes %}
+<div class="alert alert-warning"><i class="bi bi-exclamation-triangle"></i> Faltan dependencias en el servidor: <strong>{{ dep_faltantes|join(', ') }}</strong>. Instalá con <code>pip install -r requirements.txt</code>.</div>
+{% endif %}
+
+<div class="row g-2 mb-3">
+    <div class="col-6 col-md-3"><div class="card text-center"><div class="card-body py-2"><div class="h4 mb-0">{{ total }}</div><small class="text-muted">Total registros</small></div></div></div>
+    <div class="col-6 col-md-3"><div class="card text-center border-success"><div class="card-body py-2"><div class="h4 mb-0 text-success">{{ con_coords }}</div><small class="text-muted">Con coordenadas</small></div></div></div>
+    <div class="col-6 col-md-3"><div class="card text-center border-warning"><div class="card-body py-2"><div class="h4 mb-0 text-warning">{{ sin_coords }}</div><small class="text-muted">Sin coordenadas</small></div></div></div>
+    <div class="col-6 col-md-3"><div class="card text-center"><div class="card-body py-2"><a class="btn btn-outline-primary btn-sm" href="{{ url_for('dunacc.mapa') }}"><i class="bi bi-geo-alt"></i> Ver mapa</a></div></div></div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="GET" class="row g-2">
+            <div class="col-md-4"><label class="form-label form-label-sm mb-1"><i class="bi bi-search"></i> Buscar</label><input class="form-control form-control-sm" name="q" value="{{ selected.q }}" placeholder="Carátula, lugar, dependencia, acusado…"></div>
+            <div class="col-md-3"><label class="form-label form-label-sm mb-1"><i class="bi bi-building"></i> Dependencia</label><input class="form-control form-control-sm" name="dependencia" value="{{ selected.dependencia }}"></div>
+            <div class="col-md-2"><label class="form-label form-label-sm mb-1"><i class="bi bi-calendar3"></i> Año</label><select class="form-select form-select-sm" name="anio"><option value="">Todos</option>{% for a in anios %}<option value="{{ a }}" {{ 'selected' if selected.anio == a|string else '' }}>{{ a }}</option>{% endfor %}</select></div>
+            <div class="col-md-3"><label class="form-label form-label-sm mb-1"><i class="bi bi-geo"></i> Coordenadas</label><select class="form-select form-select-sm" name="geo"><option value="">Todas</option><option value="con" {{ 'selected' if selected.geo == 'con' else '' }}>Con coordenadas</option><option value="sin" {{ 'selected' if selected.geo == 'sin' else '' }}>Sin coordenadas</option></select></div>
+            <div class="col-md-4"><label class="form-label form-label-sm mb-1"><i class="bi bi-file-earmark-excel"></i> Planilla</label><select class="form-select form-select-sm" name="lote"><option value="">Todas las planillas</option>{% for l in lotes %}<option value="{{ l.id }}" {{ 'selected' if selected.lote == l.id|string else '' }}>{{ (l.nombre_original or l.nombre_archivo)|truncate(40) }} ({{ l.total_registros }})</option>{% endfor %}</select></div>
+            <div class="col-md-3"><label class="form-label form-label-sm mb-1"><i class="bi bi-calendar3"></i> Fecha desde</label><input class="form-control form-control-sm" type="date" name="fecha_desde" value="{{ selected.fecha_desde }}"></div>
+            <div class="col-md-3"><label class="form-label form-label-sm mb-1"><i class="bi bi-calendar3"></i> Fecha hasta</label><input class="form-control form-control-sm" type="date" name="fecha_hasta" value="{{ selected.fecha_hasta }}"></div>
+            <div class="col-md-6 d-flex gap-2 align-items-end"><button class="btn btn-outline-primary btn-sm" type="submit"><i class="bi bi-funnel"></i> Aplicar</button><a class="btn btn-outline-secondary btn-sm" href="{{ url_for('dunacc.listado') }}">Limpiar</a></div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>N° AP</th>
+                        <th>Fecha</th>
+                        <th>Dependencia</th>
+                        <th>Carátula</th>
+                        <th>Lugar</th>
+                        <th class="text-center">Ubicación</th>
+                        {% if can_manage %}<th class="text-end">Acciones</th>{% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in registros %}
+                    <tr>
+                        <td><span class="fw-semibold">{{ r.numero_ap or '-' }}</span></td>
+                        <td class="text-nowrap">{{ r.fecha.strftime('%d/%m/%Y') if r.fecha else '-' }}{% if r.hora %}<br><small class="text-muted">{{ r.hora }}</small>{% endif %}</td>
+                        <td><small>{{ r.dependencia or '-' }}</small></td>
+                        <td><small>{{ r.caratula or '-' }}</small></td>
+                        <td><small class="text-muted" title="{{ r.lugar or '' }}">{{ (r.lugar or '-')|truncate(60) }}</small></td>
+                        <td class="text-center">
+                            {% if r.tiene_coords %}
+                            <span class="badge bg-success" title="{{ '%.5f, %.5f'|format(r.lat, r.lon) }}"><i class="bi bi-geo-alt-fill"></i> OK</span>
+                            {% else %}
+                            <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle"></i> Falta</span>
+                            {% endif %}
+                        </td>
+                        {% if can_manage %}
+                        <td class="text-end text-nowrap">
+                            <a class="btn btn-sm {{ 'btn-outline-secondary' if r.tiene_coords else 'btn-warning' }}" href="{{ url_for('dunacc.registro_coords', registro_id=r.id) }}" title="Cargar/editar coordenadas"><i class="bi bi-geo-alt"></i> {{ 'Editar' if r.tiene_coords else 'Cargar' }}</a>
+                            <form method="POST" action="{{ url_for('dunacc.registro_eliminar', registro_id=r.id) }}" class="d-inline" onsubmit="return confirm('¿Eliminar este registro?');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button class="btn btn-sm btn-outline-danger" title="Eliminar"><i class="bi bi-trash"></i></button>
+                            </form>
+                        </td>
+                        {% endif %}
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="{{ 7 if can_manage else 6 }}" class="text-center text-muted py-4">No hay registros. {% if can_manage %}<a href="{{ url_for('dunacc.subir') }}">Subí una planilla DUNACC</a>.{% endif %}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% if lotes %}
+<div class="card mt-3">
+    <div class="card-header"><i class="bi bi-paperclip"></i> Planillas subidas</div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead class="table-light"><tr><th>Archivo</th><th>Fecha</th><th class="text-center">Registros</th><th class="text-end">Acciones</th></tr></thead>
+                <tbody>
+                    {% for l in lotes %}
+                    <tr>
+                        <td><i class="bi bi-file-earmark-excel text-success"></i> <small>{{ l.nombre_original or l.nombre_archivo }}</small></td>
+                        <td><small>{{ l.created_at|localtime }}</small></td>
+                        <td class="text-center">{{ l.total_registros }}</td>
+                        <td class="text-end text-nowrap">
+                            <a class="btn btn-sm btn-outline-primary" href="{{ url_for('dunacc.lote_descargar', lote_id=l.id) }}"><i class="bi bi-download"></i> Descargar</a>
+                            {% if can_manage %}
+                            <form method="POST" action="{{ url_for('dunacc.lote_eliminar', lote_id=l.id) }}" class="d-inline" onsubmit="return confirm('¿Eliminar el archivo? Marcá la opción si querés borrar también sus registros.');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <label class="small me-1"><input type="checkbox" name="borrar_registros" value="1"> y registros</label>
+                                <button class="btn btn-sm btn-outline-danger" title="Eliminar"><i class="bi bi-trash"></i></button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -129,6 +129,10 @@ def create_seed_data():
             ('MONITOR_NOTICIAS_VIEW', 'Ver monitor de noticias'),
             ('MONITOR_NOTICIAS_MANAGE', 'Buscar noticias y gestionar temas/fuentes'),
             ('MONITOR_NOTICIAS_EXPORT', 'Exportar noticias del monitor'),
+            # DUNACC (carga de planillas y georreferenciación)
+            ('DUNACC_VIEW', 'Ver registros DUNACC y mapa'),
+            ('DUNACC_MANAGE', 'Subir planillas DUNACC y cargar/editar coordenadas'),
+            ('DUNACC_EXPORT', 'Exportar registros DUNACC'),
             # Capacitaciones / seminarios
             ('CAPACITACIONES_VIEW', 'Ver módulo de capacitaciones, padrón e informes'),
             ('CAPACITACIONES_ADMIN', 'Gestionar padrón, eventos, inscriptos y momentos de asistencia'),
@@ -195,6 +199,7 @@ def create_seed_data():
                           'ANALISIS_INTERVENCIONES_VIEW', 'ANALISIS_INTERVENCIONES_IMPORT',
                           'ANALISIS_INTERVENCIONES_EXPORT', 'ANALISIS_INTERVENCIONES_DASHBOARD',
                           'MONITOR_NOTICIAS_VIEW', 'MONITOR_NOTICIAS_MANAGE', 'MONITOR_NOTICIAS_EXPORT',
+                          'DUNACC_VIEW', 'DUNACC_MANAGE', 'DUNACC_EXPORT',
                           'CAPACITACIONES_VIEW', 'CAPACITACIONES_ADMIN', 'CAPACITACIONES_ASISTENCIA']
             for perm_code in admin_perms:
                 if perm_code in permisos_creados:
@@ -219,6 +224,7 @@ def create_seed_data():
                 'ANALISIS_INTERVENCIONES_VIEW', 'ANALISIS_INTERVENCIONES_IMPORT',
                 'ANALISIS_INTERVENCIONES_EXPORT', 'ANALISIS_INTERVENCIONES_DASHBOARD',
                 'MONITOR_NOTICIAS_VIEW', 'MONITOR_NOTICIAS_MANAGE', 'MONITOR_NOTICIAS_EXPORT',
+                'DUNACC_VIEW', 'DUNACC_MANAGE', 'DUNACC_EXPORT',
             ]
             for perm_code in analista_perms:
                 if perm_code in permisos_creados:
