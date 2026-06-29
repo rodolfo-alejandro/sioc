@@ -256,6 +256,63 @@ def importar_excel(path: str) -> tuple[list[dict], list[str]]:
     return registros, advertencias
 
 
+# Palabras vacías (español) + términos procedimentales genéricos para el análisis de texto.
+_STOPWORDS = {
+    "de", "la", "que", "el", "en", "y", "los", "del", "se", "las", "por", "un",
+    "para", "con", "una", "su", "sus", "al", "lo", "como", "mas", "más", "pero",
+    "ya", "este", "esta", "esto", "estos", "estas", "porque", "entre", "cuando",
+    "muy", "sin", "sobre", "tambien", "también", "hasta", "hay", "donde", "quien",
+    "quienes", "desde", "todo", "todos", "toda", "todas", "nos", "durante", "uno",
+    "les", "ni", "contra", "otros", "otro", "otra", "otras", "ese", "esa", "esos",
+    "esas", "eso", "ante", "ellos", "ella", "ellas", "fue", "ser", "son", "habia",
+    "había", "han", "ha", "le", "lugar", "fecha", "hora", "hs", "aprox", "aproximadamente",
+    "sria", "cria", "nro", "n", "the", "una", "dos", "tres", "cuatro", "cinco",
+    "manifiesta", "manifesto", "manifestó", "expresa", "expreso", "expresó", "refiere",
+    "denunciante", "informante", "tomo", "tomó", "conocimiento", "parte", "personal",
+    "policial", "mismo", "misma", "cual", "dicho", "dicha", "siendo", "cuenta",
+    "realizo", "realizó", "hecho", "señor", "senor", "señora", "senora", "sr", "sra",
+    "anos", "años", "edad", "vez", "asi", "así", "luego", "cabo", "raiz", "raíz",
+}
+
+_WORD_RE = re.compile(r"[a-záéíóúñ]{4,}", re.IGNORECASE)
+
+
+def _tokens(texto: str) -> list[str]:
+    s = unicodedata.normalize("NFKD", (texto or "").lower())
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    return [w for w in _WORD_RE.findall(s) if w not in _STOPWORDS]
+
+
+def analizar_texto(textos: list[str], top: int = 25) -> dict:
+    """Cuenta términos y pares de términos (bigramas) más frecuentes."""
+    from collections import Counter
+
+    uni = Counter()
+    bi = Counter()
+    for t in textos:
+        toks = _tokens(t)
+        uni.update(toks)
+        for a, b in zip(toks, toks[1:]):
+            bi.update([f"{a} {b}"])
+    return {
+        "palabras": uni.most_common(top),
+        "bigramas": bi.most_common(top),
+    }
+
+
+def hora_a_int(v) -> int | None:
+    """Extrae la hora (0-23) de un texto tipo '09:40' o '18.45'."""
+    if not v:
+        return None
+    m = re.search(r"(\d{1,2})\s*[:.hH]\s*\d{2}", str(v))
+    if not m:
+        m = re.match(r"\s*(\d{1,2})\s*$", str(v))
+    if not m:
+        return None
+    h = int(m.group(1))
+    return h if 0 <= h <= 23 else None
+
+
 def geocodificar(consulta: str) -> dict | None:
     """
     Geocodifica una dirección con Nominatim (OpenStreetMap, gratis).

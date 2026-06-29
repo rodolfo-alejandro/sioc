@@ -245,6 +245,135 @@ def listado():
     )
 
 
+def _aplicar_filtros(q, args):
+    """Aplica los filtros comunes (texto, dependencia, carátula, año, geo, planilla, fechas)."""
+    texto = _clean(args.get("q"))
+    if texto:
+        like = f"%{texto}%"
+        q = q.filter(or_(
+            DunaccRegistro.caratula.ilike(like),
+            DunaccRegistro.lugar.ilike(like),
+            DunaccRegistro.dependencia.ilike(like),
+            DunaccRegistro.informante.ilike(like),
+            DunaccRegistro.acusado.ilike(like),
+            DunaccRegistro.numero_ap.ilike(like),
+            DunaccRegistro.relato.ilike(like),
+        ))
+    dependencia = _clean(args.get("dependencia"))
+    if dependencia:
+        q = q.filter(DunaccRegistro.dependencia.ilike(f"%{dependencia}%"))
+    caratula = _clean(args.get("caratula"))
+    if caratula:
+        q = q.filter(DunaccRegistro.caratula.ilike(f"%{caratula}%"))
+    anio = _clean(args.get("anio"))
+    if anio.isdigit():
+        q = q.filter(DunaccRegistro.anio == int(anio))
+    geo = _clean(args.get("geo"))
+    if geo == "con":
+        q = q.filter(DunaccRegistro.lat.isnot(None), DunaccRegistro.lon.isnot(None))
+    elif geo == "sin":
+        q = q.filter(or_(DunaccRegistro.lat.is_(None), DunaccRegistro.lon.is_(None)))
+    lote = _clean(args.get("lote"))
+    if lote.isdigit():
+        q = q.filter(DunaccRegistro.lote_id == int(lote))
+    d1 = _parse_date(args.get("fecha_desde"))
+    d2 = _parse_date(args.get("fecha_hasta"))
+    if d1:
+        q = q.filter(DunaccRegistro.fecha >= d1)
+    if d2:
+        q = q.filter(DunaccRegistro.fecha <= d2)
+    return q
+
+
+@bp.route("/patrones")
+def patrones():
+    registros = _aplicar_filtros(_base_registros(), request.args).all()
+
+    dow_labels = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+    mes_labels = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+    dow = [0] * 7
+    horas = [0] * 24
+    meses = [0] * 12
+    anios = {}
+    deps = {}
+    cars = {}
+    con_hora = 0
+    con_fecha = 0
+    textos = []
+    for r in registros:
+        if r.fecha:
+            con_fecha += 1
+            dow[r.fecha.weekday()] += 1
+            meses[r.fecha.month - 1] += 1
+        if r.anio:
+            anios[r.anio] = anios.get(r.anio, 0) + 1
+        h = services.hora_a_int(r.hora)
+        if h is not None:
+            horas[h] += 1
+            con_hora += 1
+        if r.dependencia:
+            d = r.dependencia.strip()
+            deps[d] = deps.get(d, 0) + 1
+        if r.caratula:
+            c = r.caratula.strip()
+            cars[c] = cars.get(c, 0) + 1
+        textos.append(f"{r.caratula or ''} {r.relato or ''}")
+
+    deps_orden = sorted(deps.items(), key=lambda x: x[1], reverse=True)
+    cars_orden = sorted(cars.items(), key=lambda x: x[1], reverse=True)
+    anios_orden = sorted(anios.items())
+
+    # Picos
+    dia_pico = dow_labels[dow.index(max(dow))] if con_fecha else "-"
+    hora_pico = f"{horas.index(max(horas)):02d}:00" if con_hora else "-"
+
+    texto_an = services.analizar_texto(textos, top=30)
+
+    # Listas para los filtros
+    anios_filtro = [
+        r[0]
+        for r in db.session.query(DunaccRegistro.anio)
+        .filter(DunaccRegistro.unidad_id == current_user.unidad_id, DunaccRegistro.anio.isnot(None))
+        .distinct()
+        .order_by(DunaccRegistro.anio.desc())
+        .all()
+        if r[0]
+    ]
+    _, all_lotes = _lotes_info()
+
+    charts = {
+        "dow": {"labels": dow_labels, "values": dow},
+        "horas": {"labels": [f"{h:02d}" for h in range(24)], "values": horas},
+        "meses": {"labels": mes_labels, "values": meses},
+        "anios": {"labels": [str(a) for a, _ in anios_orden], "values": [c for _, c in anios_orden]},
+        "deps": {"labels": [d for d, _ in deps_orden[:20]], "values": [c for _, c in deps_orden[:20]]},
+        "cars": {"labels": [c for c, _ in cars_orden[:15]], "values": [n for _, n in cars_orden[:15]]},
+    }
+
+    return render_template(
+        "dunacc/patrones.html",
+        charts=charts,
+        deps_tabla=deps_orden,
+        texto=texto_an,
+        total=len(registros),
+        dia_pico=dia_pico,
+        hora_pico=hora_pico,
+        n_dependencias=len(deps),
+        anios=anios_filtro,
+        lotes=all_lotes,
+        selected={
+            "q": _clean(request.args.get("q")),
+            "dependencia": _clean(request.args.get("dependencia")),
+            "caratula": _clean(request.args.get("caratula")),
+            "anio": _clean(request.args.get("anio")),
+            "geo": _clean(request.args.get("geo")),
+            "lote": _clean(request.args.get("lote")),
+            "fecha_desde": _clean(request.args.get("fecha_desde")),
+            "fecha_hasta": _clean(request.args.get("fecha_hasta")),
+        },
+    )
+
+
 @bp.route("/planillas")
 def planillas():
     lotes_info, _ = _lotes_info()

@@ -1,0 +1,111 @@
+{% extends "layouts/base.html" %}
+{% block title %}DUNACC - Patrones{% endblock %}
+{% block content %}
+<div class="page-header"><h1><i class="bi bi-graph-up"></i> DUNACC — Patrones y análisis</h1></div>
+
+{% with active='patrones' %}{% include "dunacc/_tabs.html" %}{% endwith %}
+
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="GET" class="row g-2">
+            <div class="col-md-3"><label class="form-label form-label-sm mb-1"><i class="bi bi-search"></i> Buscar</label><input class="form-control form-control-sm" name="q" value="{{ selected.q }}" placeholder="Texto en carátula/lugar/relato…"></div>
+            <div class="col-md-3"><label class="form-label form-label-sm mb-1"><i class="bi bi-building"></i> Comisaría / Dependencia</label><input class="form-control form-control-sm" name="dependencia" value="{{ selected.dependencia }}"></div>
+            <div class="col-md-2"><label class="form-label form-label-sm mb-1"><i class="bi bi-card-list"></i> Carátula</label><input class="form-control form-control-sm" name="caratula" value="{{ selected.caratula }}"></div>
+            <div class="col-md-2"><label class="form-label form-label-sm mb-1"><i class="bi bi-calendar3"></i> Año</label><select class="form-select form-select-sm" name="anio"><option value="">Todos</option>{% for a in anios %}<option value="{{ a }}" {{ 'selected' if selected.anio == a|string else '' }}>{{ a }}</option>{% endfor %}</select></div>
+            <div class="col-md-2"><label class="form-label form-label-sm mb-1"><i class="bi bi-file-earmark-excel"></i> Planilla</label><select class="form-select form-select-sm" name="lote"><option value="">Todas</option>{% for l in lotes %}<option value="{{ l.id }}" {{ 'selected' if selected.lote == l.id|string else '' }}>{{ (l.nombre_original or l.nombre_archivo)|truncate(30) }}</option>{% endfor %}</select></div>
+            <div class="col-md-3"><label class="form-label form-label-sm mb-1"><i class="bi bi-calendar3"></i> Fecha desde</label><input class="form-control form-control-sm" type="date" name="fecha_desde" value="{{ selected.fecha_desde }}"></div>
+            <div class="col-md-3"><label class="form-label form-label-sm mb-1"><i class="bi bi-calendar3"></i> Fecha hasta</label><input class="form-control form-control-sm" type="date" name="fecha_hasta" value="{{ selected.fecha_hasta }}"></div>
+            <div class="col-md-6 d-flex gap-2 align-items-end"><button class="btn btn-outline-primary btn-sm" type="submit"><i class="bi bi-funnel"></i> Aplicar</button><a class="btn btn-outline-secondary btn-sm" href="{{ url_for('dunacc.patrones') }}">Limpiar</a></div>
+        </form>
+    </div>
+</div>
+
+<div class="row g-2 mb-3">
+    <div class="col-6 col-md-3"><div class="card text-center"><div class="card-body py-2"><div class="h4 mb-0">{{ total }}</div><small class="text-muted">Registros analizados</small></div></div></div>
+    <div class="col-6 col-md-3"><div class="card text-center"><div class="card-body py-2"><div class="h4 mb-0">{{ n_dependencias }}</div><small class="text-muted">Comisarías/Dependencias</small></div></div></div>
+    <div class="col-6 col-md-3"><div class="card text-center"><div class="card-body py-2"><div class="h5 mb-0 text-primary">{{ dia_pico }}</div><small class="text-muted">Día con más hechos</small></div></div></div>
+    <div class="col-6 col-md-3"><div class="card text-center"><div class="card-body py-2"><div class="h5 mb-0 text-danger">{{ hora_pico }}</div><small class="text-muted">Franja horaria pico</small></div></div></div>
+</div>
+
+<div class="row g-3">
+    <div class="col-md-6"><div class="card"><div class="card-header"><i class="bi bi-calendar-week"></i> Por día de la semana</div><div class="card-body"><div id="ch-dow" style="height:300px;"></div></div></div></div>
+    <div class="col-md-6"><div class="card"><div class="card-header"><i class="bi bi-clock"></i> Por hora del día</div><div class="card-body"><div id="ch-horas" style="height:300px;"></div></div></div></div>
+    <div class="col-md-6"><div class="card"><div class="card-header"><i class="bi bi-calendar3"></i> Por mes</div><div class="card-body"><div id="ch-meses" style="height:300px;"></div></div></div></div>
+    <div class="col-md-6"><div class="card"><div class="card-header"><i class="bi bi-bar-chart"></i> Por año</div><div class="card-body"><div id="ch-anios" style="height:300px;"></div></div></div></div>
+    <div class="col-12"><div class="card"><div class="card-header"><i class="bi bi-building"></i> Por comisaría / dependencia (top 20)</div><div class="card-body"><div id="ch-deps" style="height:380px;"></div></div></div></div>
+    <div class="col-12"><div class="card"><div class="card-header"><i class="bi bi-card-list"></i> Por carátula (top 15)</div><div class="card-body"><div id="ch-cars" style="height:340px;"></div></div></div></div>
+</div>
+
+<div class="row g-3 mt-1">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header"><i class="bi bi-fonts"></i> Términos más frecuentes en los relatos</div>
+            <div class="card-body">
+                <p class="small text-muted">Hacé clic en un término para ver las coincidencias en el listado.</p>
+                {% for term, n in texto.palabras %}
+                <a class="badge bg-light text-dark border text-decoration-none me-1 mb-1" href="{{ url_for('dunacc.listado', q=term) }}" title="Ver registros que mencionan «{{ term }}»">{{ term }} <span class="text-muted">{{ n }}</span></a>
+                {% else %}
+                <p class="text-muted mb-0">Sin datos de texto.</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header"><i class="bi bi-link-45deg"></i> Pares de palabras (coincidencias)</div>
+            <div class="card-body">
+                <p class="small text-muted">Combinaciones de palabras que más se repiten (ayudan a detectar patrones).</p>
+                {% for term, n in texto.bigramas %}
+                <a class="badge bg-light text-dark border text-decoration-none me-1 mb-1" href="{{ url_for('dunacc.listado', q=term) }}" title="Ver registros que mencionan «{{ term }}»">{{ term }} <span class="text-muted">{{ n }}</span></a>
+                {% else %}
+                <p class="text-muted mb-0">Sin datos de texto.</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header"><i class="bi bi-table"></i> Cantidad por comisaría / dependencia</div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead class="table-light"><tr><th>Comisaría / Dependencia</th><th class="text-end">Cantidad</th></tr></thead>
+                <tbody>
+                    {% for d, n in deps_tabla %}
+                    <tr><td><a href="{{ url_for('dunacc.listado', dependencia=d) }}" class="text-decoration-none">{{ d }}</a></td><td class="text-end">{{ n }}</td></tr>
+                    {% else %}
+                    <tr><td colspan="2" class="text-center text-muted py-3">Sin datos.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+(function () {
+    var charts = {{ charts|tojson }};
+    var cfg = { displayModeBar: false, responsive: true };
+    function bar(id, data, color, horizontal) {
+        var el = document.getElementById(id);
+        if (!el || !window.Plotly) return;
+        var trace;
+        if (horizontal) {
+            trace = { type: 'bar', orientation: 'h', y: data.labels.slice().reverse(), x: data.values.slice().reverse(), marker: { color: color } };
+            Plotly.newPlot(id, [trace], { margin: { l: 220, r: 10, t: 10, b: 40 } }, cfg);
+        } else {
+            trace = { type: 'bar', x: data.labels, y: data.values, marker: { color: color } };
+            Plotly.newPlot(id, [trace], { margin: { l: 40, r: 10, t: 10, b: 60 }, xaxis: { type: 'category' } }, cfg);
+        }
+    }
+    bar('ch-dow', charts.dow, '#0d6efd');
+    bar('ch-horas', charts.horas, '#dc3545');
+    bar('ch-meses', charts.meses, '#198754');
+    bar('ch-anios', charts.anios, '#6f42c1');
+    bar('ch-deps', charts.deps, '#0dcaf0', true);
+    bar('ch-cars', charts.cars, '#fd7e14', true);
+})();
+</script>
+{% endblock %}
