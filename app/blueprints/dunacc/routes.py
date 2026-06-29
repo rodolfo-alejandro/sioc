@@ -667,6 +667,9 @@ def coincidencias():
     umbral_pct = min(80, max(5, request.args.get("umbral", type=int) or 18))
     fecha_desde = _clean(request.args.get("fecha_desde"))
     fecha_hasta = _clean(request.args.get("fecha_hasta"))
+    vista = _clean(request.args.get("vista")) or "dunacc"
+    if vista not in {"dunacc", "cco"}:
+        vista = "dunacc"
 
     base = _base_registros()
     d1 = _parse_date(fecha_desde)
@@ -683,9 +686,29 @@ def coincidencias():
         dunacc_regs, cco_regs, dias_tol=dias_tol, umbral=umbral_pct / 100.0
     )
 
+    grupos = {}
+    for p in pares:
+        principal = p["dunacc"] if vista == "dunacc" else p["cco"]
+        relacionado = p["cco"] if vista == "dunacc" else p["dunacc"]
+        grupo = grupos.setdefault(principal.id, {
+            "principal": principal,
+            "items": [],
+            "mejor": p,
+        })
+        grupo["items"].append({"par": p, "relacionado": relacionado})
+        if p["score"] > grupo["mejor"]["score"]:
+            grupo["mejor"] = p
+
+    grupos = sorted(
+        grupos.values(),
+        key=lambda g: (g["mejor"]["score"], len(g["items"])),
+        reverse=True,
+    )
+
     return render_template(
         "dunacc/coincidencias.html",
         pares=pares,
+        grupos=grupos,
         n_dunacc=len(dunacc_regs),
         n_cco=len(cco_regs),
         selected={
@@ -693,6 +716,7 @@ def coincidencias():
             "umbral": umbral_pct,
             "fecha_desde": fecha_desde,
             "fecha_hasta": fecha_hasta,
+            "vista": vista,
         },
     )
 

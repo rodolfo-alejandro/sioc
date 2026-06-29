@@ -1,13 +1,13 @@
 {% extends "layouts/base.html" %}
 {% block title %}Cruce DUNACC / 911 - Coincidencias{% endblock %}
 {% block content %}
-<div class="page-header"><h1><i class="bi bi-link-45deg"></i> Cruce DUNACC / 911 — Coincidencias</h1></div>
+<div class="page-header"><h1><i class="bi bi-link-45deg"></i> Cruce DUNACC / 911 - Coincidencias</h1></div>
 
 {% with active='coincidencias' %}{% include "dunacc/_tabs.html" %}{% endwith %}
 
 <div class="alert alert-info py-2 small">
     <i class="bi bi-info-circle"></i> Cruza <strong>denuncias DUNACC</strong> con <strong>llamadas 911 (CCO)</strong> para detectar posibles
-    <strong>coincidencias del mismo hecho</strong>: fecha cercana + lugar/texto parecido + cercanía geográfica (si hay coordenadas).
+    <strong>coincidencias del mismo hecho</strong>: fecha cercana + lugar/texto parecido + cercania geografica (si hay coordenadas).
     Comparando {{ n_dunacc }} denuncia(s) DUNACC con {{ n_cco }} llamada(s) 911.
 </div>
 
@@ -15,61 +15,131 @@
     <div class="card-body">
         <form method="GET" class="row g-2 align-items-end">
             <div class="col-md-3">
-                <label class="form-label form-label-sm mb-1"><i class="bi bi-calendar-range"></i> Tolerancia de fechas</label>
-                <select class="form-select form-select-sm" name="dias">
-                    {% for d in [0,1,2,3,5,7] %}<option value="{{ d }}" {{ 'selected' if selected.dias == d else '' }}>{{ '± ' ~ d ~ ' día(s)' if d else 'Mismo día' }}</option>{% endfor %}
+                <label class="form-label form-label-sm mb-1"><i class="bi bi-diagram-3"></i> Vista</label>
+                <select class="form-select form-select-sm" name="vista">
+                    <option value="dunacc" {{ 'selected' if selected.vista == 'dunacc' else '' }}>Agrupar por denuncia DUNACC</option>
+                    <option value="cco" {{ 'selected' if selected.vista == 'cco' else '' }}>Agrupar por llamada 911</option>
                 </select>
             </div>
-            <div class="col-md-3">
-                <label class="form-label form-label-sm mb-1"><i class="bi bi-sliders"></i> Similitud mínima</label>
+            <div class="col-md-2">
+                <label class="form-label form-label-sm mb-1"><i class="bi bi-calendar-range"></i> Tolerancia</label>
+                <select class="form-select form-select-sm" name="dias">
+                    {% for d in [0,1,2,3,5,7] %}<option value="{{ d }}" {{ 'selected' if selected.dias == d else '' }}>{{ '+/- ' ~ d ~ ' dia(s)' if d else 'Mismo dia' }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label form-label-sm mb-1"><i class="bi bi-sliders"></i> Similitud minima</label>
                 <select class="form-select form-select-sm" name="umbral">
                     {% for u in [10,15,18,25,35,50] %}<option value="{{ u }}" {{ 'selected' if selected.umbral == u else '' }}>{{ u }}%</option>{% endfor %}
                 </select>
             </div>
             <div class="col-md-2"><label class="form-label form-label-sm mb-1">Fecha desde</label><input class="form-control form-control-sm" type="date" name="fecha_desde" value="{{ selected.fecha_desde }}"></div>
             <div class="col-md-2"><label class="form-label form-label-sm mb-1">Fecha hasta</label><input class="form-control form-control-sm" type="date" name="fecha_hasta" value="{{ selected.fecha_hasta }}"></div>
-            <div class="col-md-2 d-flex gap-2"><button class="btn btn-outline-primary btn-sm" type="submit"><i class="bi bi-search"></i> Buscar</button><a class="btn btn-outline-secondary btn-sm" href="{{ url_for('dunacc.coincidencias') }}">Limpiar</a></div>
+            <div class="col-md-1 d-flex gap-2">
+                <button class="btn btn-outline-primary btn-sm" type="submit" title="Buscar"><i class="bi bi-search"></i></button>
+                <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('dunacc.coincidencias') }}" title="Limpiar"><i class="bi bi-x-lg"></i></a>
+            </div>
         </form>
     </div>
 </div>
 
-<p class="text-muted small">{{ pares|length }} coincidencia(s) probable(s) encontrada(s){% if pares|length == 400 %} (mostrando las primeras 400){% endif %}.</p>
+<p class="text-muted small">
+    {{ pares|length }} coincidencia(s) probable(s) encontrada(s){% if pares|length == 400 %} (mostrando las primeras 400){% endif %};
+    {{ grupos|length }} grupo(s) por {{ 'denuncia DUNACC' if selected.vista == 'dunacc' else 'llamada 911' }}.
+</p>
 
-{% for p in pares %}
+{% for g in grupos %}
+{% set principal = g['principal'] %}
+{% set items = g['items'] %}
+{% set mejor = g['mejor'] %}
+{% set grupo_id = 'grupoCoinc' ~ loop.index %}
 <div class="card mb-2">
-    <div class="card-body py-2">
-        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+    <div class="card-header bg-white">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
             <div>
-                <span class="badge {{ 'bg-success' if p.score >= 50 else ('bg-warning text-dark' if p.score >= 30 else 'bg-secondary') }}">{{ p.score }}% similitud</span>
-                {% if p.dias == 0 %}<span class="badge bg-light text-dark border">Mismo día</span>{% else %}<span class="badge bg-light text-dark border">{{ p.dias }} día(s) de diferencia</span>{% endif %}
-                {% if p.dist is not none %}<span class="badge bg-light text-dark border"><i class="bi bi-geo"></i> {{ p.dist }} m</span>{% endif %}
-            </div>
-            <small class="text-muted">Términos en común: {{ p.comunes|join(', ') }}</small>
-        </div>
-        <div class="row g-2">
-            <div class="col-md-6">
-                <div class="border rounded p-2 h-100">
-                    <div class="mb-1"><span class="badge bg-primary">DUNACC</span> <a href="{{ url_for('dunacc.registro_detalle', registro_id=p.dunacc.id) }}" class="fw-semibold text-decoration-none">{{ p.dunacc.numero_ap or 'Ver' }}</a> <small class="text-muted">{{ p.dunacc.fecha.strftime('%d/%m/%Y') if p.dunacc.fecha else '' }}{% if p.dunacc.hora %} {{ p.dunacc.hora }}{% endif %}</small></div>
-                    <div class="small"><strong>{{ p.dunacc.caratula or '-' }}</strong> · {{ p.dunacc.comisaria_norm or p.dunacc.dependencia or '-' }}</div>
-                    <div class="small text-muted">{{ (p.dunacc.lugar or '-')|truncate(120) }}</div>
-                    <div class="small text-muted fst-italic">{{ (p.dunacc.relato or '')|truncate(160) }}</div>
+                <div class="mb-1">
+                    <span class="badge {{ 'bg-primary' if selected.vista == 'dunacc' else 'bg-info text-dark' }}">{{ 'DUNACC' if selected.vista == 'dunacc' else 'CCO 911' }}</span>
+                    <a href="{{ url_for('dunacc.registro_detalle', registro_id=principal.id) }}" class="fw-semibold text-decoration-none">{{ principal.numero_ap or 'Ver registro' }}</a>
+                    <small class="text-muted">{{ principal.fecha.strftime('%d/%m/%Y') if principal.fecha else '' }}{% if principal.hora %} {{ principal.hora }}{% endif %}</small>
                 </div>
+                <div class="small"><strong>{{ principal.caratula or '-' }}</strong> · {{ principal.comisaria_norm or principal.dependencia or '-' }}</div>
+                <div class="small text-muted">{{ (principal.lugar or '-')|truncate(150) }}</div>
             </div>
-            <div class="col-md-6">
-                <div class="border rounded p-2 h-100">
-                    <div class="mb-1"><span class="badge bg-info text-dark">CCO 911</span> <a href="{{ url_for('dunacc.registro_detalle', registro_id=p.cco.id) }}" class="fw-semibold text-decoration-none">Ver</a> <small class="text-muted">{{ p.cco.fecha.strftime('%d/%m/%Y') if p.cco.fecha else '' }}{% if p.cco.hora %} {{ p.cco.hora }}{% endif %}</small></div>
-                    <div class="small"><strong>{{ p.cco.caratula or '-' }}</strong> · {{ p.cco.comisaria_norm or p.cco.dependencia or '-' }}</div>
-                    <div class="small text-muted">{{ (p.cco.lugar or '-')|truncate(120) }}</div>
-                    <div class="small text-muted fst-italic">{{ (p.cco.relato or '')|truncate(160) }}</div>
-                </div>
+            <div class="text-end">
+                <span class="badge bg-dark">{{ items|length }} coincidencia(s)</span>
+                <span class="badge {{ 'bg-success' if mejor.score >= 50 else ('bg-warning text-dark' if mejor.score >= 30 else 'bg-secondary') }}">mejor {{ mejor.score }}%</span>
+                {% if items|length > 3 %}
+                <button class="btn btn-outline-secondary btn-sm mt-1" type="button" data-bs-toggle="collapse" data-bs-target="#{{ grupo_id }}" aria-expanded="false" aria-controls="{{ grupo_id }}">
+                    Ver todas
+                </button>
+                {% endif %}
             </div>
         </div>
+    </div>
+    <div class="card-body py-2">
+        {% for item in items[:3] %}
+        {% set p = item['par'] %}
+        {% set r = item['relacionado'] %}
+        <div class="border rounded p-2 mb-2">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                <div>
+                    <div class="mb-1">
+                        <span class="badge {{ 'bg-info text-dark' if selected.vista == 'dunacc' else 'bg-primary' }}">{{ 'CCO 911' if selected.vista == 'dunacc' else 'DUNACC' }}</span>
+                        <a href="{{ url_for('dunacc.registro_detalle', registro_id=r.id) }}" class="fw-semibold text-decoration-none">{{ r.numero_ap or 'Ver registro' }}</a>
+                        <small class="text-muted">{{ r.fecha.strftime('%d/%m/%Y') if r.fecha else '' }}{% if r.hora %} {{ r.hora }}{% endif %}</small>
+                    </div>
+                    <div class="small"><strong>{{ r.caratula or '-' }}</strong> · {{ r.comisaria_norm or r.dependencia or '-' }}</div>
+                    <div class="small text-muted">{{ (r.lugar or '-')|truncate(140) }}</div>
+                    <div class="small text-muted fst-italic">{{ (r.relato or '')|truncate(180) }}</div>
+                </div>
+                <div class="text-end">
+                    <span class="badge {{ 'bg-success' if p.score >= 50 else ('bg-warning text-dark' if p.score >= 30 else 'bg-secondary') }}">{{ p.score }}% similitud</span>
+                    {% if p.dias == 0 %}<span class="badge bg-light text-dark border">Mismo dia</span>{% else %}<span class="badge bg-light text-dark border">{{ p.dias }} dia(s)</span>{% endif %}
+                    {% if p.dist is not none %}<span class="badge bg-light text-dark border"><i class="bi bi-geo"></i> {{ p.dist }} m</span>{% endif %}
+                    <div class="small text-muted mt-1">Terminos: {{ p.comunes|join(', ') }}</div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+        {% if items|length > 3 %}
+        <div class="collapse" id="{{ grupo_id }}">
+            {% for item in items[3:] %}
+            {% set p = item['par'] %}
+            {% set r = item['relacionado'] %}
+            <div class="border rounded p-2 mb-2">
+                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                    <div>
+                        <div class="mb-1">
+                            <span class="badge {{ 'bg-info text-dark' if selected.vista == 'dunacc' else 'bg-primary' }}">{{ 'CCO 911' if selected.vista == 'dunacc' else 'DUNACC' }}</span>
+                            <a href="{{ url_for('dunacc.registro_detalle', registro_id=r.id) }}" class="fw-semibold text-decoration-none">{{ r.numero_ap or 'Ver registro' }}</a>
+                            <small class="text-muted">{{ r.fecha.strftime('%d/%m/%Y') if r.fecha else '' }}{% if r.hora %} {{ r.hora }}{% endif %}</small>
+                        </div>
+                        <div class="small"><strong>{{ r.caratula or '-' }}</strong> · {{ r.comisaria_norm or r.dependencia or '-' }}</div>
+                        <div class="small text-muted">{{ (r.lugar or '-')|truncate(140) }}</div>
+                        <div class="small text-muted fst-italic">{{ (r.relato or '')|truncate(180) }}</div>
+                    </div>
+                    <div class="text-end">
+                        <span class="badge {{ 'bg-success' if p.score >= 50 else ('bg-warning text-dark' if p.score >= 30 else 'bg-secondary') }}">{{ p.score }}% similitud</span>
+                        {% if p.dias == 0 %}<span class="badge bg-light text-dark border">Mismo dia</span>{% else %}<span class="badge bg-light text-dark border">{{ p.dias }} dia(s)</span>{% endif %}
+                        {% if p.dist is not none %}<span class="badge bg-light text-dark border"><i class="bi bi-geo"></i> {{ p.dist }} m</span>{% endif %}
+                        <div class="small text-muted mt-1">Terminos: {{ p.comunes|join(', ') }}</div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="text-end">
+            <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#{{ grupo_id }}" aria-expanded="false" aria-controls="{{ grupo_id }}">
+                Mostrar/ocultar coincidencias restantes
+            </button>
+        </div>
+        {% endif %}
     </div>
 </div>
 {% else %}
 <div class="card"><div class="card-body text-center text-muted py-4">
-    No se encontraron coincidencias con los criterios actuales. Probá subir la tolerancia de fechas o bajar la similitud mínima.
-    {% if not n_dunacc or not n_cco %}<br><small>Necesitás tener cargadas planillas de <strong>ambas</strong> fuentes (DUNACC y 911) para cruzar.</small>{% endif %}
+    No se encontraron coincidencias con los criterios actuales. Proba subir la tolerancia de fechas o bajar la similitud minima.
+    {% if not n_dunacc or not n_cco %}<br><small>Necesitas tener cargadas planillas de <strong>ambas</strong> fuentes (DUNACC y 911) para cruzar.</small>{% endif %}
 </div></div>
 {% endfor %}
 {% endblock %}
