@@ -125,6 +125,7 @@ def create_seed_data():
             ('ANALISIS_INTERVENCIONES_IMPORT', 'Importar intervenciones desde CSV'),
             ('ANALISIS_INTERVENCIONES_EXPORT', 'Exportar intervenciones filtradas'),
             ('ANALISIS_INTERVENCIONES_DASHBOARD', 'Ver dashboard de intervenciones'),
+            ('ANALISIS_INTERVENCIONES_MAPA', 'Ver mapa de intervenciones'),
             # Monitor de noticias (media monitoring)
             ('MONITOR_NOTICIAS_VIEW', 'Ver monitor de noticias'),
             ('MONITOR_NOTICIAS_MANAGE', 'Buscar noticias y gestionar temas/fuentes'),
@@ -198,6 +199,7 @@ def create_seed_data():
                           'LLAMADAS_SE_DASHBOARD', 'LLAMADAS_SE_MAPA',
                           'ANALISIS_INTERVENCIONES_VIEW', 'ANALISIS_INTERVENCIONES_IMPORT',
                           'ANALISIS_INTERVENCIONES_EXPORT', 'ANALISIS_INTERVENCIONES_DASHBOARD',
+                          'ANALISIS_INTERVENCIONES_MAPA',
                           'MONITOR_NOTICIAS_VIEW', 'MONITOR_NOTICIAS_MANAGE', 'MONITOR_NOTICIAS_EXPORT',
                           'DUNACC_VIEW', 'DUNACC_MANAGE', 'DUNACC_EXPORT',
                           'CAPACITACIONES_VIEW', 'CAPACITACIONES_ADMIN', 'CAPACITACIONES_ASISTENCIA']
@@ -223,6 +225,7 @@ def create_seed_data():
                 'LLAMADAS_SE_DASHBOARD', 'LLAMADAS_SE_MAPA',
                 'ANALISIS_INTERVENCIONES_VIEW', 'ANALISIS_INTERVENCIONES_IMPORT',
                 'ANALISIS_INTERVENCIONES_EXPORT', 'ANALISIS_INTERVENCIONES_DASHBOARD',
+                'ANALISIS_INTERVENCIONES_MAPA',
                 'MONITOR_NOTICIAS_VIEW', 'MONITOR_NOTICIAS_MANAGE', 'MONITOR_NOTICIAS_EXPORT',
                 'DUNACC_VIEW', 'DUNACC_MANAGE', 'DUNACC_EXPORT',
             ]

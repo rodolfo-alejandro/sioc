@@ -175,6 +175,9 @@
                         <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('analisis_intervenciones.dashboard') }}"><i class="bi bi-bar-chart-line"></i> Dashboard</a></li>
                         <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('analisis_intervenciones.cuadros') }}"><i class="bi bi-grid-3x3-gap"></i> Cuadros</a></li>
                         {% endif %}
+                        {% if current_user.has_permission('ANALISIS_INTERVENCIONES_MAPA') %}
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('analisis_intervenciones.mapa') }}"><i class="bi bi-geo-alt"></i> Mapa</a></li>
+                        {% endif %}
                         {% if current_user.has_permission('ANALISIS_INTERVENCIONES_IMPORT') %}
                         <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('analisis_intervenciones.importar') }}"><i class="bi bi-cloud-upload"></i> Importar CSV</a></li>
                         {% endif %}

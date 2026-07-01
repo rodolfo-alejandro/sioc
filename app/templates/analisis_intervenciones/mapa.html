@@ -1,0 +1,47 @@
+{% extends "layouts/base.html" %}
+{% block title %}Mapa Intervenciones - SIOC{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/analisis_intervenciones.css') }}">
+{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-geo-alt"></i> Mapa de intervenciones</h1>
+  <p class="text-muted">Puntos georreferenciados según filtros (allanamientos y procedimientos).</p>
+</div>
+
+{% include "analisis_intervenciones/_filtros.html" %}
+
+<div class="d-flex gap-2 my-2 flex-wrap align-items-center">
+  {% if can_view %}<a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_intervenciones.listado', **request.args) }}">Listado</a>{% endif %}
+  {% if can_dashboard %}<a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_intervenciones.dashboard', **request.args) }}">Dashboard</a>{% endif %}
+  {% if can_dashboard %}<a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_intervenciones.cuadros', **request.args) }}">Cuadros</a>{% endif %}
+</div>
+
+<div class="alert alert-secondary py-2 small">
+  Total georreferenciado filtrado: <strong>{{ total_filtrado|number_format }}</strong>
+  {% if total_filtrado > 8000 %}<span class="text-muted">(mostrando los primeros 8.000 en el mapa)</span>{% endif %}
+</div>
+
+<div class="card mb-2">
+  <div class="card-body py-2 d-flex align-items-center gap-2 flex-wrap">
+    <strong class="small mb-0">Visualización:</strong>
+    <div class="btn-group btn-group-sm" role="group">
+      <input type="radio" class="btn-check" name="ai-map-mode" id="ai-map-mode-markers" value="markers" checked>
+      <label class="btn btn-outline-primary" for="ai-map-mode-markers">Marcadores</label>
+      <input type="radio" class="btn-check" name="ai-map-mode" id="ai-map-mode-heat" value="heat">
+      <label class="btn btn-outline-primary" for="ai-map-mode-heat">Mapa de calor</label>
+    </div>
+    <span class="small text-muted ms-2"><span class="badge bg-danger">&nbsp;</span> Allanamiento &nbsp; <span class="badge bg-primary">&nbsp;</span> Procedimiento &nbsp; <span class="badge bg-secondary">&nbsp;</span> Otro</span>
+  </div>
+</div>
+
+<div id="ai-map" class="ai-map"></div>
+<textarea id="ai-map-markers" class="d-none">{{ markers_json }}</textarea>
+{% endblock %}
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/analisis_intervenciones_filtros.js') }}"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
+<script src="{{ url_for('static', filename='js/analisis_intervenciones_mapa.js') }}"></script>
+{% endblock %}

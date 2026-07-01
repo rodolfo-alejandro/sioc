@@ -11,7 +11,7 @@ from urllib.parse import urlencode
 import pandas as pd
 from flask import Response, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
-from sqlalchemy import and_, extract, inspect, or_
+from sqlalchemy import and_, extract, inspect, or_, text
 
 from app.blueprints.analisis_intervenciones import bp
 from app.extensions import db
@@ -88,6 +88,10 @@ def _can_dashboard() -> bool:
     return _is_superadmin() or current_user.has_permission("ANALISIS_INTERVENCIONES_DASHBOARD")
 
 
+def _can_map() -> bool:
+    return _is_superadmin() or current_user.has_permission("ANALISIS_INTERVENCIONES_MAPA")
+
+
 def _ensure_schema():
     global _schema_checked
     if _schema_checked:
@@ -96,6 +100,16 @@ def _ensure_schema():
     existing = set(insp.get_table_names())
     if AnalisisIntervencion.__tablename__ not in existing:
         AnalisisIntervencion.__table__.create(bind=db.engine)
+    else:
+        cols = {c["name"] for c in insp.get_columns(AnalisisIntervencion.__tablename__)}
+        if "secuestro_dosis" not in cols:
+            with db.engine.begin() as conn:
+                conn.execute(
+                    text(
+                        "ALTER TABLE analisis_intervenciones "
+                        "ADD COLUMN secuestro_dosis FLOAT NOT NULL DEFAULT 0"
+                    )
+                )
     _schema_checked = True
 
 
@@ -137,6 +151,14 @@ def _parse_float(v: object) -> float | None:
         return float(s)
     except Exception:
         return None
+
+
+def _parse_dosis(row: dict) -> float:
+    for key in ("Dosis", "dosis", "secuestro_dosis", "cant_dosis", "Cant_dosis"):
+        val = _parse_float(row.get(key))
+        if val is not None:
+            return val
+    return 0.0
 
 
 def _parse_date(v: object) -> date | None:
@@ -252,6 +274,7 @@ def _new_cuadros_agg() -> dict:
         "identificados": 0,
         "marihuana": 0.0,
         "cocaina": 0.0,
+        "dosis": 0.0,
         "hojas_coca": 0.0,
         "pesos": 0.0,
         "dolares": 0.0,
@@ -270,6 +293,7 @@ def _cuadros_agg_add_row(agg: dict, row: AnalisisIntervencion) -> None:
     agg["identificados"] += _total_identificados(row)
     agg["marihuana"] += _to_num(row.secuestro_marihuana)
     agg["cocaina"] += _to_num(row.secuestro_cocaina)
+    agg["dosis"] += _to_num(row.secuestro_dosis)
     agg["hojas_coca"] += _to_num(row.hojas_coca)
     agg["pesos"] += _to_num(row.pesos_arg)
     agg["dolares"] += _to_num(row.dolares)
@@ -284,6 +308,7 @@ def _cuadros_agg_finalize(agg: dict) -> dict:
         "identificados": int(agg["identificados"] or 0),
         "marihuana": float(agg["marihuana"] or 0),
         "cocaina": float(agg["cocaina"] or 0),
+        "dosis": float(agg["dosis"] or 0),
         "hojas_coca": float(agg["hojas_coca"] or 0),
         "pesos": float(agg["pesos"] or 0),
         "dolares": float(agg["dolares"] or 0),
@@ -299,6 +324,7 @@ def _cuadros_sum_display_rows(rows: list[dict]) -> dict:
         "identificados",
         "marihuana",
         "cocaina",
+        "dosis",
         "hojas_coca",
         "pesos",
         "dolares",
@@ -447,6 +473,15 @@ def _cuadros_data(rows: list[AnalisisIntervencion]) -> dict:
             "num": True,
         },
         {
+            "label": "Dosis (unid. importe)",
+            "micro": cell(mic, "dosis"),
+            "macro": cell(mac, "dosis"),
+            "cod_ad": cell(cod, "dosis"),
+            "total_mm": cell(mic, "dosis") + cell(mac, "dosis"),
+            "total_mmc": cell(mic, "dosis") + cell(mac, "dosis") + cell(cod, "dosis"),
+            "num": True,
+        },
+        {
             "label": "Hoja de coca (unid. importe)",
             "micro": cell(mic, "hojas_coca"),
             "macro": cell(mac, "hojas_coca"),
@@ -509,6 +544,7 @@ def _cuadros_data(rows: list[AnalisisIntervencion]) -> dict:
         ("Identificados / supeditados", "identificados", False),
         ("Marihuana (unid. importe)", "marihuana", True),
         ("Cocaína (unid. importe)", "cocaina", True),
+        ("Dosis (unid. importe)", "dosis", True),
         ("Hoja de coca (unid. importe)", "hojas_coca", True),
         ("Pesos Arg", "pesos", True),
         ("Dólares", "dolares", True),
@@ -757,6 +793,7 @@ def _import_from_text(text: str) -> dict:
             departamento_operativo=_clean(row.get("departamento_operativo")),
             secuestro_marihuana=_parse_float(row.get("secuestro_marihuana")) or 0,
             secuestro_cocaina=_parse_float(row.get("secuestro_cocaina")) or 0,
+            secuestro_dosis=_parse_dosis(row),
             secuestro_plantas=_parse_float(row.get("secuestro_plantas")) or 0,
             secuestro_plantines=_parse_float(row.get("secuestro_plantines")) or 0,
             secuestro_semillas=_parse_float(row.get("secuestro_semillas")) or 0,
@@ -1211,6 +1248,7 @@ def _serialize_export_row(row: AnalisisIntervencion) -> dict:
         "coordy": row.coordy if row.coordy is not None else "",
         "secuestro_marihuana": row.secuestro_marihuana or 0,
         "secuestro_cocaina": row.secuestro_cocaina or 0,
+        "secuestro_dosis": row.secuestro_dosis or 0,
         "secuestro_plantas": row.secuestro_plantas or 0,
         "secuestro_plantines": row.secuestro_plantines or 0,
         "secuestro_semillas": row.secuestro_semillas or 0,
@@ -1346,6 +1384,7 @@ def listado():
         can_import=_can_import(),
         can_export=_can_export(),
         can_dashboard=_can_dashboard(),
+        can_map=_can_map(),
         total_detenidos=_total_detenidos,
         total_identificados=_total_identificados,
         fmt_int=_fmt_int,
@@ -1372,6 +1411,7 @@ def dashboard():
         filtros=_filter_options(),
         selected=_selected_filters(),
         can_view=_can_view(),
+        can_map=_can_map(),
         fmt_float=_fmt_float,
         fmt_int=_fmt_int,
     )
@@ -1419,8 +1459,58 @@ def cuadros():
         can_import=_can_import(),
         can_export=_can_export(),
         can_dashboard=_can_dashboard(),
+        can_map=_can_map(),
         fmt_float=_fmt_float,
         fmt_int=_fmt_int,
+    )
+
+
+@bp.route("/mapa")
+def mapa():
+    if not _can_map():
+        abort(403)
+    q = _apply_filters(_base_q()).filter(
+        AnalisisIntervencion.coordx.isnot(None),
+        AnalisisIntervencion.coordy.isnot(None),
+    )
+    total_filtrado = q.count()
+    rows = q.order_by(
+        AnalisisIntervencion.interv_fecha.desc(),
+        AnalisisIntervencion.interv_hora.desc(),
+    ).limit(8000).all()
+    markers = []
+    for r in rows:
+        markers.append(
+            {
+                "id": r.id,
+                "fecha": r.interv_fecha.strftime("%d/%m/%Y") if r.interv_fecha else "",
+                "hora": r.interv_hora.strftime("%H:%M") if r.interv_hora else "",
+                "tipo": r.tipo_interv_desc or "",
+                "escala": r.causa_escala or "",
+                "actividad": r.causa_actividad or "",
+                "dinar": r.zona or "",
+                "sinar": r.dep_interviniente or "",
+                "localidad": r.localidad_nombre or "",
+                "barrio": r.barrios_nombre or "",
+                "marihuana": round(_to_num(r.secuestro_marihuana), 2),
+                "cocaina": round(_to_num(r.secuestro_cocaina), 2),
+                "dosis": round(_to_num(r.secuestro_dosis), 2),
+                "detenidos": _total_detenidos(r),
+                "latitud": r.coordx,
+                "longitud": r.coordy,
+                "detalle_url": url_for("analisis_intervenciones.detalle", intervencion_id=r.id),
+            }
+        )
+    return render_template(
+        "analisis_intervenciones/mapa.html",
+        markers_json=json.dumps(markers),
+        total_filtrado=total_filtrado,
+        filtros=_filter_options(),
+        selected=_selected_filters(),
+        can_view=_can_view(),
+        can_dashboard=_can_dashboard(),
+        can_export=_can_export(),
+        can_map=_can_map(),
     )
 
 
@@ -1432,6 +1522,7 @@ def detalle(intervencion_id: int):
     secuestros = [
         ("Marihuana", _to_num(row.secuestro_marihuana)),
         ("Cocaina", _to_num(row.secuestro_cocaina)),
+        ("Dosis", _to_num(row.secuestro_dosis)),
         ("Plantas", _to_num(row.secuestro_plantas)),
         ("Plantines", _to_num(row.secuestro_plantines)),
         ("Semillas", _to_num(row.secuestro_semillas)),
@@ -1454,6 +1545,7 @@ def detalle(intervencion_id: int):
         fmt_float=_fmt_float,
         fmt_int=_fmt_int,
         fecha_hora=_as_datetime(row.interv_fecha, row.interv_hora),
+        can_map=_can_map(),
     )
 
 

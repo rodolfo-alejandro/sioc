@@ -40,9 +40,9 @@ function initUploadForm() {
         fileInput.addEventListener('change', function() {
             const file = this.files[0];
             if (file) {
-                const maxSize = 20 * 1024 * 1024; // 20MB
+                const maxSize = 100 * 1024 * 1024; // 100MB
                 if (file.size > maxSize) {
-                    alert('El archivo es demasiado grande. Máximo: 20MB');
+                    alert('El archivo es demasiado grande. Máximo: 100MB');
                     this.value = '';
                 }
             }

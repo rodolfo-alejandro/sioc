@@ -23,8 +23,8 @@ class Config:
         'pool_recycle': 280,
         'connect_args': {
             'connect_timeout': 30,
-            'read_timeout': 60,
-            'write_timeout': 60,
+            'read_timeout': 300,
+            'write_timeout': 300,
         },
     }
     
@@ -35,7 +35,7 @@ class Config:
     PERMANENT_SESSION_LIFETIME = 3600  # 1 hora
     
     # Uploads
-    MAX_CONTENT_LENGTH = int(os.environ.get('MAX_CONTENT_LENGTH', 20 * 1024 * 1024))  # 20MB
+    MAX_CONTENT_LENGTH = int(os.environ.get('MAX_CONTENT_LENGTH', 100 * 1024 * 1024))  # 100MB (records grandes)
     UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER', 'instance/uploads')
     ALLOWED_EXTENSIONS = {'xlsx', 'xlsm', 'csv'}
     

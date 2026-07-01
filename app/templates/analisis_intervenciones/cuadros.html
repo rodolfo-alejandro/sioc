@@ -14,6 +14,7 @@
 <div class="d-flex gap-2 my-2 flex-wrap">
   {% if can_view %}<a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_intervenciones.listado') }}{% if request.query_string %}?{{ request.query_string.decode('utf-8') }}{% endif %}">Listado</a>{% endif %}
   {% if can_dashboard %}<a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_intervenciones.dashboard') }}{% if request.query_string %}?{{ request.query_string.decode('utf-8') }}{% endif %}">Dashboard</a>{% endif %}
+  {% if can_map %}<a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_intervenciones.mapa') }}{% if request.query_string %}?{{ request.query_string.decode('utf-8') }}{% endif %}">Mapa</a>{% endif %}
   {% if can_import %}<a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_intervenciones.importar') }}">Importar</a>{% endif %}
 </div>
 
@@ -47,6 +48,7 @@
           <th class="text-end">Identif.</th>
           <th class="text-end">Marihuana</th>
           <th class="text-end">Cocaína</th>
+          <th class="text-end">Dosis</th>
           <th class="text-end">Hoja coca</th>
           <th class="text-end">Pesos</th>
           <th class="text-end">Dólares</th>
@@ -63,12 +65,13 @@
           <td class="text-end">{{ fmt_int(r.identificados) }}</td>
           <td class="text-end">{{ fmt_float(r.marihuana) }}</td>
           <td class="text-end">{{ fmt_float(r.cocaina) }}</td>
+          <td class="text-end">{{ fmt_float(r.dosis) }}</td>
           <td class="text-end">{{ fmt_float(r.hojas_coca) }}</td>
           <td class="text-end">{{ fmt_float(r.pesos) }}</td>
           <td class="text-end">{{ fmt_float(r.dolares) }}</td>
         </tr>
         {% else %}
-        <tr><td colspan="11" class="text-center text-muted py-4">Sin datos para los filtros actuales.</td></tr>
+        <tr><td colspan="12" class="text-center text-muted py-4">Sin datos para los filtros actuales.</td></tr>
         {% endfor %}
         {% if tabla %}
         <tr class="table-secondary fw-semibold">
@@ -80,6 +83,7 @@
           <td class="text-end">{{ fmt_int(totales.identificados) }}</td>
           <td class="text-end">{{ fmt_float(totales.marihuana) }}</td>
           <td class="text-end">{{ fmt_float(totales.cocaina) }}</td>
+          <td class="text-end">{{ fmt_float(totales.dosis) }}</td>
           <td class="text-end">{{ fmt_float(totales.hojas_coca) }}</td>
           <td class="text-end">{{ fmt_float(totales.pesos) }}</td>
           <td class="text-end">{{ fmt_float(totales.dolares) }}</td>

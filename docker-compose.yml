@@ -36,7 +36,7 @@ services:
       - FLASK_DEBUG=1
       - DATABASE_URL=mysql+pymysql://sioc_user:sioc_password@mysql:3306/sioc_db
       - SECRET_KEY=dev-secret-key-change-in-production-use-random-key-here
-      - MAX_CONTENT_LENGTH=20971520
+      - MAX_CONTENT_LENGTH=104857600
       - UPLOAD_FOLDER=instance/uploads
       - SESSION_COOKIE_SECURE=False
     depends_on:

@@ -10,6 +10,9 @@
 
 <div class="d-flex gap-2 mb-3">
   <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_intervenciones.listado') }}">Volver</a>
+  {% if can_map and row.coordx is not none and row.coordy is not none %}
+  <a class="btn btn-outline-primary btn-sm" href="{{ url_for('analisis_intervenciones.mapa') }}"><i class="bi bi-geo-alt"></i> Ver en mapa</a>
+  {% endif %}
   {% if row.zona %}
   <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_intervenciones.listado', **{'zona[]': [row.zona]}) }}">Ver mismo DINAR</a>
   {% endif %}

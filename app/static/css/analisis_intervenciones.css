@@ -49,3 +49,11 @@
 .ai-cuadro-total {
   background-color: #fff3e0;
 }
+
+.ai-map {
+  height: 70vh;
+  min-height: 420px;
+  width: 100%;
+  border-radius: 0.375rem;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}

@@ -14,6 +14,7 @@
 <div class="d-flex gap-2 my-2 flex-wrap">
   {% if can_view %}<a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_intervenciones.listado', **request.args) }}">Listado</a>{% endif %}
   <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_intervenciones.cuadros') }}?pestana=zona{% if request.query_string %}&{{ request.query_string.decode('utf-8') }}{% endif %}">Cuadros</a>
+  {% if can_map %}<a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_intervenciones.mapa', **request.args) }}">Mapa</a>{% endif %}
 </div>
 
 <div class="row g-3 mb-3">

@@ -525,15 +525,15 @@
         if (isNaN(ord) || ord < 1) return Promise.resolve();
 
         function runWithRef(ref) {
-            if (!ref) return Promise.resolve();
+        if (!ref) return Promise.resolve();
 
-            // Modo progresivo: si navego más allá del visibleMax, ampliar lo visible sin recargar todo
-            if (isOrdenEnabled() && isOrdenProgressiveEnabled() && ord > ordenVisibleMax) {
-                setOrdenVisibleMax(ord);
+        // Modo progresivo: si navego más allá del visibleMax, ampliar lo visible sin recargar todo
+        if (isOrdenEnabled() && isOrdenProgressiveEnabled() && ord > ordenVisibleMax) {
+            setOrdenVisibleMax(ord);
                 try { addMarkers(lastPuntosCeldas || [], { keepPanel: true, keepView: true, soloRedraw: !!(soloOrdenesVisibles && soloOrdenesVisibles.size) }); } catch (e) {}
-            }
+        }
 
-            return fetch(baseUrl + '/sabana-llamadas/api/mapa/impacto-loc?tipo=' + encodeURIComponent(ref.tipo) + '&impacto_id=' + encodeURIComponent(String(ref.impacto_id)), {
+        return fetch(baseUrl + '/sabana-llamadas/api/mapa/impacto-loc?tipo=' + encodeURIComponent(ref.tipo) + '&impacto_id=' + encodeURIComponent(String(ref.impacto_id)), {
             method: 'GET',
             headers: { 'Accept': 'application/json' }
         }).then(function (r) { return r.json(); }).then(function (data) {
@@ -583,7 +583,7 @@
             // Con varios órdenes en comparación ya encuadramos en drawAzimuthMultiForOrds; no forzar zoom a un solo punto.
             var multiComp = opts.compareOrds && opts.compareOrds.length > 1;
             if (!multiComp) {
-                try { if (ll) map.setView([ll.lat, ll.lng], Math.max(map.getZoom(), 18)); } catch (e) {}
+            try { if (ll) map.setView([ll.lat, ll.lng], Math.max(map.getZoom(), 18)); } catch (e) {}
             }
             // Azimut y radio para este impacto (si vienen del backend)
             try {
@@ -5490,7 +5490,7 @@
         if (gotoSearch) gotoSearch.addEventListener('input', function () { filterGotoOrdenList(this.value); });
         var gotoSelTodas = document.getElementById('goto-orden-sel-todas');
         if (gotoSelTodas) gotoSelTodas.addEventListener('click', function (e) {
-            e.preventDefault();
+                e.preventDefault();
             var list = document.getElementById('goto-orden-list');
             if (!list) return;
             list.querySelectorAll('input.goto-orden-cb').forEach(function (cb) { cb.checked = true; });
@@ -5597,7 +5597,7 @@
             try {
                 if (hadUrlNumeros) {
                     setCheckedValues('filtro-tipos', new Set(['voz']));
-                    updateDdTipos();
+            updateDdTipos();
                 }
             } catch (eUrlT) {}
             try { syncFiltroContextSnapshot(); } catch (eFc) {}
@@ -6018,7 +6018,7 @@
             });
         }
         var btnKmz = document.getElementById('btn-exportar-kmz');
-        if (btnKmz) {
+        if (btnKmz && !btnKmz.disabled) {
             btnKmz.addEventListener('click', function () {
                 btnKmz.disabled = true;
                 try { downloadMapaKmz(); } finally {

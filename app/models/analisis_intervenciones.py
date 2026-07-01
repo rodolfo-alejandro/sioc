@@ -46,6 +46,7 @@ class AnalisisIntervencion(db.Model):
 
     secuestro_marihuana = db.Column(db.Float, nullable=False, default=0)
     secuestro_cocaina = db.Column(db.Float, nullable=False, default=0)
+    secuestro_dosis = db.Column(db.Float, nullable=False, default=0)
     secuestro_plantas = db.Column(db.Float, nullable=False, default=0)
     secuestro_plantines = db.Column(db.Float, nullable=False, default=0)
     secuestro_semillas = db.Column(db.Float, nullable=False, default=0)

@@ -14,6 +14,7 @@
 <div class="d-flex gap-2 my-2 flex-wrap">
   {% if can_import %}<a class="btn btn-outline-primary btn-sm" href="{{ url_for('analisis_intervenciones.importar') }}">Importar CSV</a>{% endif %}
   {% if can_dashboard %}<a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_intervenciones.dashboard', **request.args) }}">Dashboard</a>{% endif %}
+  {% if can_map %}<a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_intervenciones.mapa', **request.args) }}">Mapa</a>{% endif %}
   {% if can_export %}
     <a class="btn btn-outline-success btn-sm" href="{{ url_for('analisis_intervenciones.export_csv', **request.args) }}">CSV</a>
     <a class="btn btn-outline-success btn-sm" href="{{ url_for('analisis_intervenciones.export_xlsx', **request.args) }}">Excel</a>

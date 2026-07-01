@@ -37,7 +37,7 @@ if (-not (Test-Path .env)) {
         @"
 SECRET_KEY=dev-secret-key-change-in-production
 DATABASE_URL=mysql+pymysql://sioc_user:sioc_password@localhost:3306/sioc_db
-MAX_CONTENT_LENGTH=20971520
+MAX_CONTENT_LENGTH=104857600
 UPLOAD_FOLDER=instance/uploads
 SESSION_COOKIE_SECURE=False
 DEFAULT_ADMIN_USERNAME=admin

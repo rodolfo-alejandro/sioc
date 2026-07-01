@@ -12,6 +12,8 @@ from app.models.analisis_puntos import (
     AnalisisPuntoTitular,
 )
 
+BATCH_FLUSH = 3000
+
 
 def _normalize_col_name(col):
     if col is None or (isinstance(col, float) and pd.isna(col)):
@@ -152,6 +154,13 @@ def _payload_has_data(payload):
     return False
 
 
+def _flush_batch(pending: int) -> int:
+    if pending >= BATCH_FLUSH:
+        db.session.commit()
+        return 0
+    return pending
+
+
 def procesar_fuente_voz(fuente: AnalisisPuntoFuente, absolute_path: str):
     if not os.path.exists(absolute_path):
         raise FileNotFoundError("No se encontró el archivo subido para procesar.")
@@ -232,6 +241,7 @@ def procesar_fuente_voz(fuente: AnalisisPuntoFuente, absolute_path: str):
     total_filas_trafico = 0
     count_eventos = 0
     skipped_empty = 0
+    pending = 0
     for _, row in df_traf.iterrows():
         total_filas_trafico += 1
         payload = _payload_from_row(row)
@@ -280,6 +290,7 @@ def procesar_fuente_voz(fuente: AnalisisPuntoFuente, absolute_path: str):
         )
         db.session.add(e)
         count_eventos += 1
+        pending = _flush_batch(pending + 1)
 
     summary = {
         "source_type": "VOZ",
@@ -381,6 +392,7 @@ def procesar_fuente_gprs(fuente: AnalisisPuntoFuente, absolute_path: str):
     total_filas_trafico = 0
     count_eventos = 0
     skipped_empty = 0
+    pending = 0
     for _, row in df_traf.iterrows():
         total_filas_trafico += 1
         payload = _payload_from_row(row)
@@ -447,6 +459,7 @@ def procesar_fuente_gprs(fuente: AnalisisPuntoFuente, absolute_path: str):
         )
         db.session.add(e)
         count_eventos += 1
+        pending = _flush_batch(pending + 1)
 
     fuente.upload_status = "PROCESSED"
     summary = {
