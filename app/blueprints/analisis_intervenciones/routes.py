@@ -112,16 +112,6 @@ def _ensure_schema():
                         "ADD COLUMN secuestro_dosis FLOAT NOT NULL DEFAULT 0"
                     )
                 )
-        with db.engine.begin() as conn:
-            conn.execute(
-                text(
-                    "UPDATE analisis_intervenciones SET secuestro_dosis = "
-                    "(COALESCE(secuestro_marihuana, 0) * :f_mar + COALESCE(secuestro_cocaina, 0) * :f_coc) "
-                    "WHERE secuestro_dosis = 0 "
-                    "AND (COALESCE(secuestro_marihuana, 0) > 0 OR COALESCE(secuestro_cocaina, 0) > 0)"
-                ),
-                {"f_mar": DOSIS_FACTOR_MARIHUANA, "f_coc": DOSIS_FACTOR_COCAINA},
-            )
     _schema_checked = True
 
 

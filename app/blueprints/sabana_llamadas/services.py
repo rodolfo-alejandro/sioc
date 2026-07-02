@@ -5,6 +5,7 @@ import os
 import re
 import json
 import hashlib
+import logging
 import pandas as pd
 from datetime import datetime, date
 from werkzeug.utils import secure_filename
@@ -14,12 +15,16 @@ from app.models.sabana_llamadas import (
     CargaLlamada, ResultadoTraficoGPRS, ResultadoTraficoVOZ, DatoTecnico
 )
 
-BATCH_FLUSH = 3000
+BATCH_FLUSH = int(os.environ.get("IMPORT_BATCH_FLUSH", "500"))
+_log = logging.getLogger(__name__)
 
 
-def _flush_batch(pending: int) -> int:
+def _flush_batch(pending: int, *, label: str = "") -> int:
     if pending >= BATCH_FLUSH:
         db.session.commit()
+        db.session.expunge_all()
+        if label:
+            _log.info("Sabana import %s: lote de %s filas guardado", label, BATCH_FLUSH)
         return 0
     return pending
 
@@ -545,7 +550,7 @@ def procesar_archivo_gprs(file, unidad_id, user_id, sujeto_id=None, operadora=No
             r.extras = json.dumps(extras, ensure_ascii=False, default=str)
             db.session.add(r)
             count_trafico += 1
-            pending = _flush_batch(pending + 1)
+            pending = _flush_batch(pending + 1, label="Sabana-GPRS")
 
         # Datos técnicos: localizar hoja por nombre (por si hay hoja intermedia "Titulares")
         idx_tec = _find_datos_tecnicos_sheet_index(file_path, default_index=1)
@@ -712,7 +717,7 @@ def procesar_archivo_voz(file, unidad_id, user_id, sujeto_id=None, operadora=Non
             r.extras = json.dumps(extras, ensure_ascii=False, default=str)
             db.session.add(r)
             count_trafico += 1
-            pending = _flush_batch(pending + 1)
+            pending = _flush_batch(pending + 1, label="Sabana-GPRS")
 
         idx_tec = _find_datos_tecnicos_sheet_index(file_path, default_index=1)
         df_tec = _read_excel_sheet(file_path, sheet_index=idx_tec, header_row=HEADER_ROW_DATOS_TECNICOS, keywords=['lat', 'long'])

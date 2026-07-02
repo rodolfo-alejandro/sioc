@@ -140,6 +140,49 @@ sudo systemctl restart sioc.service
 
 `104857600` = 100 MB en bytes.
 
+### Carga Record GPRS/VOZ lenta o que “cuelga”
+
+En logs suele verse `WORKER TIMEOUT` o `Perhaps out of memory?`. El servidor tiene poca RAM (swap al 100%).
+
+**Ver logs en vivo mientras subís archivo:**
+
+```bash
+sudo journalctl -u sioc.service -f
+```
+
+**Subir timeout de Gunicorn (recomendado 30 min para Records grandes):**
+
+```bash
+sudo nano /etc/systemd/system/sioc.service
+```
+
+En la línea de `gunicorn`, cambiá `--timeout 600` por `--timeout 1800`, luego:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart sioc.service
+```
+
+**Nginx (si corta antes):** en el `server` de SIOC:
+
+```nginx
+client_max_body_size 100M;
+proxy_read_timeout 1800s;
+proxy_send_timeout 1800s;
+```
+
+```bash
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+**Memoria antes de subir un Record grande:**
+
+```bash
+free -h
+```
+
+Si swap está al 100%, reiniciá el servicio y no abras otras pestañas pesadas mientras importa.
+
 ---
 
 ### Entrar al servidor y clonar/actualizar (desde GitHub)

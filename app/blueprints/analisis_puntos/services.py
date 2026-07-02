@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 from datetime import datetime
 
@@ -12,7 +13,18 @@ from app.models.analisis_puntos import (
     AnalisisPuntoTitular,
 )
 
-BATCH_FLUSH = 3000
+BATCH_FLUSH = int(os.environ.get("IMPORT_BATCH_FLUSH", "500"))
+_log = logging.getLogger(__name__)
+
+
+def _flush_batch(pending: int, *, label: str = "") -> int:
+    if pending >= BATCH_FLUSH:
+        db.session.commit()
+        db.session.expunge_all()
+        if label:
+            _log.info("Import %s: lote de %s filas guardado", label, BATCH_FLUSH)
+        return 0
+    return pending
 
 
 def _normalize_col_name(col):
@@ -154,13 +166,6 @@ def _payload_has_data(payload):
     return False
 
 
-def _flush_batch(pending: int) -> int:
-    if pending >= BATCH_FLUSH:
-        db.session.commit()
-        return 0
-    return pending
-
-
 def procesar_fuente_voz(fuente: AnalisisPuntoFuente, absolute_path: str):
     if not os.path.exists(absolute_path):
         raise FileNotFoundError("No se encontró el archivo subido para procesar.")
@@ -244,6 +249,8 @@ def procesar_fuente_voz(fuente: AnalisisPuntoFuente, absolute_path: str):
     pending = 0
     for _, row in df_traf.iterrows():
         total_filas_trafico += 1
+        if total_filas_trafico % 5000 == 0:
+            _log.info("VOZ: %s filas leídas, %s eventos", total_filas_trafico, count_eventos)
         payload = _payload_from_row(row)
         if not _payload_has_data(payload):
             skipped_empty += 1
@@ -290,7 +297,7 @@ def procesar_fuente_voz(fuente: AnalisisPuntoFuente, absolute_path: str):
         )
         db.session.add(e)
         count_eventos += 1
-        pending = _flush_batch(pending + 1)
+        pending = _flush_batch(pending + 1, label="VOZ")
 
     summary = {
         "source_type": "VOZ",
@@ -320,6 +327,7 @@ def procesar_fuente_gprs(fuente: AnalisisPuntoFuente, absolute_path: str):
     caso_id = fuente.caso_id
     unidad_id = fuente.unidad_id
     user_id = fuente.user_id
+    _log.info("GPRS: iniciando %s (batch=%s)", os.path.basename(absolute_path), BATCH_FLUSH)
 
     # 1) Datos técnicos -> ap_celdas
     sheet_tec = _sheet_name_like(absolute_path, ["datos", "tecnic"], 1)
@@ -395,6 +403,8 @@ def procesar_fuente_gprs(fuente: AnalisisPuntoFuente, absolute_path: str):
     pending = 0
     for _, row in df_traf.iterrows():
         total_filas_trafico += 1
+        if total_filas_trafico % 5000 == 0:
+            _log.info("GPRS: %s filas leídas, %s eventos", total_filas_trafico, count_eventos)
         payload = _payload_from_row(row)
         if not _payload_has_data(payload):
             skipped_empty += 1
@@ -459,7 +469,7 @@ def procesar_fuente_gprs(fuente: AnalisisPuntoFuente, absolute_path: str):
         )
         db.session.add(e)
         count_eventos += 1
-        pending = _flush_batch(pending + 1)
+        pending = _flush_batch(pending + 1, label="GPRS")
 
     fuente.upload_status = "PROCESSED"
     summary = {
