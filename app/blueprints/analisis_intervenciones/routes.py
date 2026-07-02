@@ -19,6 +19,8 @@ from app.models.analisis_intervenciones import AnalisisIntervencion
 
 
 _schema_checked = False
+DOSIS_FACTOR_MARIHUANA = 4
+DOSIS_FACTOR_COCAINA = 8
 _EXPECTED_COLUMNS = {
     "causas_id",
     "causas_interv_id",
@@ -110,6 +112,16 @@ def _ensure_schema():
                         "ADD COLUMN secuestro_dosis FLOAT NOT NULL DEFAULT 0"
                     )
                 )
+        with db.engine.begin() as conn:
+            conn.execute(
+                text(
+                    "UPDATE analisis_intervenciones SET secuestro_dosis = "
+                    "(COALESCE(secuestro_marihuana, 0) * :f_mar + COALESCE(secuestro_cocaina, 0) * :f_coc) "
+                    "WHERE secuestro_dosis = 0 "
+                    "AND (COALESCE(secuestro_marihuana, 0) > 0 OR COALESCE(secuestro_cocaina, 0) > 0)"
+                ),
+                {"f_mar": DOSIS_FACTOR_MARIHUANA, "f_coc": DOSIS_FACTOR_COCAINA},
+            )
     _schema_checked = True
 
 
@@ -153,12 +165,23 @@ def _parse_float(v: object) -> float | None:
         return None
 
 
+def _compute_dosis(marihuana: float | int | None, cocaina: float | int | None) -> float:
+    """1 g marihuana = 4 dosis; 1 g cocaína = 8 dosis."""
+    return float(marihuana or 0) * DOSIS_FACTOR_MARIHUANA + float(cocaina or 0) * DOSIS_FACTOR_COCAINA
+
+
+def _dosis_efectiva(row: AnalisisIntervencion) -> float:
+    return _compute_dosis(row.secuestro_marihuana, row.secuestro_cocaina)
+
+
 def _parse_dosis(row: dict) -> float:
     for key in ("Dosis", "dosis", "secuestro_dosis", "cant_dosis", "Cant_dosis"):
         val = _parse_float(row.get(key))
         if val is not None:
             return val
-    return 0.0
+    mar = _parse_float(row.get("secuestro_marihuana")) or 0
+    coc = _parse_float(row.get("secuestro_cocaina")) or 0
+    return _compute_dosis(mar, coc)
 
 
 def _parse_date(v: object) -> date | None:
@@ -293,7 +316,7 @@ def _cuadros_agg_add_row(agg: dict, row: AnalisisIntervencion) -> None:
     agg["identificados"] += _total_identificados(row)
     agg["marihuana"] += _to_num(row.secuestro_marihuana)
     agg["cocaina"] += _to_num(row.secuestro_cocaina)
-    agg["dosis"] += _to_num(row.secuestro_dosis)
+    agg["dosis"] += _dosis_efectiva(row)
     agg["hojas_coca"] += _to_num(row.hojas_coca)
     agg["pesos"] += _to_num(row.pesos_arg)
     agg["dolares"] += _to_num(row.dolares)
@@ -1248,7 +1271,7 @@ def _serialize_export_row(row: AnalisisIntervencion) -> dict:
         "coordy": row.coordy if row.coordy is not None else "",
         "secuestro_marihuana": row.secuestro_marihuana or 0,
         "secuestro_cocaina": row.secuestro_cocaina or 0,
-        "secuestro_dosis": row.secuestro_dosis or 0,
+        "secuestro_dosis": _dosis_efectiva(row),
         "secuestro_plantas": row.secuestro_plantas or 0,
         "secuestro_plantines": row.secuestro_plantines or 0,
         "secuestro_semillas": row.secuestro_semillas or 0,
@@ -1494,7 +1517,7 @@ def mapa():
                 "barrio": r.barrios_nombre or "",
                 "marihuana": round(_to_num(r.secuestro_marihuana), 2),
                 "cocaina": round(_to_num(r.secuestro_cocaina), 2),
-                "dosis": round(_to_num(r.secuestro_dosis), 2),
+                "dosis": round(_dosis_efectiva(r), 2),
                 "detenidos": _total_detenidos(r),
                 "latitud": r.coordx,
                 "longitud": r.coordy,
@@ -1522,7 +1545,7 @@ def detalle(intervencion_id: int):
     secuestros = [
         ("Marihuana", _to_num(row.secuestro_marihuana)),
         ("Cocaina", _to_num(row.secuestro_cocaina)),
-        ("Dosis", _to_num(row.secuestro_dosis)),
+        ("Dosis", _dosis_efectiva(row)),
         ("Plantas", _to_num(row.secuestro_plantas)),
         ("Plantines", _to_num(row.secuestro_plantines)),
         ("Semillas", _to_num(row.secuestro_semillas)),

@@ -1,9 +1,21 @@
 """
-Script para crear usuario administrador y datos semilla del sistema SIOC
+Script para crear usuario administrador y datos semilla del sistema SIOC.
+
+En producción (systemd), no hace falta en cada deploy: git pull + systemctl restart.
+Ejecutar solo cuando hay permisos/tablas nuevos. Si la app ya corre, preferir:
+  sudo systemctl stop sioc.service
+  python -u create_admin.py --sync-only
+  sudo systemctl start sioc.service
 """
+import argparse
 import os
 import sys
 import time
+
+print("SIOC create_admin: iniciando...", flush=True)
+
+from sqlalchemy import inspect
+
 from app import create_app
 from app.extensions import db
 from app.models.unidad import Unidad
@@ -13,31 +25,84 @@ from app.models.permission import Permission
 from app.config import Config
 
 
+def _log(msg: str) -> None:
+    print(msg, flush=True)
+
+
 def wait_for_db(app, max_attempts=30):
     """Espera a que la base de datos esté disponible"""
-    print("Esperando a que la base de datos esté disponible...")
+    _log("Esperando a que la base de datos esté disponible...")
     for attempt in range(max_attempts):
         try:
             with app.app_context():
                 db.engine.connect()
-            print("✓ Base de datos disponible")
+            _log("✓ Base de datos disponible")
             return True
         except Exception as e:
             if attempt < max_attempts - 1:
-                print(f"  Intento {attempt + 1}/{max_attempts}...")
+                _log(f"  Intento {attempt + 1}/{max_attempts}... ({e})")
                 time.sleep(2)
             else:
-                print(f"✗ No se pudo conectar a la base de datos: {e}")
-                print("\nVerifique que:")
-                print("  1. MySQL esté ejecutándose (docker compose up -d mysql)")
-                print("  2. Las credenciales en .env sean correctas")
-                print("  3. El contenedor MySQL esté saludable (docker compose ps)")
+                _log(f"✗ No se pudo conectar a la base de datos: {e}")
+                _log("\nVerifique que:")
+                _log("  1. MySQL esté ejecutándose (docker compose up -d mysql)")
+                _log("  2. Las credenciales en .env sean correctas")
+                _log("  3. El contenedor MySQL esté saludable (docker compose ps)")
                 return False
     return False
 
 
-def create_seed_data():
+def _sync_role_permissions(role: Role, perm_codes: list[str], permisos_creados: dict) -> int:
+    added = 0
+    for perm_code in perm_codes:
+        perm = permisos_creados.get(perm_code)
+        if perm and perm not in role.permissions:
+            role.permissions.append(perm)
+            added += 1
+    return added
+
+
+ADMIN_PERM_CODES = [
+    'CORE_VIEW', 'DATALAB_UPLOAD', 'DATALAB_VIEW', 'ADMIN_USERS',
+    'INTERVENCIONES_CREATE', 'INTERVENCIONES_VIEW', 'INTERVENCIONES_VIEW_ALL',
+    'CONTROL_COMERCIAL_CREATE', 'CONTROL_COMERCIAL_VIEW',
+    'CONTROL_EDUCATIVO_CREATE', 'CONTROL_EDUCATIVO_VIEW',
+    'ENTREVISTAS_VIEW', 'ENTREVISTAS_CREATE',
+    'GRUPOS_VIEW', 'GRUPOS_CREATE',
+    'RELACIONES_VIEW',
+    'OPERATIVOS_VIEW', 'OPERATIVOS_CREATE',
+    'SABANA_LLAMADAS_VIEW', 'SABANA_LLAMADAS_UPLOAD',
+    'DENUNCIAS_WEB_VIEW', 'DENUNCIAS_WEB_IMPORT', 'DENUNCIAS_WEB_EXPORT',
+    'DENUNCIAS_WEB_DASHBOARD', 'DENUNCIAS_WEB_MAPA',
+    'OFICIOS_JUDICIALES_VIEW', 'OFICIOS_JUDICIALES_UPLOAD', 'OFICIOS_JUDICIALES_EXPORT',
+    'LLAMADAS_SE_VIEW', 'LLAMADAS_SE_IMPORT', 'LLAMADAS_SE_EXPORT',
+    'LLAMADAS_SE_DASHBOARD', 'LLAMADAS_SE_MAPA',
+    'ANALISIS_INTERVENCIONES_VIEW', 'ANALISIS_INTERVENCIONES_IMPORT',
+    'ANALISIS_INTERVENCIONES_EXPORT', 'ANALISIS_INTERVENCIONES_DASHBOARD',
+    'ANALISIS_INTERVENCIONES_MAPA',
+    'MONITOR_NOTICIAS_VIEW', 'MONITOR_NOTICIAS_MANAGE', 'MONITOR_NOTICIAS_EXPORT',
+    'DUNACC_VIEW', 'DUNACC_MANAGE', 'DUNACC_EXPORT',
+    'CAPACITACIONES_VIEW', 'CAPACITACIONES_ADMIN', 'CAPACITACIONES_ASISTENCIA',
+]
+
+ANALISTA_PERM_CODES = [
+    'CORE_VIEW', 'DATALAB_VIEW', 'DATALAB_UPLOAD', 'SABANA_LLAMADAS_VIEW', 'SABANA_LLAMADAS_UPLOAD',
+    'DENUNCIAS_WEB_VIEW', 'DENUNCIAS_WEB_IMPORT', 'DENUNCIAS_WEB_EXPORT',
+    'DENUNCIAS_WEB_DASHBOARD', 'DENUNCIAS_WEB_MAPA',
+    'OFICIOS_JUDICIALES_VIEW', 'OFICIOS_JUDICIALES_UPLOAD', 'OFICIOS_JUDICIALES_EXPORT',
+    'LLAMADAS_SE_VIEW', 'LLAMADAS_SE_IMPORT', 'LLAMADAS_SE_EXPORT',
+    'LLAMADAS_SE_DASHBOARD', 'LLAMADAS_SE_MAPA',
+    'ANALISIS_INTERVENCIONES_VIEW', 'ANALISIS_INTERVENCIONES_IMPORT',
+    'ANALISIS_INTERVENCIONES_EXPORT', 'ANALISIS_INTERVENCIONES_DASHBOARD',
+    'ANALISIS_INTERVENCIONES_MAPA',
+    'MONITOR_NOTICIAS_VIEW', 'MONITOR_NOTICIAS_MANAGE', 'MONITOR_NOTICIAS_EXPORT',
+    'DUNACC_VIEW', 'DUNACC_MANAGE', 'DUNACC_EXPORT',
+]
+
+
+def create_seed_data(*, create_tables: bool = True):
     """Crea los datos semilla del sistema"""
+    _log("SIOC create_admin: cargando aplicación (puede tardar unos segundos)...")
     app = create_app()
     
     # Esperar a que la base de datos esté lista
@@ -45,20 +110,38 @@ def create_seed_data():
         return False
     
     with app.app_context():
-        print("=" * 60)
-        print("SIOC - Creación de datos semilla")
-        print("=" * 60)
+        _log("=" * 60)
+        _log("SIOC - Creación de datos semilla")
+        _log("=" * 60)
         
         # Crear tablas si no existen
-        print("\n[1/6] Creando tablas de base de datos...")
+        _log("\n[1/6] Verificando tablas de base de datos...")
         try:
-            db.create_all()
-            print("✓ Tablas creadas correctamente")
+            existing_tables = set(inspect(db.engine).get_table_names())
+            if existing_tables and not create_tables:
+                _log(f"✓ {len(existing_tables)} tablas existentes (omitido db.create_all)")
+            elif existing_tables:
+                _log(
+                    f"✓ {len(existing_tables)} tablas existentes; "
+                    "db.create_all() solo agrega las que falten..."
+                )
+                db.create_all()
+                _log("✓ Esquema verificado")
+            else:
+                _log("No hay tablas; creando esquema inicial...")
+                db.create_all()
+                _log("✓ Tablas creadas correctamente")
         except Exception as e:
-            print(f"✗ Error al crear tablas: {e}")
-            print("\nDetalles del error:")
+            _log(f"✗ Error al crear tablas: {e}")
+            _log("\nDetalles del error:")
             import traceback
             traceback.print_exc()
+            _log(
+                "\nSi la app systemd sigue corriendo, detenerla y reintentar:\n"
+                "  sudo systemctl stop sioc.service\n"
+                "  python -u create_admin.py\n"
+                "  sudo systemctl start sioc.service"
+            )
             return False
         
         # Crear unidad "Central"
@@ -154,14 +237,26 @@ def create_seed_data():
         db.session.commit()
         print(f"✓ {len(permisos_creados)} permisos creados/verificados")
 
-        # Sincronizar permisos nuevos con rol SUPERADMIN (entornos ya existentes)
-        _sa = Role.query.filter_by(name="SUPERADMIN").first()
-        if _sa:
-            for _p in Permission.query.all():
-                if _p not in _sa.permissions:
-                    _sa.permissions.append(_p)
-            db.session.commit()
-            print("✓ SUPERADMIN actualizado con permisos recientes")
+        # Sincronizar permisos nuevos con roles existentes (entornos ya desplegados)
+        for role_name, perm_codes in (
+            ("SUPERADMIN", [p.code for p in Permission.query.all()]),
+            ("ADMIN", ADMIN_PERM_CODES),
+            ("ANALISTA", ANALISTA_PERM_CODES),
+        ):
+            role = Role.query.filter_by(name=role_name).first()
+            if not role:
+                continue
+            if role_name == "SUPERADMIN":
+                added = 0
+                for perm in Permission.query.all():
+                    if perm not in role.permissions:
+                        role.permissions.append(perm)
+                        added += 1
+            else:
+                added = _sync_role_permissions(role, perm_codes, permisos_creados)
+            if added:
+                db.session.commit()
+                _log(f"✓ Rol '{role_name}' actualizado (+{added} permisos)")
         
         # Crear roles
         print("\n[4/6] Creando roles...")
@@ -183,27 +278,7 @@ def create_seed_data():
         if not admin_role:
             admin_role = Role(name='ADMIN', description='Administrador de unidad')
             db.session.add(admin_role)
-            admin_perms = ['CORE_VIEW', 'DATALAB_UPLOAD', 'DATALAB_VIEW', 'ADMIN_USERS', 
-                          'INTERVENCIONES_CREATE', 'INTERVENCIONES_VIEW', 'INTERVENCIONES_VIEW_ALL',
-                          'CONTROL_COMERCIAL_CREATE', 'CONTROL_COMERCIAL_VIEW',
-                          'CONTROL_EDUCATIVO_CREATE', 'CONTROL_EDUCATIVO_VIEW',
-                          'ENTREVISTAS_VIEW', 'ENTREVISTAS_CREATE',
-                          'GRUPOS_VIEW', 'GRUPOS_CREATE',
-                          'RELACIONES_VIEW',
-                          'OPERATIVOS_VIEW', 'OPERATIVOS_CREATE',
-                          'SABANA_LLAMADAS_VIEW', 'SABANA_LLAMADAS_UPLOAD',
-                          'DENUNCIAS_WEB_VIEW', 'DENUNCIAS_WEB_IMPORT', 'DENUNCIAS_WEB_EXPORT',
-                          'DENUNCIAS_WEB_DASHBOARD', 'DENUNCIAS_WEB_MAPA',
-                          'OFICIOS_JUDICIALES_VIEW', 'OFICIOS_JUDICIALES_UPLOAD', 'OFICIOS_JUDICIALES_EXPORT',
-                          'LLAMADAS_SE_VIEW', 'LLAMADAS_SE_IMPORT', 'LLAMADAS_SE_EXPORT',
-                          'LLAMADAS_SE_DASHBOARD', 'LLAMADAS_SE_MAPA',
-                          'ANALISIS_INTERVENCIONES_VIEW', 'ANALISIS_INTERVENCIONES_IMPORT',
-                          'ANALISIS_INTERVENCIONES_EXPORT', 'ANALISIS_INTERVENCIONES_DASHBOARD',
-                          'ANALISIS_INTERVENCIONES_MAPA',
-                          'MONITOR_NOTICIAS_VIEW', 'MONITOR_NOTICIAS_MANAGE', 'MONITOR_NOTICIAS_EXPORT',
-                          'DUNACC_VIEW', 'DUNACC_MANAGE', 'DUNACC_EXPORT',
-                          'CAPACITACIONES_VIEW', 'CAPACITACIONES_ADMIN', 'CAPACITACIONES_ASISTENCIA']
-            for perm_code in admin_perms:
+            for perm_code in ADMIN_PERM_CODES:
                 if perm_code in permisos_creados:
                     admin_role.permissions.append(permisos_creados[perm_code])
             db.session.commit()
@@ -216,20 +291,7 @@ def create_seed_data():
         if not analista_role:
             analista_role = Role(name='ANALISTA', description='Analista de datos')
             db.session.add(analista_role)
-            analista_perms = [
-                'CORE_VIEW', 'DATALAB_VIEW', 'DATALAB_UPLOAD', 'SABANA_LLAMADAS_VIEW', 'SABANA_LLAMADAS_UPLOAD',
-                'DENUNCIAS_WEB_VIEW', 'DENUNCIAS_WEB_IMPORT', 'DENUNCIAS_WEB_EXPORT',
-                'DENUNCIAS_WEB_DASHBOARD', 'DENUNCIAS_WEB_MAPA',
-                'OFICIOS_JUDICIALES_VIEW', 'OFICIOS_JUDICIALES_UPLOAD', 'OFICIOS_JUDICIALES_EXPORT',
-                'LLAMADAS_SE_VIEW', 'LLAMADAS_SE_IMPORT', 'LLAMADAS_SE_EXPORT',
-                'LLAMADAS_SE_DASHBOARD', 'LLAMADAS_SE_MAPA',
-                'ANALISIS_INTERVENCIONES_VIEW', 'ANALISIS_INTERVENCIONES_IMPORT',
-                'ANALISIS_INTERVENCIONES_EXPORT', 'ANALISIS_INTERVENCIONES_DASHBOARD',
-                'ANALISIS_INTERVENCIONES_MAPA',
-                'MONITOR_NOTICIAS_VIEW', 'MONITOR_NOTICIAS_MANAGE', 'MONITOR_NOTICIAS_EXPORT',
-                'DUNACC_VIEW', 'DUNACC_MANAGE', 'DUNACC_EXPORT',
-            ]
-            for perm_code in analista_perms:
+            for perm_code in ANALISTA_PERM_CODES:
                 if perm_code in permisos_creados:
                     analista_role.permissions.append(permisos_creados[perm_code])
             db.session.commit()
@@ -294,14 +356,21 @@ def create_seed_data():
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="Bootstrap SIOC (tablas, permisos, admin)")
+    parser.add_argument(
+        '--sync-only',
+        action='store_true',
+        help='Solo permisos/usuario; no ejecutar db.create_all() (recomendado en producción)',
+    )
+    args = parser.parse_args()
     try:
-        success = create_seed_data()
+        success = create_seed_data(create_tables=not args.sync_only)
         if success:
             sys.exit(0)
         else:
             sys.exit(1)
     except Exception as e:
-        print(f"\n✗ Error fatal: {e}")
+        _log(f"\n✗ Error fatal: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

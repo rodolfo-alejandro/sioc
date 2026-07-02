@@ -102,7 +102,43 @@ git pull origin main
 sudo systemctl restart sioc.service
 ```
 
-Eso es el flujo que usaron, por ejemplo, tras el commit de vista móvil (`e63064d`) y el de carga manual de oficios (u otro push posterior a `main`). Si `git pull` falla por permisos, ejecutalo con el usuario que sea dueño del repo o con `sudo` según cómo lo tengan montado.
+**Solo si agregaste permisos o tablas nuevos** (no en cada deploy):
+
+```bash
+cd /opt/sioc && source venv/bin/activate
+sudo systemctl stop sioc.service
+python -u create_admin.py --sync-only
+sudo systemctl start sioc.service
+```
+
+`--sync-only` evita `db.create_all()` y reduce bloqueos con MySQL mientras la app corre.
+Usá `python -u` para ver la salida al instante (sin buffer).
+
+Si `git pull` dice `Already up to date`, el código ya está al día; igual podés reiniciar el servicio.
+
+### Subida de archivos grandes (100 MB)
+
+La app lee el límite desde `/opt/sioc/.env`:
+
+```bash
+nano /opt/sioc/.env
+```
+
+Buscá la línea `MAX_CONTENT_LENGTH` (o agregala al final si no existe):
+
+```
+MAX_CONTENT_LENGTH=104857600
+```
+
+En nano: editás, luego **Ctrl+O** (guardar), **Enter**, **Ctrl+X** (salir).
+
+Reiniciá el servicio para que tome el valor:
+
+```bash
+sudo systemctl restart sioc.service
+```
+
+`104857600` = 100 MB en bytes.
 
 ---
 
