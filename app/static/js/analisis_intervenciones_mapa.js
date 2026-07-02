@@ -25,7 +25,8 @@
       "<div><strong>SINAR:</strong> " + (m.sinar || "—") + "</div>" +
       "<div><strong>Localidad / Barrio:</strong> " + (m.localidad || "—") + " / " + (m.barrio || "—") + "</div>" +
       "<hr class='my-1'>" +
-      "<div class='small'>Marihuana: " + (m.marihuana || 0) + " · Cocaína: " + (m.cocaina || 0) + " · Dosis: " + (m.dosis || 0) + "</div>" +
+      "<div class='small'>Marihuana: " + (m.marihuana || 0) + " g · Dosis mar.: " + (m.dosis_marihuana || 0) +
+      " · Cocaína: " + (m.cocaina || 0) + " g · Dosis coca.: " + (m.dosis_cocaina || 0) + "</div>" +
       "<div class='small'>Detenidos: " + (m.detenidos || 0) + "</div>" +
       "<div class='mt-2'><a class='btn btn-sm btn-primary' href='" + (m.detalle_url || "#") + "'>Ver detalle</a></div>";
     return div;

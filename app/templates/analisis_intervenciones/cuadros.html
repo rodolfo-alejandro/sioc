@@ -48,7 +48,8 @@
           <th class="text-end">Identif.</th>
           <th class="text-end">Marihuana</th>
           <th class="text-end">Cocaína</th>
-          <th class="text-end">Dosis</th>
+          <th class="text-end">Dosis mar.</th>
+          <th class="text-end">Dosis coca.</th>
           <th class="text-end">Hoja coca</th>
           <th class="text-end">Pesos</th>
           <th class="text-end">Dólares</th>
@@ -65,13 +66,14 @@
           <td class="text-end">{{ fmt_int(r.identificados) }}</td>
           <td class="text-end">{{ fmt_float(r.marihuana) }}</td>
           <td class="text-end">{{ fmt_float(r.cocaina) }}</td>
-          <td class="text-end">{{ fmt_float(r.dosis) }}</td>
+          <td class="text-end">{{ fmt_float(r.dosis_marihuana) }}</td>
+          <td class="text-end">{{ fmt_float(r.dosis_cocaina) }}</td>
           <td class="text-end">{{ fmt_float(r.hojas_coca) }}</td>
           <td class="text-end">{{ fmt_float(r.pesos) }}</td>
           <td class="text-end">{{ fmt_float(r.dolares) }}</td>
         </tr>
         {% else %}
-        <tr><td colspan="12" class="text-center text-muted py-4">Sin datos para los filtros actuales.</td></tr>
+        <tr><td colspan="13" class="text-center text-muted py-4">Sin datos para los filtros actuales.</td></tr>
         {% endfor %}
         {% if tabla %}
         <tr class="table-secondary fw-semibold">
@@ -83,7 +85,8 @@
           <td class="text-end">{{ fmt_int(totales.identificados) }}</td>
           <td class="text-end">{{ fmt_float(totales.marihuana) }}</td>
           <td class="text-end">{{ fmt_float(totales.cocaina) }}</td>
-          <td class="text-end">{{ fmt_float(totales.dosis) }}</td>
+          <td class="text-end">{{ fmt_float(totales.dosis_marihuana) }}</td>
+          <td class="text-end">{{ fmt_float(totales.dosis_cocaina) }}</td>
           <td class="text-end">{{ fmt_float(totales.hojas_coca) }}</td>
           <td class="text-end">{{ fmt_float(totales.pesos) }}</td>
           <td class="text-end">{{ fmt_float(totales.dolares) }}</td>

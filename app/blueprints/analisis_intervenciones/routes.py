@@ -165,23 +165,20 @@ def _parse_float(v: object) -> float | None:
         return None
 
 
-def _compute_dosis(marihuana: float | int | None, cocaina: float | int | None) -> float:
-    """1 g marihuana = 4 dosis; 1 g cocaína = 8 dosis."""
-    return float(marihuana or 0) * DOSIS_FACTOR_MARIHUANA + float(cocaina or 0) * DOSIS_FACTOR_COCAINA
+def _dosis_marihuana_val(marihuana: float | int | None) -> float:
+    return float(marihuana or 0) * DOSIS_FACTOR_MARIHUANA
 
 
-def _dosis_efectiva(row: AnalisisIntervencion) -> float:
-    return _compute_dosis(row.secuestro_marihuana, row.secuestro_cocaina)
+def _dosis_cocaina_val(cocaina: float | int | None) -> float:
+    return float(cocaina or 0) * DOSIS_FACTOR_COCAINA
 
 
-def _parse_dosis(row: dict) -> float:
-    for key in ("Dosis", "dosis", "secuestro_dosis", "cant_dosis", "Cant_dosis"):
-        val = _parse_float(row.get(key))
-        if val is not None:
-            return val
-    mar = _parse_float(row.get("secuestro_marihuana")) or 0
-    coc = _parse_float(row.get("secuestro_cocaina")) or 0
-    return _compute_dosis(mar, coc)
+def _dosis_marihuana_row(row: AnalisisIntervencion) -> float:
+    return _dosis_marihuana_val(row.secuestro_marihuana)
+
+
+def _dosis_cocaina_row(row: AnalisisIntervencion) -> float:
+    return _dosis_cocaina_val(row.secuestro_cocaina)
 
 
 def _parse_date(v: object) -> date | None:
@@ -297,7 +294,8 @@ def _new_cuadros_agg() -> dict:
         "identificados": 0,
         "marihuana": 0.0,
         "cocaina": 0.0,
-        "dosis": 0.0,
+        "dosis_marihuana": 0.0,
+        "dosis_cocaina": 0.0,
         "hojas_coca": 0.0,
         "pesos": 0.0,
         "dolares": 0.0,
@@ -316,7 +314,8 @@ def _cuadros_agg_add_row(agg: dict, row: AnalisisIntervencion) -> None:
     agg["identificados"] += _total_identificados(row)
     agg["marihuana"] += _to_num(row.secuestro_marihuana)
     agg["cocaina"] += _to_num(row.secuestro_cocaina)
-    agg["dosis"] += _dosis_efectiva(row)
+    agg["dosis_marihuana"] += _dosis_marihuana_row(row)
+    agg["dosis_cocaina"] += _dosis_cocaina_row(row)
     agg["hojas_coca"] += _to_num(row.hojas_coca)
     agg["pesos"] += _to_num(row.pesos_arg)
     agg["dolares"] += _to_num(row.dolares)
@@ -331,7 +330,8 @@ def _cuadros_agg_finalize(agg: dict) -> dict:
         "identificados": int(agg["identificados"] or 0),
         "marihuana": float(agg["marihuana"] or 0),
         "cocaina": float(agg["cocaina"] or 0),
-        "dosis": float(agg["dosis"] or 0),
+        "dosis_marihuana": float(agg["dosis_marihuana"] or 0),
+        "dosis_cocaina": float(agg["dosis_cocaina"] or 0),
         "hojas_coca": float(agg["hojas_coca"] or 0),
         "pesos": float(agg["pesos"] or 0),
         "dolares": float(agg["dolares"] or 0),
@@ -347,7 +347,8 @@ def _cuadros_sum_display_rows(rows: list[dict]) -> dict:
         "identificados",
         "marihuana",
         "cocaina",
-        "dosis",
+        "dosis_marihuana",
+        "dosis_cocaina",
         "hojas_coca",
         "pesos",
         "dolares",
@@ -496,12 +497,21 @@ def _cuadros_data(rows: list[AnalisisIntervencion]) -> dict:
             "num": True,
         },
         {
-            "label": "Dosis (unid. importe)",
-            "micro": cell(mic, "dosis"),
-            "macro": cell(mac, "dosis"),
-            "cod_ad": cell(cod, "dosis"),
-            "total_mm": cell(mic, "dosis") + cell(mac, "dosis"),
-            "total_mmc": cell(mic, "dosis") + cell(mac, "dosis") + cell(cod, "dosis"),
+            "label": "Dosis marihuana (g × 4)",
+            "micro": cell(mic, "dosis_marihuana"),
+            "macro": cell(mac, "dosis_marihuana"),
+            "cod_ad": cell(cod, "dosis_marihuana"),
+            "total_mm": cell(mic, "dosis_marihuana") + cell(mac, "dosis_marihuana"),
+            "total_mmc": cell(mic, "dosis_marihuana") + cell(mac, "dosis_marihuana") + cell(cod, "dosis_marihuana"),
+            "num": True,
+        },
+        {
+            "label": "Dosis cocaína (g × 8)",
+            "micro": cell(mic, "dosis_cocaina"),
+            "macro": cell(mac, "dosis_cocaina"),
+            "cod_ad": cell(cod, "dosis_cocaina"),
+            "total_mm": cell(mic, "dosis_cocaina") + cell(mac, "dosis_cocaina"),
+            "total_mmc": cell(mic, "dosis_cocaina") + cell(mac, "dosis_cocaina") + cell(cod, "dosis_cocaina"),
             "num": True,
         },
         {
@@ -567,7 +577,8 @@ def _cuadros_data(rows: list[AnalisisIntervencion]) -> dict:
         ("Identificados / supeditados", "identificados", False),
         ("Marihuana (unid. importe)", "marihuana", True),
         ("Cocaína (unid. importe)", "cocaina", True),
-        ("Dosis (unid. importe)", "dosis", True),
+        ("Dosis marihuana (g × 4)", "dosis_marihuana", True),
+        ("Dosis cocaína (g × 8)", "dosis_cocaina", True),
         ("Hoja de coca (unid. importe)", "hojas_coca", True),
         ("Pesos Arg", "pesos", True),
         ("Dólares", "dolares", True),
@@ -816,7 +827,7 @@ def _import_from_text(text: str) -> dict:
             departamento_operativo=_clean(row.get("departamento_operativo")),
             secuestro_marihuana=_parse_float(row.get("secuestro_marihuana")) or 0,
             secuestro_cocaina=_parse_float(row.get("secuestro_cocaina")) or 0,
-            secuestro_dosis=_parse_dosis(row),
+            secuestro_dosis=0,
             secuestro_plantas=_parse_float(row.get("secuestro_plantas")) or 0,
             secuestro_plantines=_parse_float(row.get("secuestro_plantines")) or 0,
             secuestro_semillas=_parse_float(row.get("secuestro_semillas")) or 0,
@@ -1271,7 +1282,8 @@ def _serialize_export_row(row: AnalisisIntervencion) -> dict:
         "coordy": row.coordy if row.coordy is not None else "",
         "secuestro_marihuana": row.secuestro_marihuana or 0,
         "secuestro_cocaina": row.secuestro_cocaina or 0,
-        "secuestro_dosis": _dosis_efectiva(row),
+        "dosis_marihuana": _dosis_marihuana_row(row),
+        "dosis_cocaina": _dosis_cocaina_row(row),
         "secuestro_plantas": row.secuestro_plantas or 0,
         "secuestro_plantines": row.secuestro_plantines or 0,
         "secuestro_semillas": row.secuestro_semillas or 0,
@@ -1517,7 +1529,8 @@ def mapa():
                 "barrio": r.barrios_nombre or "",
                 "marihuana": round(_to_num(r.secuestro_marihuana), 2),
                 "cocaina": round(_to_num(r.secuestro_cocaina), 2),
-                "dosis": round(_dosis_efectiva(r), 2),
+                "dosis_marihuana": round(_dosis_marihuana_row(r), 2),
+                "dosis_cocaina": round(_dosis_cocaina_row(r), 2),
                 "detenidos": _total_detenidos(r),
                 "latitud": r.coordx,
                 "longitud": r.coordy,
@@ -1545,7 +1558,8 @@ def detalle(intervencion_id: int):
     secuestros = [
         ("Marihuana", _to_num(row.secuestro_marihuana)),
         ("Cocaina", _to_num(row.secuestro_cocaina)),
-        ("Dosis", _dosis_efectiva(row)),
+        ("Dosis marihuana", _dosis_marihuana_row(row)),
+        ("Dosis cocaina", _dosis_cocaina_row(row)),
         ("Plantas", _to_num(row.secuestro_plantas)),
         ("Plantines", _to_num(row.secuestro_plantines)),
         ("Semillas", _to_num(row.secuestro_semillas)),
