@@ -20,7 +20,8 @@ class ConsignaJudicial(db.Model):
     juzgado = db.Column(db.String(255), nullable=True, index=True)
     juzgado_key = db.Column(db.String(255), nullable=True, index=True)
     caratula = db.Column(db.Text, nullable=True)
-    tipo_medida = db.Column(db.String(191), nullable=True, index=True)
+    # Varias medidas del catálogo se concatenan con " · "; puede superar 191 chars.
+    tipo_medida = db.Column(db.Text, nullable=True)
     tipo_denuncia = db.Column(db.String(40), nullable=True, index=True)  # penal_vif | penal_vg | no_penal_vif_vg | femicidio
     tipo_consigna = db.Column(db.String(30), nullable=True, index=True)  # fija | ambulatoria | personalizada | indeterminada
     consigna_aplica_a = db.Column(db.String(20), nullable=True, index=True)  # victima | acusado | ambos

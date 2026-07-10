@@ -280,9 +280,20 @@ def _ensure_schema():
             db.session.execute(text("ALTER TABLE oficios_consignas MODIFY COLUMN caratula TEXT NULL"))
             db.session.commit()
         tcol = cons_cols.get("tipo_medida")
-        tlen = getattr(tcol.get("type"), "length", None) if tcol else None
-        if tcol and tlen is not None and int(tlen) < 191:
-            db.session.execute(text("ALTER TABLE oficios_consignas MODIFY COLUMN tipo_medida VARCHAR(191) NULL"))
+        ttype = str(tcol.get("type")).lower() if tcol else ""
+        if tcol and ("char" in ttype or "varchar" in ttype):
+            # Varias medidas concatenadas superan VARCHAR(191); pasar a TEXT.
+            # Si había índice sobre VARCHAR, hay que dropearlo antes (TEXT no indexa completo).
+            for idx_name in (
+                "ix_oficios_consignas_tipo_medida",
+                "tipo_medida",
+            ):
+                try:
+                    db.session.execute(text(f"ALTER TABLE oficios_consignas DROP INDEX `{idx_name}`"))
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
+            db.session.execute(text("ALTER TABLE oficios_consignas MODIFY COLUMN tipo_medida TEXT NULL"))
             db.session.commit()
         tel_col = cons_cols.get("telefono_contacto")
         tel_len = getattr(tel_col.get("type"), "length", None) if tel_col else None
