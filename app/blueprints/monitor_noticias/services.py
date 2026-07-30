@@ -312,76 +312,183 @@ def _resolver_periodo(
     return None, None
 
 
+def _es_articulo_salta(path: str) -> bool:
+    return bool(re.search(r"/prensa/noticias/[a-z0-9-]+-\d{5,}/?$", path or "", re.I))
+
+
+def _links_lista_noticias(soup, base_url: str) -> list[str]:
+    """Solo notas del listado principal (evita destacados/sidebar)."""
+    links: list[str] = []
+    contenedores = soup.select("ul.lista-noticias a[href]") if soup else []
+    if not contenedores:
+        contenedores = soup.select("a[href]") if soup else []
+    for a in contenedores:
+        href = (a.get("href") or "").strip()
+        if not href:
+            continue
+        full = urljoin(base_url, href).split("#")[0]
+        if _es_articulo_salta(urlparse(full).path or ""):
+            links.append(full)
+    return links
+
+
+def _parse_articulo_html(art_html: str, link: str, medio: str) -> dict | None:
+    art = BeautifulSoup(art_html, "html.parser")
+    h1 = art.find("h1")
+    titulo = _strip_html(h1.get_text(" ", strip=True) if h1 else "", 600)
+    if not titulo:
+        og = art.find("meta", property="og:title")
+        titulo = _strip_html((og.get("content") if og else "") or "", 600)
+    if not titulo:
+        return None
+    resumen = ""
+    desc = art.find("meta", attrs={"name": "description"}) or art.find(
+        "meta", property="og:description"
+    )
+    if desc and desc.get("content"):
+        resumen = _strip_html(desc.get("content"), 600)
+    if not resumen:
+        p = art.find("p")
+        if p:
+            resumen = _strip_html(p.get_text(" ", strip=True), 600)
+    publicado = None
+    time_el = art.find("time")
+    if time_el:
+        publicado = _parse_fecha_texto(time_el.get("datetime") or time_el.get_text(" ", strip=True))
+    if not publicado:
+        publicado = _parse_fecha_texto(art.get_text(" ", strip=True)[:2500])
+    return {
+        "titulo": titulo,
+        "link": link,
+        "medio": (medio or "")[:200],
+        "resumen": resumen,
+        "publicado_en": publicado,
+    }
+
+
+def scrape_salta_organismo(
+    list_url: str,
+    medio_default: str = "",
+    fecha_desde: date | None = None,
+    fecha_hasta: date | None = None,
+    max_pages: int = 40,
+    max_articulos: int = 250,
+) -> list[dict]:
+    """Listado paginado del Ministerio: .../organismos/.../pagina-N."""
+    if BeautifulSoup is None or requests is None:
+        return []
+    if "/prensa/noticias/organismos/" not in list_url and "ministerio-de-seguridad" in list_url:
+        list_url = "https://www.salta.gob.ar/prensa/noticias/organismos/ministerio-de-seguridad-6"
+    base = list_url.split("?")[0].rstrip("/")
+    base = re.sub(r"/pagina-\d+$", "", base)
+    medio = medio_default or "Ministerio de Seguridad - Salta"
+    salida: list[dict] = []
+    vistos: set[str] = set()
+    pages_sin_nuevos = 0
+
+    for page in range(1, max(1, max_pages) + 1):
+        page_url = base if page == 1 else f"{base}/pagina-{page}"
+        html = _fetch_text(page_url)
+        if not html:
+            break
+        soup = BeautifulSoup(html, "html.parser")
+        page_links = _links_lista_noticias(soup, page_url)
+        nuevos_links: list[str] = []
+        for link in page_links:
+            if link in vistos:
+                continue
+            vistos.add(link)
+            nuevos_links.append(link)
+        if not nuevos_links:
+            pages_sin_nuevos += 1
+            if pages_sin_nuevos >= 2:
+                break
+            continue
+        pages_sin_nuevos = 0
+
+        oldest_en_pagina: date | None = None
+        for i, link in enumerate(nuevos_links):
+            if len(salida) >= max_articulos:
+                return salida
+            if i or page > 1:
+                time.sleep(0.15)
+            art_html = _fetch_text(link)
+            if not art_html:
+                continue
+            item = _parse_articulo_html(art_html, link, medio)
+            if not item:
+                continue
+            pub = item.get("publicado_en")
+            if pub:
+                pd = pub.date() if isinstance(pub, datetime) else pub
+                if oldest_en_pagina is None or pd < oldest_en_pagina:
+                    oldest_en_pagina = pd
+                if fecha_hasta and pd > fecha_hasta:
+                    continue
+                if fecha_desde and pd < fecha_desde:
+                    continue
+            salida.append(item)
+
+        if fecha_desde and oldest_en_pagina and oldest_en_pagina < fecha_desde:
+            break
+        time.sleep(0.1)
+    return salida
+
+
 def scrape_html_site(
     url: str,
     medio_default: str = "",
     max_articulos: int = 40,
+    fecha_desde: date | None = None,
+    fecha_hasta: date | None = None,
+    max_pages: int | None = None,
     extra_list_urls: list[str] | None = None,
 ) -> list[dict]:
-    """
-    Scraper genérico orientado a sitios oficiales de Salta.
-    - Policía/WordPress: enlaces a ?p= o permalinks
-    - salta.gob.ar: enlaces /prensa/noticias/...
-    """
+    """Scraper oficiales. Ministerio Salta usa /pagina-N."""
     if BeautifulSoup is None or requests is None:
         return []
 
-    list_urls = [url] + list(extra_list_urls or [])
-    # Ministerio: también el listado completo del organismo
-    if "salta.gob.ar" in (url or "") and "ministerio-de-seguridad" in (url or ""):
-        list_urls.append(
-            "https://www.salta.gob.ar/prensa/noticias/organismos/ministerio-de-seguridad-6"
+    if "salta.gob.ar" in (url or "") and (
+        "ministerio-de-seguridad" in (url or "") or "/prensa/noticias/organismos/" in (url or "")
+    ):
+        span = 30
+        if fecha_desde:
+            span = max(1, ((fecha_hasta or date.today()) - fecha_desde).days + 1)
+        pages = max_pages or min(60, max(10, span // 4 + 6))
+        return scrape_salta_organismo(
+            url,
+            medio_default=medio_default,
+            fecha_desde=fecha_desde,
+            fecha_hasta=fecha_hasta,
+            max_pages=pages,
+            max_articulos=max(max_articulos, pages * 12),
         )
 
+    html = _fetch_text(url)
+    if not html:
+        return []
+    soup = BeautifulSoup(html, "html.parser")
+    host = (urlparse(url).netloc or "").lower()
     links: list[str] = []
-    for list_url in list_urls:
-        html = _fetch_text(list_url)
-        if not html:
+    for a in soup.find_all("a", href=True):
+        href = (a.get("href") or "").strip()
+        if not href or href.startswith("#"):
             continue
-        soup = BeautifulSoup(html, "html.parser")
-        host = (urlparse(list_url).netloc or "").lower()
-        for a in soup.find_all("a", href=True):
-            href = (a.get("href") or "").strip()
-            if not href or href.startswith("#"):
-                continue
-            full = urljoin(list_url, href)
-            path = urlparse(full).path or ""
-            if "salta.gob.ar" in host:
-                if re.search(r"/prensa/noticias/[a-z0-9-]+-\d{5,}/?$", path, re.I):
-                    links.append(full.split("#")[0])
-            else:
-                if re.search(r"[?&]p=\d+", full) or re.search(r"/\d{4}/\d{2}/", path):
-                    links.append(full.split("#")[0])
-                elif path.count("/") >= 2 and not any(
-                    x in path.lower() for x in ("/cat/", "/tag/", "/page/", "/author/", "wp-")
-                ):
-                    if full.startswith(f"{urlparse(list_url).scheme}://{urlparse(list_url).netloc}"):
-                        titulo_a = _strip_html(a.get_text(" ", strip=True), 200)
-                        if len(titulo_a) >= 25:
-                            links.append(full.split("#")[0])
-        # Páginas extra del listado Ministerio / WordPress
+        full = urljoin(url, href).split("#")[0]
+        path = urlparse(full).path or ""
         if "salta.gob.ar" in host:
-            for p in range(2, 6):
-                page_u = list_url.rstrip("/") + (f"?page={p}" if "?" not in list_url else f"&page={p}")
-                # WordPress-style also
-                page_u2 = _url_con_pagina(list_url, p) if "cat=" in list_url or "paged" in list_url else None
-                for candidate in ([page_u, page_u2] if page_u2 else [page_u]):
-                    if not candidate or candidate == list_url:
-                        continue
-                    html_p = _fetch_text(candidate)
-                    if not html_p:
-                        continue
-                    soup_p = BeautifulSoup(html_p, "html.parser")
-                    found = 0
-                    for a in soup_p.find_all("a", href=True):
-                        full = urljoin(candidate, a["href"]).split("#")[0]
-                        path = urlparse(full).path or ""
-                        if re.search(r"/prensa/noticias/[a-z0-9-]+-\d{5,}/?$", path, re.I):
-                            links.append(full)
-                            found += 1
-                    if found == 0:
-                        break
-                    time.sleep(0.2)
+            if _es_articulo_salta(path):
+                links.append(full)
+        else:
+            if re.search(r"[?&]p=\d+", full) or re.search(r"/\d{4}/\d{2}/", path):
+                links.append(full)
+            elif path.count("/") >= 2 and not any(
+                x in path.lower() for x in ("/cat/", "/tag/", "/page/", "/author/", "wp-")
+            ):
+                if full.startswith(f"{urlparse(url).scheme}://{urlparse(url).netloc}"):
+                    titulo_a = _strip_html(a.get_text(" ", strip=True), 200)
+                    if len(titulo_a) >= 25:
+                        links.append(full)
 
     vistos: set[str] = set()
     unicos: list[str] = []
@@ -393,47 +500,17 @@ def scrape_html_site(
         if len(unicos) >= max_articulos:
             break
 
-    medio = medio_default or (urlparse(url).netloc or "").replace("www.", "")
+    medio = medio_default or host.replace("www.", "")
     salida: list[dict] = []
     for i, link in enumerate(unicos):
         if i:
-            time.sleep(0.25)
+            time.sleep(0.2)
         art_html = _fetch_text(link)
         if not art_html:
             continue
-        art = BeautifulSoup(art_html, "html.parser")
-        h1 = art.find("h1")
-        titulo = _strip_html(h1.get_text(" ", strip=True) if h1 else "", 600)
-        if not titulo:
-            og = art.find("meta", property="og:title")
-            titulo = _strip_html((og.get("content") if og else "") or "", 600)
-        if not titulo:
-            continue
-        resumen = ""
-        desc = art.find("meta", attrs={"name": "description"}) or art.find(
-            "meta", property="og:description"
-        )
-        if desc and desc.get("content"):
-            resumen = _strip_html(desc.get("content"), 600)
-        if not resumen:
-            p = art.find("p")
-            if p:
-                resumen = _strip_html(p.get_text(" ", strip=True), 600)
-        publicado = None
-        time_el = art.find("time")
-        if time_el:
-            publicado = _parse_fecha_texto(time_el.get("datetime") or time_el.get_text(" ", strip=True))
-        if not publicado:
-            publicado = _parse_fecha_texto(art.get_text(" ", strip=True)[:2500])
-        salida.append(
-            {
-                "titulo": titulo,
-                "link": link,
-                "medio": medio[:200],
-                "resumen": resumen,
-                "publicado_en": publicado,
-            }
-        )
+        item = _parse_articulo_html(art_html, link, medio)
+        if item:
+            salida.append(item)
     return salida
 
 
@@ -461,7 +538,7 @@ def recolectar_para_tema(
     # Más páginas si el rango es amplio
     span_days = dias_eff or 7
     max_rss_pages = min(20, max(3, span_days // 5 + 2))
-    max_html = min(80, max(20, span_days))
+    max_html = min(300, max(40, span_days * 2))
 
     for fuente in fuentes:
         if not getattr(fuente, "activo", True):
@@ -483,7 +560,13 @@ def recolectar_para_tema(
             url = (fuente.url or "").strip()
             if not url:
                 continue
-            items = scrape_html_site(url, medio_default=fuente.nombre or "", max_articulos=max_html)
+            items = scrape_html_site(
+                url,
+                medio_default=fuente.nombre or "",
+                max_articulos=max_html,
+                fecha_desde=d1,
+                fecha_hasta=d2,
+            )
             filtrar_claves = True
         else:
             continue

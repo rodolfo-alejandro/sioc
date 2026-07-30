@@ -56,7 +56,7 @@ _FUENTES_OFICIALES_SEED = [
     {
         "nombre": "Ministerio de Seguridad - Salta",
         "tipo": "html_site",
-        "url": "https://www.salta.gob.ar/organismos/ministerio-de-seguridad-6",
+        "url": "https://www.salta.gob.ar/prensa/noticias/organismos/ministerio-de-seguridad-6",
     },
 ]
 
@@ -137,6 +137,11 @@ def _seed_inicial():
             )
         elif fo["tipo"] == "rss" and existe.url and "cat=51" in existe.url:
             # Corrección: DROGAS es cat=40 (51 era DIC)
+            existe.url = fo["url"]
+            existe.tipo = fo["tipo"]
+            existe.activo = True
+        elif fo["tipo"] == "html_site" and existe.url and "/organismos/ministerio-de-seguridad" in (existe.url or "") and "/prensa/noticias/" not in (existe.url or ""):
+            # Usar listado paginado de noticias (no la ficha del organismo)
             existe.url = fo["url"]
             existe.tipo = fo["tipo"]
             existe.activo = True
