@@ -29,6 +29,35 @@ def _flush_batch(pending: int, *, label: str = "") -> int:
     return pending
 
 
+def _col_idx_fuzzy(cols_map, *needles):
+    """Busca columna por nombre aproximado (tolera encoding roto de Número)."""
+    for n in needles:
+        if n in cols_map:
+            return cols_map[n]
+    needles_l = [n.lower() for n in needles]
+    for key, idx in cols_map.items():
+        kl = key.lower()
+        for n in needles_l:
+            if n in kl or kl in n:
+                return idx
+            if "mero" in n and "mero" in kl and "doc" not in n and "doc" not in kl:
+                return idx
+    return None
+
+
+def _get_fuzzy(row, cols_map, names, default=None):
+    idx = _col_idx_fuzzy(cols_map, *names)
+    if idx is None:
+        return default
+    try:
+        val = row.iloc[idx] if hasattr(row, "iloc") else row[idx]
+    except Exception:
+        return default
+    if pd.isna(val):
+        return default
+    return val
+
+
 def _ensure_caso_sujeto_link(caso_id, sujeto_id, unidad_id, user_id):
     """Si hay caso y sujeto en una sábana, asegura fila en ap_caso_sujetos (sin duplicar)."""
     if not caso_id or not sujeto_id:
@@ -179,10 +208,11 @@ def _read_excel_sheet(path, sheet_index, header_row, keywords=None):
         data = rows[1:]
         return pd.DataFrame(data, columns=headers)
     else:
-        # xlsx/xlsm con openpyxl: leer sin encabezados, detectar fila y re-leer
-        df_raw = pd.read_excel(path, sheet_name=sheet_index, header=None)
-        preview_rows = df_raw.values.tolist()
+        # xlsx/xlsm: preview liviano (evita cargar 2 veces hojas GPRS enormes)
+        df_preview = pd.read_excel(path, sheet_name=sheet_index, header=None, nrows=20)
+        preview_rows = df_preview.values.tolist()
         hdr_idx = detect_header_index_rows(preview_rows, header_row, keywords)
+        del df_preview
         return pd.read_excel(path, sheet_name=sheet_index, header=hdr_idx)
 
 
@@ -492,11 +522,24 @@ def procesar_archivo_gprs(file, unidad_id, user_id, sujeto_id=None, operadora=No
     )
     db.session.add(carga)
     db.session.flush()
-    # Rango / criterio (si existe en el archivo)
+    carga_id = carga.id
+    _log.info("Sabana GPRS: iniciando %s carga_id=%s batch=%s", safe_name, carga_id, BATCH_FLUSH)
+
     rd, rh = _extract_rango_desde_hasta(file_path, sheet_index=0)
     carga.rango_desde = rd
     carga.rango_hasta = rh
-    carga.criterio_busqueda = _read_criterio_busqueda_text(file_path, sheet_index=2)
+    # Criterio: última hoja típica; si hay Titulares el índice 2 puede variar
+    try:
+        xls = pd.ExcelFile(file_path)
+        criterio_idx = len(xls.sheet_names) - 1 if xls.sheet_names else 2
+        for i, sn in enumerate(xls.sheet_names):
+            if 'criterio' in str(sn).lower():
+                criterio_idx = i
+                break
+        carga.criterio_busqueda = _read_criterio_busqueda_text(file_path, sheet_index=criterio_idx)
+    except Exception:
+        carga.criterio_busqueda = _read_criterio_busqueda_text(file_path, sheet_index=2)
+    db.session.commit()
 
     total_filas_trafico = 0
     skipped_trafico_empty = 0
@@ -505,109 +548,100 @@ def procesar_archivo_gprs(file, unidad_id, user_id, sujeto_id=None, operadora=No
     pending = 0
 
     try:
-        # Resultado de Tráfico: buscar encabezados por columnas IMEI/IMSI
         df_trafico = _read_excel_sheet(file_path, sheet_index=0, header_row=HEADER_ROW_TRAFICO, keywords=['imei', 'imsi'])
         cols = {_normalize_col_name(c): i for i, c in enumerate(df_trafico.columns)}
+        traf_columns = list(df_trafico.columns)
+        _log.info("Sabana GPRS: tráfico filas=%s cols=%s", len(df_trafico), traf_columns)
 
-        def get(row, names, default=None):
-            for n in names:
-                if n in cols:
-                    val = row.iloc[cols[n]] if cols[n] < len(row) else default
-                    return val if not pd.isna(val) else default
-            return default
-
-        for idx, row in df_trafico.iterrows():
+        for row in df_trafico.itertuples(index=False, name=None):
             total_filas_trafico += 1
-            extras = _row_extras(row)
-            # Saltar filas totalmente vacías (pero no filtrar por IMEI; queremos guardar todo)
-            if not any(v is not None for v in extras.values()):
+            if total_filas_trafico % 5000 == 0:
+                _log.info("Sabana GPRS: %s filas leídas, %s importadas", total_filas_trafico, count_trafico)
+            extras = {}
+            for k, v in zip(traf_columns, row):
+                extras[str(k)] = None if pd.isna(v) else v
+            if not any(v is not None and str(v).strip() != "" for v in extras.values()):
                 skipped_trafico_empty += 1
                 continue
-            r = ResultadoTraficoGPRS(carga_id=carga.id)
-            r.imei = _valor_str(get(row, ['IMEI', 'imei']), 50)
-            r.imsi = _valor_str(get(row, ['IMSI', 'imsi']), 50)
-            r.numero = _valor_str(get(row, [
-                'N�mero',  # como viene en los Excel ejemplo
+            r = ResultadoTraficoGPRS(carga_id=carga_id)
+            r.imei = _valor_str(_get_fuzzy(row, cols, ['IMEI', 'imei']), 50)
+            r.imsi = _valor_str(_get_fuzzy(row, cols, ['IMSI', 'imsi']), 50)
+            r.numero = _valor_str(_get_fuzzy(row, cols, [
                 'Número', 'Numero', 'Nro', 'N°', 'Nº',
                 'MSISDN', 'msisdn',
                 'Teléfono', 'Telefono', 'Teléfonos', 'Telefonos',
                 'Línea', 'Linea', 'Número línea', 'Numero linea',
                 'Número origen', 'Numero origen', 'Origen',
-                'Número destino', 'Numero destino', 'Destino',
             ]), 64)
-            r.fecha = _parse_fecha(get(row, ['Fecha', 'fecha']))
-            r.hora = _normalize_hora_str(get(row, ['Hora', 'hora']), 20)
-            r.duracion = _valor_str(get(row, ['Duracion', 'duracion']), 50)
-            r.ip = _valor_str(get(row, ['IP', 'ip']), 100)
-            r.ip_dual_stack = _valor_str(get(row, ['IP Dual Stack', 'IP Dual Stack']), 100)
-            r.volumen_kb = _valor_str(get(row, ['Volumen (kb)', 'Volumen (kb)']), 50)
-            r.celda = _normalize_celda_id(get(row, ['Celda', 'celda']), 100)
-            r.celda_direccion = _valor_str(get(row, ['Celda direccion', 'Celda direccion']), 255)
-            r.celda_localidad = _valor_str(get(row, ['Celda localidad', 'Celda localidad']), 200)
-            r.celda_provincia = _valor_str(get(row, ['Celda provincia', 'Celda provincia']), 200)
-            r.ip_wifi = _valor_str(get(row, ['IP WIFI', 'IP WIFI']), 100)
-            # Guardar TODAS las columnas originales
+            r.fecha = _parse_fecha(_get_fuzzy(row, cols, ['Fecha', 'fecha']))
+            r.hora = _normalize_hora_str(_get_fuzzy(row, cols, ['Hora', 'hora']), 20)
+            r.duracion = _valor_str(_get_fuzzy(row, cols, ['Duracion', 'Duración', 'duracion']), 50)
+            r.ip = _valor_str(_get_fuzzy(row, cols, ['IP', 'ip']), 100)
+            r.ip_dual_stack = _valor_str(_get_fuzzy(row, cols, ['IP Dual Stack']), 100)
+            r.volumen_kb = _valor_str(_get_fuzzy(row, cols, ['Volumen (kb)', 'Volumen(kb)', 'Volumen KB']), 50)
+            r.celda = _normalize_celda_id(_get_fuzzy(row, cols, ['Celda', 'celda']), 100)
+            r.celda_direccion = _valor_str(_get_fuzzy(row, cols, ['Celda direccion', 'Celda Direccion']), 255)
+            r.celda_localidad = _valor_str(_get_fuzzy(row, cols, ['Celda localidad', 'Celda Localidad']), 200)
+            r.celda_provincia = _valor_str(_get_fuzzy(row, cols, ['Celda provincia', 'Celda Provincia']), 200)
+            r.ip_wifi = _valor_str(_get_fuzzy(row, cols, ['IP WIFI', 'IP Wifi']), 100)
             r.extras = json.dumps(extras, ensure_ascii=False, default=str)
             db.session.add(r)
             count_trafico += 1
             pending = _flush_batch(pending + 1, label="Sabana-GPRS")
 
-        # Datos técnicos: localizar hoja por nombre (por si hay hoja intermedia "Titulares")
+        del df_trafico
+
         idx_tec = _find_datos_tecnicos_sheet_index(file_path, default_index=1)
         df_tec = _read_excel_sheet(file_path, sheet_index=idx_tec, header_row=HEADER_ROW_DATOS_TECNICOS, keywords=['lat', 'long'])
         cols_tec = {_normalize_col_name(c): i for i, c in enumerate(df_tec.columns)}
+        tec_columns = list(df_tec.columns)
 
-        def get_tec(row, names):
-            for n in names:
-                if n in cols_tec:
-                    val = row.iloc[cols_tec[n]] if cols_tec[n] < len(row) else None
-                    return val if not pd.isna(val) else None
-            return None
-
-        for idx, row in df_tec.iterrows():
-            extras = _row_extras(row)
-            rango = get_tec(row, ['Rango de consulta', 'Rango de consulta'])
-            celda_id = get_tec(row, ['CeldaID', 'CeldaID'])
-            lat = get_tec(row, ['Lat', 'lat'])
-            lon = get_tec(row, ['Long', 'long'])
-            # Guardar filas aunque no tengan coords (se filtran en el mapa), pero saltar filas vacías.
-            if not any(v is not None for v in extras.values()):
+        for row in df_tec.itertuples(index=False, name=None):
+            extras = {}
+            for k, v in zip(tec_columns, row):
+                extras[str(k)] = None if pd.isna(v) else v
+            if not any(v is not None and str(v).strip() != "" for v in extras.values()):
                 continue
+            celda_id = _get_fuzzy(row, cols_tec, ['CeldaID', 'Celda ID'])
+            lat = _get_fuzzy(row, cols_tec, ['Lat', 'lat'])
+            lon = _get_fuzzy(row, cols_tec, ['Long', 'long'])
             celda_norm = _normalize_celda_id(celda_id, 100)
             dt_lat = _parse_float(lat)
             dt_lon = _parse_float(lon)
 
-            # Upsert lógico: si ya existe un técnico para esa celda en ESTA carga y le faltan coords,
-            # completar sin duplicar (evita basura y mismatches).
             dt = None
             try:
                 if celda_norm and (dt_lat is not None or dt_lon is not None):
-                    dt = DatoTecnico.query.filter_by(carga_id=carga.id, tipo='gprs', celda_id=celda_norm).filter(
+                    dt = DatoTecnico.query.filter_by(carga_id=carga_id, tipo='gprs', celda_id=celda_norm).filter(
                         (DatoTecnico.lat.is_(None)) | (DatoTecnico.long.is_(None))
                     ).order_by(DatoTecnico.id.asc()).first()
             except Exception:
                 dt = None
             if not dt:
-                dt = DatoTecnico(carga_id=carga.id, tipo='gprs')
+                dt = DatoTecnico(carga_id=carga_id, tipo='gprs')
                 dt.celda_id = celda_norm
-            dt.rango_consulta = _valor_str(rango, 100)
-            dt.celda_direccion = _valor_str(get_tec(row, ['Celda Direccion', 'Celda Direccion']), 255)
-            dt.celda_loc = _valor_str(get_tec(row, ['Celda Loc', 'Celda Loc']), 200)
-            dt.celda_prov = _valor_str(get_tec(row, ['Celda Prov', 'Celda Prov']), 200)
-            dt.rad_cob_km = _valor_str(get_tec(row, ['Rad Cob (KM)', 'Rad Cob (KM)']), 50)
-            dt.azimuth = _valor_str(get_tec(row, ['Azimuth', 'azimuth']), 50)
+            dt.rango_consulta = _valor_str(_get_fuzzy(row, cols_tec, ['Rango de consulta']), 100)
+            dt.celda_direccion = _valor_str(_get_fuzzy(row, cols_tec, ['Celda Direccion']), 255)
+            dt.celda_loc = _valor_str(_get_fuzzy(row, cols_tec, ['Celda Loc']), 200)
+            dt.celda_prov = _valor_str(_get_fuzzy(row, cols_tec, ['Celda Prov']), 200)
+            dt.rad_cob_km = _valor_str(_get_fuzzy(row, cols_tec, ['Rad Cob (KM)']), 50)
+            dt.azimuth = _valor_str(_get_fuzzy(row, cols_tec, ['Azimuth', 'azimuth']), 50)
             if dt.lat is None and dt_lat is not None:
                 dt.lat = dt_lat
             if dt.long is None and dt_lon is not None:
                 dt.long = dt_lon
-            dt.a_horiz = _valor_str(get_tec(row, ['A. Horiz', 'A. Horiz']), 50)
-            dt.a_vert = _valor_str(get_tec(row, ['A. Vert', 'A. Vert']), 50)
-            # Preferir no pisar extras ya existentes si solo estamos completando coords
+            dt.a_horiz = _valor_str(_get_fuzzy(row, cols_tec, ['A. Horiz']), 50)
+            dt.a_vert = _valor_str(_get_fuzzy(row, cols_tec, ['A. Vert']), 50)
             if not dt.extras:
                 dt.extras = json.dumps(extras, ensure_ascii=False, default=str)
             db.session.add(dt)
             count_tecnicos += 1
 
+        del df_tec
+
+        carga = db.session.get(CargaLlamada, carga_id)
+        if carga is None:
+            raise RuntimeError(f"No se encontró la carga {carga_id} tras el import")
         carga.processing_detail = json.dumps({
             'source_type': 'GPRS',
             'filas_trafico_leidas': int(total_filas_trafico),
@@ -617,17 +651,30 @@ def procesar_archivo_gprs(file, unidad_id, user_id, sujeto_id=None, operadora=No
             'datos_tecnicos_importados': int(count_tecnicos),
         }, ensure_ascii=False)
         _ensure_caso_sujeto_link(caso_id, sujeto_id, unidad_id, user_id)
+        db.session.add(carga)
         db.session.commit()
-        audit_log('SABANA_GPRS_UPLOAD', f'Carga GPRS {carga.id}: {count_trafico} tráfico, {count_tecnicos} datos técnicos', user_id=user_id)
+        audit_log('SABANA_GPRS_UPLOAD', f'Carga GPRS {carga_id}: {count_trafico} tráfico, {count_tecnicos} datos técnicos', user_id=user_id)
+        _log.info("Sabana GPRS: listo carga=%s trafico=%s tecnicos=%s", carga_id, count_trafico, count_tecnicos)
         return carga, count_trafico, count_tecnicos, None
     except Exception as e:
+        _log.exception("Sabana GPRS falló carga_id=%s: %s", carga_id, e)
         db.session.rollback()
-        if os.path.exists(file_path):
-            try:
-                os.remove(file_path)
-            except Exception:
-                pass
-        return None, 0, 0, str(e)
+        # Marcar carga existente (lotes ya commiteados) como error en lugar de borrar a ciegas
+        try:
+            carga = db.session.get(CargaLlamada, carga_id)
+            if carga:
+                carga.processing_detail = json.dumps({
+                    'source_type': 'GPRS',
+                    'error': str(e),
+                    'filas_trafico_leidas': int(total_filas_trafico),
+                    'eventos_importados': int(count_trafico),
+                    'datos_tecnicos_importados': int(count_tecnicos),
+                }, ensure_ascii=False)
+                db.session.add(carga)
+                db.session.commit()
+        except Exception:
+            db.session.rollback()
+        return None, count_trafico, count_tecnicos, str(e)
 
 
 def procesar_archivo_voz(file, unidad_id, user_id, sujeto_id=None, operadora=None, caso_id=None):
@@ -658,10 +705,23 @@ def procesar_archivo_voz(file, unidad_id, user_id, sujeto_id=None, operadora=Non
     )
     db.session.add(carga)
     db.session.flush()
+    carga_id = carga.id
+    _log.info("Sabana VOZ: iniciando %s carga_id=%s batch=%s", safe_name, carga_id, BATCH_FLUSH)
+
     rd, rh = _extract_rango_desde_hasta(file_path, sheet_index=0)
     carga.rango_desde = rd
     carga.rango_hasta = rh
-    carga.criterio_busqueda = _read_criterio_busqueda_text(file_path, sheet_index=2)
+    try:
+        xls = pd.ExcelFile(file_path)
+        criterio_idx = len(xls.sheet_names) - 1 if xls.sheet_names else 2
+        for i, sn in enumerate(xls.sheet_names):
+            if 'criterio' in str(sn).lower():
+                criterio_idx = i
+                break
+        carga.criterio_busqueda = _read_criterio_busqueda_text(file_path, sheet_index=criterio_idx)
+    except Exception:
+        carga.criterio_busqueda = _read_criterio_busqueda_text(file_path, sheet_index=2)
+    db.session.commit()
 
     total_filas_trafico = 0
     skipped_trafico_empty = 0
@@ -672,71 +732,64 @@ def procesar_archivo_voz(file, unidad_id, user_id, sujeto_id=None, operadora=Non
     try:
         df_trafico = _read_excel_sheet(file_path, sheet_index=0, header_row=HEADER_ROW_TRAFICO, keywords=['imei', 'imsi'])
         cols = {_normalize_col_name(c): i for i, c in enumerate(df_trafico.columns)}
+        traf_columns = list(df_trafico.columns)
 
-        def get(row, names):
-            for n in names:
-                if n in cols:
-                    val = row.iloc[cols[n]] if cols[n] < len(row) else None
-                    return val if not pd.isna(val) else None
-            return None
-
-        for idx, row in df_trafico.iterrows():
+        for row in df_trafico.itertuples(index=False, name=None):
             total_filas_trafico += 1
-            extras = _row_extras(row)
-            if not any(v is not None for v in extras.values()):
+            if total_filas_trafico % 5000 == 0:
+                _log.info("Sabana VOZ: %s filas leídas, %s importadas", total_filas_trafico, count_trafico)
+            extras = {}
+            for k, v in zip(traf_columns, row):
+                extras[str(k)] = None if pd.isna(v) else v
+            if not any(v is not None and str(v).strip() != "" for v in extras.values()):
                 skipped_trafico_empty += 1
                 continue
-            r = ResultadoTraficoVOZ(carga_id=carga.id)
-            r.imei = _valor_str(get(row, ['IMEI', 'imei']), 50)
-            r.imsi = _valor_str(get(row, ['IMSI', 'imsi']), 50)
-            r.numero = _valor_str(get(row, [
-                'N�mero',
+            r = ResultadoTraficoVOZ(carga_id=carga_id)
+            r.imei = _valor_str(_get_fuzzy(row, cols, ['IMEI', 'imei']), 50)
+            r.imsi = _valor_str(_get_fuzzy(row, cols, ['IMSI', 'imsi']), 50)
+            r.numero = _valor_str(_get_fuzzy(row, cols, [
                 'Número', 'Numero', 'Nro', 'N°', 'Nº',
                 'MSISDN', 'msisdn',
                 'Teléfono', 'Telefono', 'Telefonos', 'Teléfonos',
                 'Línea', 'Linea',
             ]), 64)
-            r.fecha = _parse_fecha(get(row, ['Fecha', 'fecha']))
-            r.hora = _normalize_hora_str(get(row, ['Hora', 'hora']), 20)
-            r.tipo = _valor_str(get(row, ['Tipo', 'tipo']), 50)
-            r.duracion = _valor_str(get(row, ['Duracion', 'duracion']), 50)
-            # En distintos reportes el "número" puede venir con nombres distintos.
-            r.otro = _valor_str(get(row, [
+            r.fecha = _parse_fecha(_get_fuzzy(row, cols, ['Fecha', 'fecha']))
+            r.hora = _normalize_hora_str(_get_fuzzy(row, cols, ['Hora', 'hora']), 20)
+            r.tipo = _valor_str(_get_fuzzy(row, cols, ['Tipo', 'tipo']), 50)
+            r.duracion = _valor_str(_get_fuzzy(row, cols, ['Duracion', 'Duración', 'duracion']), 50)
+            r.otro = _valor_str(_get_fuzzy(row, cols, [
                 'Otro', 'otro',
-                'Número', 'Numero', 'Nro', 'N°', 'Nº',
                 'Número destino', 'Numero destino', 'Destino',
                 'B Number', 'B-Number', 'B_Number',
                 'MSISDN', 'msisdn',
-                'Teléfono', 'Telefono', 'Telefonos', 'Teléfonos',
-                'Llamado', 'Llamante', 'Número llamado', 'Numero llamado',
+                'Teléfono', 'Telefono',
+                'Llamado', 'Llamante',
             ]), 255)
-            r.celda_id = _normalize_celda_id(get(row, ['Celda ID', 'Celda ID']), 100)
-            r.celda_calle_altura = _valor_str(get(row, ['Celda Calle Altura', 'Celda Calle Altura']), 255)
-            r.celda_localidad = _valor_str(get(row, ['Celda Localidad', 'Celda localidad']), 200)
-            r.celda_provincia = _valor_str(get(row, ['Celda Provincia ', 'Celda Provincia', 'Celda provincia']), 200)
+            r.celda_id = _normalize_celda_id(_get_fuzzy(row, cols, ['Celda ID', 'Celda', 'CeldaID']), 100)
+            r.celda_calle_altura = _valor_str(_get_fuzzy(row, cols, ['Celda Calle Altura']), 255)
+            r.celda_localidad = _valor_str(_get_fuzzy(row, cols, ['Celda Localidad', 'Celda localidad']), 200)
+            r.celda_provincia = _valor_str(_get_fuzzy(row, cols, ['Celda Provincia', 'Celda provincia']), 200)
             r.extras = json.dumps(extras, ensure_ascii=False, default=str)
             db.session.add(r)
             count_trafico += 1
-            pending = _flush_batch(pending + 1, label="Sabana-GPRS")
+            pending = _flush_batch(pending + 1, label="Sabana-VOZ")
+
+        del df_trafico
 
         idx_tec = _find_datos_tecnicos_sheet_index(file_path, default_index=1)
         df_tec = _read_excel_sheet(file_path, sheet_index=idx_tec, header_row=HEADER_ROW_DATOS_TECNICOS, keywords=['lat', 'long'])
         cols_tec = {_normalize_col_name(c): i for i, c in enumerate(df_tec.columns)}
+        tec_columns = list(df_tec.columns)
 
-        def get_tec(row, names):
-            for n in names:
-                if n in cols_tec:
-                    val = row.iloc[cols_tec[n]] if cols_tec[n] < len(row) else None
-                    return val if not pd.isna(val) else None
-            return None
-
-        for idx, row in df_tec.iterrows():
-            extras = _row_extras(row)
-            celda_id = get_tec(row, ['CeldaID', 'CeldaID'])
-            lat = get_tec(row, ['Lat', 'lat'])
-            lon = get_tec(row, ['Long', 'long'])
-            if not any(v is not None for v in extras.values()):
+        for row in df_tec.itertuples(index=False, name=None):
+            extras = {}
+            for k, v in zip(tec_columns, row):
+                extras[str(k)] = None if pd.isna(v) else v
+            if not any(v is not None and str(v).strip() != "" for v in extras.values()):
                 continue
+            celda_id = _get_fuzzy(row, cols_tec, ['CeldaID', 'Celda ID'])
+            lat = _get_fuzzy(row, cols_tec, ['Lat', 'lat'])
+            lon = _get_fuzzy(row, cols_tec, ['Long', 'long'])
             celda_norm = _normalize_celda_id(celda_id, 100)
             dt_lat = _parse_float(lat)
             dt_lon = _parse_float(lon)
@@ -744,31 +797,36 @@ def procesar_archivo_voz(file, unidad_id, user_id, sujeto_id=None, operadora=Non
             dt = None
             try:
                 if celda_norm and (dt_lat is not None or dt_lon is not None):
-                    dt = DatoTecnico.query.filter_by(carga_id=carga.id, tipo='voz', celda_id=celda_norm).filter(
+                    dt = DatoTecnico.query.filter_by(carga_id=carga_id, tipo='voz', celda_id=celda_norm).filter(
                         (DatoTecnico.lat.is_(None)) | (DatoTecnico.long.is_(None))
                     ).order_by(DatoTecnico.id.asc()).first()
             except Exception:
                 dt = None
             if not dt:
-                dt = DatoTecnico(carga_id=carga.id, tipo='voz')
+                dt = DatoTecnico(carga_id=carga_id, tipo='voz')
                 dt.celda_id = celda_norm
-            dt.rango_consulta = _valor_str(get_tec(row, ['Rango de consulta', 'Rango de consulta']), 100)
-            dt.celda_direccion = _valor_str(get_tec(row, ['Celda Direccion', 'Celda Direccion']), 255)
-            dt.celda_loc = _valor_str(get_tec(row, ['Celda Loc', 'Celda Loc']), 200)
-            dt.celda_prov = _valor_str(get_tec(row, ['Celda Prov', 'Celda Prov']), 200)
-            dt.rad_cob_km = _valor_str(get_tec(row, ['Rad Cob (KM)', 'Rad Cob (KM)']), 50)
-            dt.azimuth = _valor_str(get_tec(row, ['Azimuth', 'azimuth']), 50)
+            dt.rango_consulta = _valor_str(_get_fuzzy(row, cols_tec, ['Rango de consulta']), 100)
+            dt.celda_direccion = _valor_str(_get_fuzzy(row, cols_tec, ['Celda Direccion']), 255)
+            dt.celda_loc = _valor_str(_get_fuzzy(row, cols_tec, ['Celda Loc']), 200)
+            dt.celda_prov = _valor_str(_get_fuzzy(row, cols_tec, ['Celda Prov']), 200)
+            dt.rad_cob_km = _valor_str(_get_fuzzy(row, cols_tec, ['Rad Cob (KM)']), 50)
+            dt.azimuth = _valor_str(_get_fuzzy(row, cols_tec, ['Azimuth']), 50)
             if dt.lat is None and dt_lat is not None:
                 dt.lat = dt_lat
             if dt.long is None and dt_lon is not None:
                 dt.long = dt_lon
-            dt.a_horiz = _valor_str(get_tec(row, ['A. Horiz', 'A. Horiz']), 50)
-            dt.a_vert = _valor_str(get_tec(row, ['A. Vert', 'A. Vert']), 50)
+            dt.a_horiz = _valor_str(_get_fuzzy(row, cols_tec, ['A. Horiz']), 50)
+            dt.a_vert = _valor_str(_get_fuzzy(row, cols_tec, ['A. Vert']), 50)
             if not dt.extras:
                 dt.extras = json.dumps(extras, ensure_ascii=False, default=str)
             db.session.add(dt)
             count_tecnicos += 1
 
+        del df_tec
+
+        carga = db.session.get(CargaLlamada, carga_id)
+        if carga is None:
+            raise RuntimeError(f"No se encontró la carga {carga_id} tras el import")
         carga.processing_detail = json.dumps({
             'source_type': 'VOZ',
             'filas_trafico_leidas': int(total_filas_trafico),
@@ -778,17 +836,29 @@ def procesar_archivo_voz(file, unidad_id, user_id, sujeto_id=None, operadora=Non
             'datos_tecnicos_importados': int(count_tecnicos),
         }, ensure_ascii=False)
         _ensure_caso_sujeto_link(caso_id, sujeto_id, unidad_id, user_id)
+        db.session.add(carga)
         db.session.commit()
-        audit_log('SABANA_VOZ_UPLOAD', f'Carga VOZ {carga.id}: {count_trafico} tráfico, {count_tecnicos} datos técnicos', user_id=user_id)
+        audit_log('SABANA_VOZ_UPLOAD', f'Carga VOZ {carga_id}: {count_trafico} tráfico, {count_tecnicos} datos técnicos', user_id=user_id)
+        _log.info("Sabana VOZ: listo carga=%s trafico=%s tecnicos=%s", carga_id, count_trafico, count_tecnicos)
         return carga, count_trafico, count_tecnicos, None
     except Exception as e:
+        _log.exception("Sabana VOZ falló carga_id=%s: %s", carga_id, e)
         db.session.rollback()
-        if os.path.exists(file_path):
-            try:
-                os.remove(file_path)
-            except Exception:
-                pass
-        return None, 0, 0, str(e)
+        try:
+            carga = db.session.get(CargaLlamada, carga_id)
+            if carga:
+                carga.processing_detail = json.dumps({
+                    'source_type': 'VOZ',
+                    'error': str(e),
+                    'filas_trafico_leidas': int(total_filas_trafico),
+                    'eventos_importados': int(count_trafico),
+                    'datos_tecnicos_importados': int(count_tecnicos),
+                }, ensure_ascii=False)
+                db.session.add(carga)
+                db.session.commit()
+        except Exception:
+            db.session.rollback()
+        return None, count_trafico, count_tecnicos, str(e)
 
 
 def guardar_imagen_sujeto(file, unidad_id, sujeto_id=None):
