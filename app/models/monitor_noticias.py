@@ -38,7 +38,10 @@ class TemaNoticia(db.Model):
 class FuenteNoticia(db.Model):
     """
     Origen de noticias.
-    tipo = 'google_news' (busca con las palabras del tema) o 'rss' (feed directo a filtrar).
+    tipo:
+      - google_news: busca con las palabras del tema
+      - rss: feed RSS directo (ej. Prensa Policía cat=DROGAS)
+      - html_site: listado HTML oficial (ej. Ministerio de Seguridad Salta)
     """
 
     __tablename__ = "monitor_noticias_fuentes"
@@ -49,7 +52,7 @@ class FuenteNoticia(db.Model):
 
     nombre = db.Column(db.String(150), nullable=False, index=True)
     tipo = db.Column(db.String(20), nullable=False, default="google_news", index=True)
-    url = db.Column(db.String(500), nullable=True)  # solo para tipo rss
+    url = db.Column(db.String(500), nullable=True)  # rss | html_site
     activo = db.Column(db.Boolean, nullable=False, default=True, index=True)
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
@@ -80,7 +83,7 @@ class Noticia(db.Model):
     publicado_en = db.Column(db.DateTime, nullable=True, index=True)
 
     estado = db.Column(db.String(20), nullable=False, default="nueva", index=True)  # nueva | relevante | descartada
-    fuente_origen = db.Column(db.String(30), nullable=True)  # google_news | rss
+    fuente_origen = db.Column(db.String(30), nullable=True)  # google_news | rss | html_site
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
 

@@ -3,7 +3,7 @@
 {% block content %}
 <div class="page-header">
   <h1><i class="bi bi-newspaper"></i> Monitor de Noticias</h1>
-  <p class="text-muted mb-0">Orígenes de noticias. Google News cubre la mayoría de los medios; podés sumar feeds RSS directos.</p>
+  <p class="text-muted mb-0">Orígenes de noticias: Google News, feeds RSS (Policía) y sitios HTML oficiales (Ministerio).</p>
 </div>
 
 {% with active='fuentes' %}{% include "monitor_noticias/_tabs.html" %}{% endwith %}
@@ -22,7 +22,11 @@
               {% for f in fuentes %}
               <tr>
                 <td class="fw-semibold">{{ f.nombre }}</td>
-                <td>{% if f.tipo == 'google_news' %}<span class="badge text-bg-info">Google News</span>{% else %}<span class="badge text-bg-light border">RSS</span>{% endif %}</td>
+                <td>
+                  {% if f.tipo == 'google_news' %}<span class="badge text-bg-info">Google News</span>
+                  {% elif f.tipo == 'html_site' %}<span class="badge text-bg-warning">Sitio HTML</span>
+                  {% else %}<span class="badge text-bg-light border">RSS</span>{% endif %}
+                </td>
                 <td class="small text-muted text-truncate" style="max-width:280px">{{ f.url or '— (usa palabras del tema)' }}</td>
                 <td>{% if f.activo %}<span class="badge text-bg-success">Activa</span>{% else %}<span class="badge text-bg-secondary">Inactiva</span>{% endif %}</td>
                 <td class="text-end text-nowrap">
@@ -47,8 +51,10 @@
       </div>
     </div>
     <p class="small text-muted mt-2">
-      Ejemplos de feeds RSS de Salta: El Tribuno publica canales en <code>eltribuno.com/page-rss</code>.
-      Google News ya trae El Tribuno, HolaSalta, Prensa Policía de Salta y más.
+      Oficiales sugeridos: RSS Policía DROGAS
+      <code>prensa.policiadesalta.gob.ar/?feed=rss2&amp;cat=40</code>
+      y sitio HTML del Ministerio
+      <code>salta.gob.ar/organismos/ministerio-de-seguridad-6</code>.
     </p>
   </div>
 
@@ -69,10 +75,11 @@
             <select name="tipo" id="fuente-tipo" class="form-select form-select-sm" onchange="toggleUrl()">
               <option value="google_news">Google News (busca por palabras del tema)</option>
               <option value="rss" selected>RSS directo (URL del feed)</option>
+              <option value="html_site">Sitio HTML oficial (listado de noticias)</option>
             </select>
           </div>
           <div class="mb-2" id="fuente-url-wrap">
-            <label class="form-label small mb-1">URL del feed RSS</label>
+            <label class="form-label small mb-1" id="fuente-url-label">URL del feed RSS</label>
             <input type="url" name="url" id="fuente-url" class="form-control form-control-sm" placeholder="https://...">
           </div>
           <div class="form-check mb-3">
@@ -93,7 +100,11 @@
 <script>
 function toggleUrl() {
   var tipo = document.getElementById('fuente-tipo').value;
-  document.getElementById('fuente-url-wrap').style.display = (tipo === 'rss') ? '' : 'none';
+  var wrap = document.getElementById('fuente-url-wrap');
+  var label = document.getElementById('fuente-url-label');
+  wrap.style.display = (tipo === 'google_news') ? 'none' : '';
+  if (tipo === 'html_site') label.textContent = 'URL del listado HTML';
+  else label.textContent = 'URL del feed RSS';
 }
 function cargarFuente(f) {
   document.getElementById('fuente-id').value = f.id;

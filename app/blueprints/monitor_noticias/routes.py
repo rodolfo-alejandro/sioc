@@ -46,6 +46,20 @@ _TEMAS_SEED = [
     },
 ]
 
+# Fuentes oficiales de Salta (se crean si faltan, aunque ya exista Google News)
+_FUENTES_OFICIALES_SEED = [
+    {
+        "nombre": "Prensa Policía de Salta - DROGAS",
+        "tipo": "rss",
+        "url": "https://prensa.policiadesalta.gob.ar/?feed=rss2&cat=40",
+    },
+    {
+        "nombre": "Ministerio de Seguridad - Salta",
+        "tipo": "html_site",
+        "url": "https://www.salta.gob.ar/organismos/ministerio-de-seguridad-6",
+    },
+]
+
 
 def _clean(v) -> str:
     return (v or "").strip() if isinstance(v, str) else ""
@@ -95,7 +109,7 @@ def _ensure_schema():
 
 
 def _seed_inicial():
-    """Crea, una sola vez por unidad, la fuente Google News y los temas de droga."""
+    """Crea, una sola vez por unidad, Google News, temas de droga y fuentes oficiales."""
     uid = current_user.unidad_id
     if not FuenteNoticia.query.filter_by(unidad_id=uid).first():
         db.session.add(
@@ -108,6 +122,24 @@ def _seed_inicial():
                 activo=True,
             )
         )
+    for fo in _FUENTES_OFICIALES_SEED:
+        existe = FuenteNoticia.query.filter_by(unidad_id=uid, nombre=fo["nombre"]).first()
+        if not existe:
+            db.session.add(
+                FuenteNoticia(
+                    unidad_id=uid,
+                    creado_por=current_user.id,
+                    nombre=fo["nombre"],
+                    tipo=fo["tipo"],
+                    url=fo["url"],
+                    activo=True,
+                )
+            )
+        elif fo["tipo"] == "rss" and existe.url and "cat=51" in existe.url:
+            # Corrección: DROGAS es cat=40 (51 era DIC)
+            existe.url = fo["url"]
+            existe.tipo = fo["tipo"]
+            existe.activo = True
     if not TemaNoticia.query.filter_by(unidad_id=uid).first():
         for t in _TEMAS_SEED:
             db.session.add(
@@ -326,6 +358,94 @@ def buscar():
     return redirect(url_for("monitor_noticias.bandeja"))
 
 
+@bp.route("/buscar-oficiales", methods=["POST"])
+def buscar_oficiales():
+    """Recolecta noticias de fuentes oficiales (Policía RSS + Ministerio HTML) por período."""
+    if not _can_manage():
+        abort(403)
+    faltan = services.dependencias_faltantes()
+    if faltan:
+        flash(f"Faltan dependencias en el servidor: {', '.join(faltan)}. Instalá con pip install -r requirements.txt.", "danger")
+        return redirect(url_for("monitor_noticias.bandeja"))
+
+    _seed_inicial()
+    uid = current_user.unidad_id
+    d1 = _parse_date(request.form.get("fecha_desde"))
+    d2 = _parse_date(request.form.get("fecha_hasta"))
+    dias_raw = _clean(request.form.get("dias_oficial"))
+    dias_int = int(dias_raw) if dias_raw.isdigit() and int(dias_raw) > 0 else None
+
+    if not d1 and not d2 and not dias_int:
+        flash("Indicá un período (fechas o últimos N días) para las fuentes oficiales.", "warning")
+        return redirect(url_for("monitor_noticias.bandeja"))
+
+    tema_id = _clean(request.form.get("tema_id"))
+    temas_q = TemaNoticia.query.filter_by(unidad_id=uid, activo=True)
+    if tema_id.isdigit():
+        temas_q = temas_q.filter(TemaNoticia.id == int(tema_id))
+    temas = temas_q.all()
+    if not temas:
+        # Tema temporal genérico droga para filtrar Ministerio
+        temas = [
+            TemaNoticia(
+                unidad_id=uid,
+                nombre="Oficiales - Droga",
+                palabras_clave="droga, cocaína, marihuana, narcotráfico, narcomenudeo, allanamiento, secuestro, dosis, estupefacientes",
+                palabras_excluir="",
+                region="Salta",
+                activo=True,
+            )
+        ]
+
+    fuentes = (
+        FuenteNoticia.query.filter_by(unidad_id=uid, activo=True)
+        .filter(FuenteNoticia.tipo.in_(("rss", "html_site")))
+        .all()
+    )
+    if not fuentes:
+        flash("No hay fuentes oficiales activas (RSS / sitio HTML). Revisá la pestaña Fuentes.", "warning")
+        return redirect(url_for("monitor_noticias.bandeja"))
+
+    total_nuevas = 0
+    total_dup = 0
+    for tema in temas:
+        try:
+            candidatos = services.recolectar_para_tema(
+                tema,
+                fuentes,
+                dias=dias_int,
+                fecha_desde=d1,
+                fecha_hasta=d2,
+                solo_oficiales=True,
+            )
+        except Exception as e:
+            flash(f"Error al buscar oficiales («{tema.nombre}»): {e}", "danger")
+            continue
+        tid = getattr(tema, "id", None)
+        n, d = _guardar_candidatos(uid, tid, candidatos)
+        total_nuevas += n
+        total_dup += d
+
+    periodo = ""
+    if d1 or d2:
+        periodo = f" del {d1 or '…'} al {d2 or '…'}"
+    elif dias_int:
+        periodo = f" (últimos {dias_int} días)"
+    flash(
+        f"Fuentes oficiales{periodo}: {total_nuevas} noticia(s) nueva(s), {total_dup} ya existían.",
+        "success" if total_nuevas else "info",
+    )
+    redirect_args = {}
+    if dias_int:
+        redirect_args["dias"] = dias_int
+    else:
+        if d1:
+            redirect_args["fecha_desde"] = d1.isoformat()
+        if d2:
+            redirect_args["fecha_hasta"] = d2.isoformat()
+    return redirect(url_for("monitor_noticias.bandeja", **redirect_args))
+
+
 @bp.route("/limpiar", methods=["POST"])
 def limpiar():
     if not _can_manage():
@@ -420,14 +540,14 @@ def fuentes_guardar():
     fid = _clean(request.form.get("id"))
     nombre = _clean(request.form.get("nombre"))
     tipo = _clean(request.form.get("tipo")) or "rss"
-    if tipo not in ("google_news", "rss"):
+    if tipo not in ("google_news", "rss", "html_site"):
         tipo = "rss"
     url = _clean(request.form.get("url"))
     if not nombre:
         flash("El nombre de la fuente es obligatorio.", "warning")
         return redirect(url_for("monitor_noticias.fuentes"))
-    if tipo == "rss" and not url:
-        flash("Una fuente RSS necesita la URL del feed.", "warning")
+    if tipo in ("rss", "html_site") and not url:
+        flash("RSS y sitios HTML necesitan una URL.", "warning")
         return redirect(url_for("monitor_noticias.fuentes"))
     if fid.isdigit():
         row = FuenteNoticia.query.filter_by(unidad_id=current_user.unidad_id, id=int(fid)).first_or_404()
@@ -436,7 +556,7 @@ def fuentes_guardar():
         db.session.add(row)
     row.nombre = nombre[:150]
     row.tipo = tipo
-    row.url = url[:500] if tipo == "rss" else None
+    row.url = url[:500] if tipo in ("rss", "html_site") else None
     row.activo = request.form.get("activo") == "1"
     db.session.commit()
     flash("Fuente guardada.", "success")

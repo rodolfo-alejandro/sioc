@@ -64,6 +64,45 @@
     </div>
   </form>
 </div>
+
+<div class="card card-body py-3 mb-3 border-primary-subtle">
+  <form method="POST" action="{{ url_for('monitor_noticias.buscar_oficiales') }}" class="row g-2 align-items-end">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="col-12">
+      <div class="small fw-semibold mb-1"><i class="bi bi-building-check"></i> Fuentes oficiales (Policía de Salta + Ministerio de Seguridad)</div>
+      <div class="form-text mt-0 mb-2">Trae notas del RSS de DROGAS de Prensa Policía y del sitio del Ministerio. Filtrá por período.</div>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label small mb-1">Tema (opcional)</label>
+      <select name="tema_id" class="form-select form-select-sm">
+        <option value="">Todos los temas de droga</option>
+        {% for t in temas %}
+        <option value="{{ t.id }}" {% if not t.activo %}disabled{% endif %}>{{ t.nombre }}{% if not t.activo %} (inactivo){% endif %}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label small mb-1">Últimos N días</label>
+      <select name="dias_oficial" class="form-select form-select-sm" onchange="if(this.value){this.form.fecha_desde.value='';this.form.fecha_hasta.value='';}">
+        <option value="">Usar fechas →</option>
+        <option value="7" selected>Últimos 7 días</option>
+        <option value="15">Últimos 15 días</option>
+        <option value="30">Últimos 30 días</option>
+        <option value="90">Últimos 90 días</option>
+      </select>
+    </div>
+    <div class="col-md-4">
+      <label class="form-label small mb-1">O rango de fechas</label>
+      <div class="input-group input-group-sm">
+        <input type="date" name="fecha_desde" class="form-control" onchange="if(this.value||this.form.fecha_hasta.value){this.form.dias_oficial.value='';}">
+        <input type="date" name="fecha_hasta" class="form-control" onchange="if(this.value||this.form.fecha_desde.value){this.form.dias_oficial.value='';}">
+      </div>
+    </div>
+    <div class="col-md-3 d-grid">
+      <button type="submit" class="btn btn-outline-primary"><i class="bi bi-cloud-download"></i> Recolectar oficiales</button>
+    </div>
+  </form>
+</div>
 {% endif %}
 
 <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
@@ -207,6 +246,9 @@ actualizarRegionesBtn();
               {% if n.medio %}<i class="bi bi-building"></i> {{ n.medio }} · {% endif %}
               {% if n.publicado_en %}<i class="bi bi-calendar3"></i> {{ n.publicado_en|localtime('%d/%m/%Y %H:%M') }} · {% endif %}
               {% if n.tema %}<span class="badge text-bg-light border">{{ n.tema.nombre }}</span>{% endif %}
+              {% if n.fuente_origen == 'rss' %}<span class="badge text-bg-warning-subtle border">Oficial RSS</span>
+              {% elif n.fuente_origen == 'html_site' %}<span class="badge text-bg-warning-subtle border">Oficial web</span>
+              {% elif n.fuente_origen == 'google_news' %}<span class="badge text-bg-info-subtle border">Google News</span>{% endif %}
               {% if n.estado == 'relevante' %}<span class="badge text-bg-success">Relevante</span>
               {% elif n.estado == 'descartada' %}<span class="badge text-bg-secondary">Descartada</span>
               {% else %}<span class="badge text-bg-primary">Nueva</span>{% endif %}
