@@ -107,12 +107,26 @@ def _parse_fecha_texto(texto: str) -> datetime | None:
 
 
 def _fetch_raw(url: str, timeout: int = 25) -> bytes | None:
+    """Descarga bytes. Si el cert SSL del sitio oficial falla, reintenta sin verify."""
     if requests is None:
         return None
+    headers = {"User-Agent": _USER_AGENT}
     try:
-        resp = requests.get(url, headers={"User-Agent": _USER_AGENT}, timeout=timeout)
+        resp = requests.get(url, headers=headers, timeout=timeout)
         resp.raise_for_status()
         return resp.content
+    except requests.exceptions.SSLError:
+        try:
+            import urllib3
+
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+            resp = requests.get(url, headers=headers, timeout=timeout, verify=False)
+            resp.raise_for_status()
+            _log.info("Fetch OK sin verify SSL: %s", url)
+            return resp.content
+        except Exception as e2:
+            _log.warning("Fetch falló (SSL retry) %s: %s", url, e2)
+            return None
     except Exception as e:
         _log.warning("Fetch falló %s: %s", url, e)
         return None
@@ -165,6 +179,36 @@ def _coincide(texto: str, claves: list[str]) -> bool:
         return True
     t = (texto or "").lower()
     return any(c.lower() in t for c in claves)
+
+
+def _coincide_flexible(texto: str, claves: list[str]) -> bool:
+    """
+    Match flexible: además de la frase completa, prueba cada palabra significativa
+    (útil para Ministerio, donde 'incautaron ... droga' no matchea 'incautación').
+    """
+    if not claves:
+        return True
+    if _coincide(texto, claves):
+        return True
+    t = (texto or "").lower()
+    tokens: set[str] = set()
+    for c in claves:
+        for w in re.split(r"[\s,;/|-]+", (c or "").lower()):
+            w = w.strip()
+            if len(w) >= 4 and w not in ("para", "sobre", "como", "este", "esta", "desde"):
+                tokens.add(w)
+    return any(tok in t for tok in tokens)
+
+
+def _fuente_ya_tematica(fuente) -> bool:
+    nombre_f = (getattr(fuente, "nombre", None) or "").lower()
+    url_f = (getattr(fuente, "url", None) or "").lower()
+    return (
+        "droga" in nombre_f
+        or "polic" in nombre_f
+        or "cat=40" in url_f
+        or "drogas" in url_f
+    )
 
 
 def _excluido(texto: str, excluir: list[str]) -> bool:
@@ -339,17 +383,13 @@ def recolectar_para_tema(
 
         for item in items:
             blob = f"{item['titulo']} {item['resumen']}"
-            if filtrar_claves and claves and not _coincide(blob, claves):
-                # Feeds ya temáticos (cat DROGAS / nombre con droga|policía) se aceptan sin match estricto
-                nombre_f = (fuente.nombre or "").lower()
-                url_f = (getattr(fuente, "url", None) or "").lower()
-                tematico = (
-                    "droga" in nombre_f
-                    or "polic" in nombre_f
-                    or "cat=40" in url_f
-                    or "drogas" in url_f
-                )
-                if not tematico:
+            if filtrar_claves and claves:
+                if _fuente_ya_tematica(fuente):
+                    pass  # RSS DROGAS / Policía: ya viene filtrado por categoría
+                elif tipo == "html_site":
+                    if not _coincide_flexible(blob, claves):
+                        continue
+                elif not _coincide(blob, claves):
                     continue
             if _excluido(blob, excluir):
                 continue

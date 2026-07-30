@@ -388,17 +388,25 @@ def buscar_oficiales():
         return redirect(url_for("monitor_noticias.bandeja"))
 
     tema_id = _clean(request.form.get("tema_id"))
-    temas_q = TemaNoticia.query.filter_by(unidad_id=uid, activo=True)
+    # Un solo pasada: si no eligen tema, usamos claves simples de droga
+    # (evitar filtrar de más con frases tipo "incautación" vs "incautaron").
     if tema_id.isdigit():
-        temas_q = temas_q.filter(TemaNoticia.id == int(tema_id))
-    temas = temas_q.all()
-    if not temas:
-        # Tema temporal genérico droga para filtrar Ministerio
+        temas = TemaNoticia.query.filter_by(
+            unidad_id=uid, activo=True, id=int(tema_id)
+        ).all()
+        if not temas:
+            flash("El tema elegido no existe o está inactivo.", "warning")
+            return redirect(url_for("monitor_noticias.bandeja"))
+    else:
         temas = [
             TemaNoticia(
                 unidad_id=uid,
                 nombre="Oficiales - Droga",
-                palabras_clave="droga, cocaína, marihuana, narcotráfico, narcomenudeo, allanamiento, secuestro, dosis, estupefacientes",
+                palabras_clave=(
+                    "droga, drogas, cocaína, cocaina, marihuana, narcotráfico, narcotrafico, "
+                    "narcomenudeo, allanamiento, secuestro, dosis, estupefacientes, "
+                    "incaut, microtráfico, microtrafico, búnker, bunker"
+                ),
                 palabras_excluir="",
                 region="Salta",
                 activo=True,
@@ -443,7 +451,12 @@ def buscar_oficiales():
     elif dias_int:
         periodo = f" (últimos {dias_int} días)"
     flash(
-        f"Fuentes oficiales{periodo}: {total_nuevas} noticia(s) nueva(s), {total_dup} ya existían.",
+        f"Fuentes oficiales{periodo}: {total_nuevas} noticia(s) nueva(s), {total_dup} ya existían."
+        + (
+            " Si da 0, revisá que las fuentes estén marcadas y el período cubra fechas recientes."
+            if total_nuevas == 0 and total_dup == 0
+            else ""
+        ),
         "success" if total_nuevas else "info",
     )
     redirect_args = {}
