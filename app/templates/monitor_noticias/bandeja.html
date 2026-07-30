@@ -57,27 +57,54 @@
           {% endfor %}
         </select>
       </div>
-      <div class="col-md-2">
-        <label class="form-label small mb-1">Últimos N días</label>
-        <select name="dias_oficial" class="form-select" onchange="if(this.value){this.form.fecha_desde.value='';this.form.fecha_hasta.value='';}">
-          <option value="">Usar fechas →</option>
-          <option value="7" selected>Últimos 7 días</option>
+      <div class="col-md-3">
+        <label class="form-label small mb-1">Atajo: últimos N días</label>
+        <select name="dias_oficial" id="dias_oficial" class="form-select" onchange="oficialPeriodoAtajo()">
+          <option value="">— Usar rango de fechas —</option>
+          <option value="7">Últimos 7 días</option>
           <option value="15">Últimos 15 días</option>
-          <option value="30">Últimos 30 días</option>
+          <option value="30" selected>Últimos 30 días</option>
           <option value="90">Últimos 90 días</option>
+          <option value="180">Últimos 180 días</option>
         </select>
       </div>
       <div class="col-md-4">
-        <label class="form-label small mb-1">O rango exacto</label>
+        <label class="form-label small mb-1">Rango exacto (prioridad)</label>
         <div class="input-group">
-          <input type="date" name="fecha_desde" class="form-control" onchange="if(this.value||this.form.fecha_hasta.value){this.form.dias_oficial.value='';}">
-          <input type="date" name="fecha_hasta" class="form-control" onchange="if(this.value||this.form.fecha_desde.value){this.form.dias_oficial.value='';}">
+          <input type="date" name="fecha_desde" id="fecha_desde_oficial" class="form-control" onchange="oficialPeriodoFechas()">
+          <span class="input-group-text">→</span>
+          <input type="date" name="fecha_hasta" id="fecha_hasta_oficial" class="form-control" onchange="oficialPeriodoFechas()">
         </div>
+        <div class="form-text mb-0">Si cargás fechas, se ignoran los “últimos N días”.</div>
       </div>
-      <div class="col-md-3 d-grid">
-        <button type="submit" class="btn btn-primary btn-lg"><i class="bi bi-cloud-download"></i> Traer noticias</button>
+      <div class="col-md-2 d-grid">
+        <button type="submit" class="btn btn-primary btn-lg" onclick="return oficialAntesDeEnviar(this.form)"><i class="bi bi-cloud-download"></i> Traer</button>
       </div>
     </form>
+    <script>
+    function oficialPeriodoAtajo() {
+      var d = document.getElementById('dias_oficial');
+      if (d && d.value) {
+        document.getElementById('fecha_desde_oficial').value = '';
+        document.getElementById('fecha_hasta_oficial').value = '';
+      }
+    }
+    function oficialPeriodoFechas() {
+      var a = document.getElementById('fecha_desde_oficial').value;
+      var b = document.getElementById('fecha_hasta_oficial').value;
+      if (a || b) document.getElementById('dias_oficial').value = '';
+    }
+    function oficialAntesDeEnviar(form) {
+      var a = form.fecha_desde.value;
+      var b = form.fecha_hasta.value;
+      if (a || b) form.dias_oficial.value = '';
+      if (!form.dias_oficial.value && !a && !b) {
+        alert('Elegí “últimos N días” o un rango de fechas.');
+        return false;
+      }
+      return true;
+    }
+    </script>
   </div>
 </div>
 

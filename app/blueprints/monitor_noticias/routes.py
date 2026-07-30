@@ -190,7 +190,7 @@ def bandeja():
     if texto:
         q = q.filter(Noticia.titulo.ilike(f"%{texto}%"))
 
-    if dias.isdigit() and int(dias) > 0:
+    if dias.isdigit() and int(dias) > 0 and not fecha_desde and not fecha_hasta:
         q = q.filter(Noticia.publicado_en >= datetime.utcnow() - timedelta(days=int(dias)))
     else:
         d1 = _parse_date(fecha_desde)
@@ -383,8 +383,18 @@ def buscar_oficiales():
     dias_raw = _clean(request.form.get("dias_oficial"))
     dias_int = int(dias_raw) if dias_raw.isdigit() and int(dias_raw) > 0 else None
 
-    if not d1 and not d2 and not dias_int:
+    # Fechas absolutas siempre ganan (el select de 7 días no debe pisarlas)
+    if d1 or d2:
+        dias_int = None
+        d1, d2 = services._resolver_periodo(d1, d2, None)
+    elif dias_int:
+        d1, d2 = services._resolver_periodo(None, None, dias_int)
+    else:
         flash("Indicá un período (fechas o últimos N días) para las fuentes oficiales.", "warning")
+        return redirect(url_for("monitor_noticias.bandeja"))
+
+    if not d1 and not d2:
+        flash("Indicá un período válido.", "warning")
         return redirect(url_for("monitor_noticias.bandeja"))
 
     tema_id = _clean(request.form.get("tema_id"))
@@ -432,7 +442,7 @@ def buscar_oficiales():
             candidatos = services.recolectar_para_tema(
                 tema,
                 fuentes,
-                dias=dias_int,
+                dias=None,
                 fecha_desde=d1,
                 fecha_hasta=d2,
                 solo_oficiales=True,
@@ -445,28 +455,23 @@ def buscar_oficiales():
         total_nuevas += n
         total_dup += d
 
-    periodo = ""
-    if d1 or d2:
-        periodo = f" del {d1 or '…'} al {d2 or '…'}"
-    elif dias_int:
-        periodo = f" (últimos {dias_int} días)"
+    periodo = f" del {d1.strftime('%d/%m/%Y') if d1 else '…'} al {d2.strftime('%d/%m/%Y') if d2 else '…'}"
+    if dias_raw.isdigit() and int(dias_raw) > 0 and not _parse_date(request.form.get("fecha_desde")) and not _parse_date(request.form.get("fecha_hasta")):
+        periodo = f" (últimos {int(dias_raw)} días: {d1.strftime('%d/%m/%Y')} → {d2.strftime('%d/%m/%Y')})"
     flash(
         f"Fuentes oficiales{periodo}: {total_nuevas} noticia(s) nueva(s), {total_dup} ya existían."
         + (
-            " Si da 0, revisá que las fuentes estén marcadas y el período cubra fechas recientes."
+            " Si da 0, ampliá el rango o revisá que las fuentes estén marcadas."
             if total_nuevas == 0 and total_dup == 0
             else ""
         ),
         "success" if total_nuevas else "info",
     )
     redirect_args = {}
-    if dias_int:
-        redirect_args["dias"] = dias_int
-    else:
-        if d1:
-            redirect_args["fecha_desde"] = d1.isoformat()
-        if d2:
-            redirect_args["fecha_hasta"] = d2.isoformat()
+    if d1:
+        redirect_args["fecha_desde"] = d1.isoformat()
+    if d2:
+        redirect_args["fecha_hasta"] = d2.isoformat()
     return redirect(url_for("monitor_noticias.bandeja", **redirect_args))
 
 

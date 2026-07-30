@@ -149,7 +149,9 @@ def fetch_feed_entries(url: str) -> list[dict]:
     if feedparser is None:
         return []
     raw = _fetch_raw(url)
-    parsed = feedparser.parse(raw if raw is not None else url)
+    if raw is None:
+        return []
+    parsed = feedparser.parse(raw)
     salida = []
     for e in getattr(parsed, "entries", []) or []:
         titulo = _strip_html(getattr(e, "title", ""), 600)
@@ -172,6 +174,55 @@ def fetch_feed_entries(url: str) -> list[dict]:
             }
         )
     return salida
+
+
+def _url_con_pagina(url: str, page: int) -> str:
+    """Agrega paged=N (WordPress) preservando query existente."""
+    if page <= 1:
+        return url
+    parsed = urlparse(url)
+    from urllib.parse import parse_qsl, urlencode
+
+    qs = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    qs["paged"] = str(page)
+    return parsed._replace(query=urlencode(qs)).geturl()
+
+
+def fetch_feed_entries_rango(
+    url: str,
+    fecha_desde: date | None = None,
+    max_pages: int = 15,
+) -> list[dict]:
+    """
+    Recorre páginas del RSS (WordPress paged=) hasta cubrir fecha_desde
+    o agotar páginas. Un solo RSS suele traer ~10 ítems recientes.
+    """
+    acumulado: list[dict] = []
+    vistos: set[str] = set()
+    for page in range(1, max(1, max_pages) + 1):
+        page_url = _url_con_pagina(url, page)
+        items = fetch_feed_entries(page_url)
+        if not items:
+            break
+        nuevos = 0
+        oldest: datetime | None = None
+        for it in items:
+            h = link_hash(it["link"])
+            if h in vistos:
+                continue
+            vistos.add(h)
+            acumulado.append(it)
+            nuevos += 1
+            pub = it.get("publicado_en")
+            if pub and (oldest is None or pub < oldest):
+                oldest = pub
+        if nuevos == 0:
+            break
+        if fecha_desde and oldest and oldest.date() < fecha_desde:
+            break
+        if page < max_pages:
+            time.sleep(0.2)
+    return acumulado
 
 
 def _coincide(texto: str, claves: list[str]) -> bool:
@@ -233,15 +284,40 @@ def _en_periodo(dt: datetime | None, fecha_desde: date | None, fecha_hasta: date
 
 
 def _dias_desde_hasta(fecha_desde: date | None, fecha_hasta: date | None, dias: int | None) -> int | None:
+    # Las fechas absolutas tienen prioridad sobre "últimos N días"
+    if fecha_desde or fecha_hasta:
+        if fecha_desde:
+            fin = fecha_hasta or date.today()
+            return max(1, (fin - fecha_desde).days + 1)
+        return None
     if dias and int(dias) > 0:
         return int(dias)
-    if fecha_desde:
-        fin = fecha_hasta or date.today()
-        return max(1, (fin - fecha_desde).days + 1)
     return None
 
 
-def scrape_html_site(url: str, medio_default: str = "", max_articulos: int = 40) -> list[dict]:
+def _resolver_periodo(
+    fecha_desde: date | None,
+    fecha_hasta: date | None,
+    dias: int | None,
+) -> tuple[date | None, date | None]:
+    """Normaliza a (desde, hasta). Si hay fechas, ignoran 'dias'."""
+    if fecha_desde or fecha_hasta:
+        d1 = fecha_desde
+        d2 = fecha_hasta or (date.today() if fecha_desde else None)
+        return d1, d2
+    if dias and int(dias) > 0:
+        d2 = date.today()
+        d1 = d2 - timedelta(days=int(dias))
+        return d1, d2
+    return None, None
+
+
+def scrape_html_site(
+    url: str,
+    medio_default: str = "",
+    max_articulos: int = 40,
+    extra_list_urls: list[str] | None = None,
+) -> list[dict]:
     """
     Scraper genérico orientado a sitios oficiales de Salta.
     - Policía/WordPress: enlaces a ?p= o permalinks
@@ -249,38 +325,64 @@ def scrape_html_site(url: str, medio_default: str = "", max_articulos: int = 40)
     """
     if BeautifulSoup is None or requests is None:
         return []
-    html = _fetch_text(url)
-    if not html:
-        return []
-    soup = BeautifulSoup(html, "html.parser")
-    base = f"{urlparse(url).scheme}://{urlparse(url).netloc}"
-    host = (urlparse(url).netloc or "").lower()
+
+    list_urls = [url] + list(extra_list_urls or [])
+    # Ministerio: también el listado completo del organismo
+    if "salta.gob.ar" in (url or "") and "ministerio-de-seguridad" in (url or ""):
+        list_urls.append(
+            "https://www.salta.gob.ar/prensa/noticias/organismos/ministerio-de-seguridad-6"
+        )
 
     links: list[str] = []
-    for a in soup.find_all("a", href=True):
-        href = (a.get("href") or "").strip()
-        if not href or href.startswith("#"):
+    for list_url in list_urls:
+        html = _fetch_text(list_url)
+        if not html:
             continue
-        full = urljoin(url, href)
-        path = urlparse(full).path or ""
+        soup = BeautifulSoup(html, "html.parser")
+        host = (urlparse(list_url).netloc or "").lower()
+        for a in soup.find_all("a", href=True):
+            href = (a.get("href") or "").strip()
+            if not href or href.startswith("#"):
+                continue
+            full = urljoin(list_url, href)
+            path = urlparse(full).path or ""
+            if "salta.gob.ar" in host:
+                if re.search(r"/prensa/noticias/[a-z0-9-]+-\d{5,}/?$", path, re.I):
+                    links.append(full.split("#")[0])
+            else:
+                if re.search(r"[?&]p=\d+", full) or re.search(r"/\d{4}/\d{2}/", path):
+                    links.append(full.split("#")[0])
+                elif path.count("/") >= 2 and not any(
+                    x in path.lower() for x in ("/cat/", "/tag/", "/page/", "/author/", "wp-")
+                ):
+                    if full.startswith(f"{urlparse(list_url).scheme}://{urlparse(list_url).netloc}"):
+                        titulo_a = _strip_html(a.get_text(" ", strip=True), 200)
+                        if len(titulo_a) >= 25:
+                            links.append(full.split("#")[0])
+        # Páginas extra del listado Ministerio / WordPress
         if "salta.gob.ar" in host:
-            # Artículos reales: .../slug-109230 (id numérico largo). Excluye listados/secciones.
-            if re.search(r"/prensa/noticias/[a-z0-9-]+-\d{5,}/?$", path, re.I):
-                links.append(full.split("#")[0])
-        else:
-            # WordPress prensa policial u otros
-            if re.search(r"[?&]p=\d+", full) or re.search(r"/\d{4}/\d{2}/", path):
-                links.append(full.split("#")[0])
-            elif path.count("/") >= 2 and not any(
-                x in path.lower() for x in ("/cat/", "/tag/", "/page/", "/author/", "wp-")
-            ):
-                # permalinks tipo /titulo-noticia/
-                if full.startswith(base) and path not in ("/", ""):
-                    titulo_a = _strip_html(a.get_text(" ", strip=True), 200)
-                    if len(titulo_a) >= 25:
-                        links.append(full.split("#")[0])
+            for p in range(2, 6):
+                page_u = list_url.rstrip("/") + (f"?page={p}" if "?" not in list_url else f"&page={p}")
+                # WordPress-style also
+                page_u2 = _url_con_pagina(list_url, p) if "cat=" in list_url or "paged" in list_url else None
+                for candidate in ([page_u, page_u2] if page_u2 else [page_u]):
+                    if not candidate or candidate == list_url:
+                        continue
+                    html_p = _fetch_text(candidate)
+                    if not html_p:
+                        continue
+                    soup_p = BeautifulSoup(html_p, "html.parser")
+                    found = 0
+                    for a in soup_p.find_all("a", href=True):
+                        full = urljoin(candidate, a["href"]).split("#")[0]
+                        path = urlparse(full).path or ""
+                        if re.search(r"/prensa/noticias/[a-z0-9-]+-\d{5,}/?$", path, re.I):
+                            links.append(full)
+                            found += 1
+                    if found == 0:
+                        break
+                    time.sleep(0.2)
 
-    # Dedup preservando orden
     vistos: set[str] = set()
     unicos: list[str] = []
     for link in links:
@@ -291,11 +393,11 @@ def scrape_html_site(url: str, medio_default: str = "", max_articulos: int = 40)
         if len(unicos) >= max_articulos:
             break
 
-    medio = medio_default or host.replace("www.", "")
+    medio = medio_default or (urlparse(url).netloc or "").replace("www.", "")
     salida: list[dict] = []
     for i, link in enumerate(unicos):
         if i:
-            time.sleep(0.35)  # no saturar el sitio oficial
+            time.sleep(0.25)
         art_html = _fetch_text(link)
         if not art_html:
             continue
@@ -350,16 +452,22 @@ def recolectar_para_tema(
     claves = tema.lista_claves
     excluir = tema.lista_excluir
     region = (tema.region or "").strip()
-    dias_eff = _dias_desde_hasta(fecha_desde, fecha_hasta, dias)
+    # Unificar período: fechas absolutas ganan; "últimos N" → rango desde/hasta
+    d1, d2 = _resolver_periodo(fecha_desde, fecha_hasta, dias)
+    dias_eff = _dias_desde_hasta(d1, d2, None if (d1 or d2) else dias)
     candidatos: list[dict] = []
     vistos: set[str] = set()
+
+    # Más páginas si el rango es amplio
+    span_days = dias_eff or 7
+    max_rss_pages = min(20, max(3, span_days // 5 + 2))
+    max_html = min(80, max(20, span_days))
 
     for fuente in fuentes:
         if not getattr(fuente, "activo", True):
             continue
         tipo = (fuente.tipo or "").strip()
         if solo_oficiales and tipo not in ("rss", "html_site"):
-            # Oficiales = RSS/HTML configurados (Policía/Ministerio), no Google News
             continue
         if tipo == "google_news":
             url = build_google_news_url(claves, region, dias_eff)
@@ -369,14 +477,13 @@ def recolectar_para_tema(
             url = (fuente.url or "").strip()
             if not url:
                 continue
-            items = fetch_feed_entries(url)
-            # Feeds ya temáticos (ej. cat=DROGAS) no exigen match estricto de todas las claves
+            items = fetch_feed_entries_rango(url, fecha_desde=d1, max_pages=max_rss_pages)
             filtrar_claves = True
         elif tipo == "html_site":
             url = (fuente.url or "").strip()
             if not url:
                 continue
-            items = scrape_html_site(url, medio_default=fuente.nombre or "")
+            items = scrape_html_site(url, medio_default=fuente.nombre or "", max_articulos=max_html)
             filtrar_claves = True
         else:
             continue
@@ -385,7 +492,7 @@ def recolectar_para_tema(
             blob = f"{item['titulo']} {item['resumen']}"
             if filtrar_claves and claves:
                 if _fuente_ya_tematica(fuente):
-                    pass  # RSS DROGAS / Policía: ya viene filtrado por categoría
+                    pass
                 elif tipo == "html_site":
                     if not _coincide_flexible(blob, claves):
                         continue
@@ -393,12 +500,8 @@ def recolectar_para_tema(
                     continue
             if _excluido(blob, excluir):
                 continue
-            if not _en_periodo(item.get("publicado_en"), fecha_desde, fecha_hasta):
+            if not _en_periodo(item.get("publicado_en"), d1, d2):
                 continue
-            # Si pedimos "últimos N días" sin fechas absolutas
-            if dias_eff and fecha_desde is None and fecha_hasta is None and item.get("publicado_en"):
-                if item["publicado_en"] < datetime.utcnow() - timedelta(days=dias_eff):
-                    continue
             h = link_hash(item["link"])
             if h in vistos:
                 continue
