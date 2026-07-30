@@ -222,11 +222,19 @@ def bandeja():
         "descartada": _base_noticias().filter(Noticia.estado == "descartada").count(),
     }
 
+    fuentes_oficiales = (
+        FuenteNoticia.query.filter_by(unidad_id=current_user.unidad_id, activo=True)
+        .filter(FuenteNoticia.tipo.in_(("rss", "html_site")))
+        .order_by(FuenteNoticia.nombre)
+        .all()
+    )
+
     return render_template(
         "monitor_noticias/bandeja.html",
         noticias=noticias,
         temas=temas,
         medios=medios,
+        fuentes_oficiales=fuentes_oficiales,
         contadores=contadores,
         selected={
             "tema": tema_id,
@@ -397,13 +405,16 @@ def buscar_oficiales():
             )
         ]
 
-    fuentes = (
-        FuenteNoticia.query.filter_by(unidad_id=uid, activo=True)
-        .filter(FuenteNoticia.tipo.in_(("rss", "html_site")))
-        .all()
+    fuentes_q = FuenteNoticia.query.filter_by(unidad_id=uid, activo=True).filter(
+        FuenteNoticia.tipo.in_(("rss", "html_site"))
     )
+    # Opcional: limitar a una sola fuente oficial (policía / ministerio)
+    fuente_ids = [x for x in request.form.getlist("fuente_ids") if str(x).isdigit()]
+    if fuente_ids:
+        fuentes_q = fuentes_q.filter(FuenteNoticia.id.in_([int(x) for x in fuente_ids]))
+    fuentes = fuentes_q.all()
     if not fuentes:
-        flash("No hay fuentes oficiales activas (RSS / sitio HTML). Revisá la pestaña Fuentes.", "warning")
+        flash("No hay fuentes oficiales activas. Abrí la pestaña Fuentes o dejá marcadas Policía/Ministerio.", "warning")
         return redirect(url_for("monitor_noticias.bandeja"))
 
     total_nuevas = 0

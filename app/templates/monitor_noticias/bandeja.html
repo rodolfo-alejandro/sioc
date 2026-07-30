@@ -17,16 +17,81 @@
 {% endif %}
 
 {% if can_manage %}
+{# === 1) Oficiales: acá van Policía + Ministerio (NO uses el filtro Medio de abajo) === #}
+<div class="card mb-3 border-primary">
+  <div class="card-header bg-primary text-white py-2">
+    <strong><i class="bi bi-building-check"></i> 1. Noticias oficiales de droga</strong>
+    <span class="small opacity-75 ms-1">— Policía de Salta y Ministerio de Seguridad</span>
+  </div>
+  <div class="card-body py-3">
+    <p class="small mb-3">
+      <strong>No hace falta escribir medios.</strong> Las dos páginas ya están cargadas como fuentes.
+      Solo elegí el período y apretá <em>Traer noticias</em>.
+    </p>
+    <form method="POST" action="{{ url_for('monitor_noticias.buscar_oficiales') }}" class="row g-3 align-items-end">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="col-12">
+        <label class="form-label small mb-1 fw-semibold">Desde dónde traer</label>
+        <div class="d-flex flex-wrap gap-3">
+          {% if fuentes_oficiales %}
+            {% for f in fuentes_oficiales %}
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="fuente_ids" value="{{ f.id }}" id="fo-{{ f.id }}" checked>
+              <label class="form-check-label" for="fo-{{ f.id }}">
+                {{ f.nombre }}
+                <span class="badge {% if f.tipo == 'html_site' %}text-bg-warning{% else %}text-bg-light border{% endif %}">{{ 'Web' if f.tipo == 'html_site' else 'RSS' }}</span>
+              </label>
+            </div>
+            {% endfor %}
+          {% else %}
+            <span class="text-muted small">Al abrir esta página se crean solas las fuentes oficiales. Recargá si no aparecen.</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small mb-1">Tema (opcional)</label>
+        <select name="tema_id" class="form-select">
+          <option value="">Todos (filtro droga)</option>
+          {% for t in temas %}
+          <option value="{{ t.id }}" {% if not t.activo %}disabled{% endif %}>{{ t.nombre }}{% if not t.activo %} (inactivo){% endif %}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small mb-1">Últimos N días</label>
+        <select name="dias_oficial" class="form-select" onchange="if(this.value){this.form.fecha_desde.value='';this.form.fecha_hasta.value='';}">
+          <option value="">Usar fechas →</option>
+          <option value="7" selected>Últimos 7 días</option>
+          <option value="15">Últimos 15 días</option>
+          <option value="30">Últimos 30 días</option>
+          <option value="90">Últimos 90 días</option>
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label small mb-1">O rango exacto</label>
+        <div class="input-group">
+          <input type="date" name="fecha_desde" class="form-control" onchange="if(this.value||this.form.fecha_hasta.value){this.form.dias_oficial.value='';}">
+          <input type="date" name="fecha_hasta" class="form-control" onchange="if(this.value||this.form.fecha_desde.value){this.form.dias_oficial.value='';}">
+        </div>
+      </div>
+      <div class="col-md-3 d-grid">
+        <button type="submit" class="btn btn-primary btn-lg"><i class="bi bi-cloud-download"></i> Traer noticias</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# === 2) Google News (medios periodísticos) — distinto de oficiales === #}
 <div class="card card-body py-3 mb-3 bg-light-subtle">
+  <div class="small fw-semibold mb-2 text-muted"><i class="bi bi-search"></i> 2. Búsqueda libre en Google News <span class="fw-normal">(medios / diarios — no es Policía ni Ministerio)</span></div>
   <form method="POST" action="{{ url_for('monitor_noticias.buscar_libre') }}" class="row g-2 align-items-end">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="col-md-5">
-      <label class="form-label small mb-1 fw-semibold"><i class="bi bi-search"></i> Búsqueda libre (escribí lo que quieras)</label>
-      <input type="text" name="q_libre" class="form-control" placeholder="Ej: narcotráfico Orán, cocaína frontera, bunker..." required>
-      <div class="form-text mb-0">Texto + regiones + período se aplican <strong>juntos</strong>. Separá con comas para varios términos.</div>
+      <label class="form-label small mb-1">Qué buscar</label>
+      <input type="text" name="q_libre" class="form-control" placeholder="Ej: narcotráfico Orán, cocaína frontera..." required>
     </div>
     <div class="col-md-3">
-      <label class="form-label small mb-1">Regiones (Argentina)</label>
+      <label class="form-label small mb-1">Regiones</label>
       <div class="dropdown">
         <button class="btn btn-outline-secondary w-100 text-start dropdown-toggle" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" id="regiones-btn">Salta</button>
         <div class="dropdown-menu p-2" style="max-height:340px; overflow:auto; min-width:260px">
@@ -46,7 +111,6 @@
           </div>
         </div>
       </div>
-      <div class="form-text mb-0">Sin selección = todo el país.</div>
     </div>
     <div class="col-md-2">
       <label class="form-label small mb-1">Período</label>
@@ -60,46 +124,7 @@
       </select>
     </div>
     <div class="col-md-2 d-grid">
-      <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i> Buscar</button>
-    </div>
-  </form>
-</div>
-
-<div class="card card-body py-3 mb-3 border-primary-subtle">
-  <form method="POST" action="{{ url_for('monitor_noticias.buscar_oficiales') }}" class="row g-2 align-items-end">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="col-12">
-      <div class="small fw-semibold mb-1"><i class="bi bi-building-check"></i> Fuentes oficiales (Policía de Salta + Ministerio de Seguridad)</div>
-      <div class="form-text mt-0 mb-2">Trae notas del RSS de DROGAS de Prensa Policía y del sitio del Ministerio. Filtrá por período.</div>
-    </div>
-    <div class="col-md-3">
-      <label class="form-label small mb-1">Tema (opcional)</label>
-      <select name="tema_id" class="form-select form-select-sm">
-        <option value="">Todos los temas de droga</option>
-        {% for t in temas %}
-        <option value="{{ t.id }}" {% if not t.activo %}disabled{% endif %}>{{ t.nombre }}{% if not t.activo %} (inactivo){% endif %}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="col-md-2">
-      <label class="form-label small mb-1">Últimos N días</label>
-      <select name="dias_oficial" class="form-select form-select-sm" onchange="if(this.value){this.form.fecha_desde.value='';this.form.fecha_hasta.value='';}">
-        <option value="">Usar fechas →</option>
-        <option value="7" selected>Últimos 7 días</option>
-        <option value="15">Últimos 15 días</option>
-        <option value="30">Últimos 30 días</option>
-        <option value="90">Últimos 90 días</option>
-      </select>
-    </div>
-    <div class="col-md-4">
-      <label class="form-label small mb-1">O rango de fechas</label>
-      <div class="input-group input-group-sm">
-        <input type="date" name="fecha_desde" class="form-control" onchange="if(this.value||this.form.fecha_hasta.value){this.form.dias_oficial.value='';}">
-        <input type="date" name="fecha_hasta" class="form-control" onchange="if(this.value||this.form.fecha_desde.value){this.form.dias_oficial.value='';}">
-      </div>
-    </div>
-    <div class="col-md-3 d-grid">
-      <button type="submit" class="btn btn-outline-primary"><i class="bi bi-cloud-download"></i> Recolectar oficiales</button>
+      <button type="submit" class="btn btn-outline-secondary"><i class="bi bi-search"></i> Buscar</button>
     </div>
   </form>
 </div>
@@ -158,7 +183,7 @@
 </div>
 
 <form method="get" class="card card-body py-2 mb-3">
-  <div class="small text-muted mb-2"><i class="bi bi-funnel"></i> Filtrar las noticias ya guardadas (se combinan todos los filtros):</div>
+  <div class="small text-muted mb-2"><i class="bi bi-funnel"></i> Filtrar la bandeja (solo noticias <strong>ya guardadas</strong>; no sirve para la primera búsqueda):</div>
   <div class="row g-2 align-items-end">
     <div class="col-md-3">
       <label class="form-label small mb-1">Tema</label>
@@ -179,9 +204,10 @@
       </select>
     </div>
     <div class="col-md-3">
-      <label class="form-label small mb-1">Medio</label>
-      <input type="text" name="medio" value="{{ selected.medio }}" class="form-control form-control-sm" list="medios-list" placeholder="Cualquiera">
+      <label class="form-label small mb-1">Medio (filtro)</label>
+      <input type="text" name="medio" value="{{ selected.medio }}" class="form-control form-control-sm" list="medios-list" placeholder="Ej. Policía, Ministerio…">
       <datalist id="medios-list">{% for m in medios %}<option value="{{ m }}">{% endfor %}</datalist>
+      <div class="form-text mb-0">No es para buscar: solo filtra lo ya traído.</div>
     </div>
     <div class="col-md-2">
       <label class="form-label small mb-1">Buscar en título</label>
