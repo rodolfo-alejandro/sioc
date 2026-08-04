@@ -37,6 +37,7 @@ from app.blueprints.sabana_llamadas.services import (
     guardar_imagen_sujeto,
 )
 from app.blueprints.sabana_llamadas.claro_import import procesar_archivo_claro
+from app.blueprints.sabana_llamadas.movistar_import import procesar_archivo_movistar
 from app.blueprints.analisis_puntos.claro_record import procesar_record_claro
 from app.extensions import db
 from app.models.sabana_llamadas import (
@@ -1286,7 +1287,7 @@ def cargas_upload_unificado():
             flash('Debe seleccionar una operadora válida.', 'warning')
             return redirect(url_for('sabana_llamadas.cargas_list', nuevo=1))
         if tipo_carga not in {
-            'sabana_gprs', 'sabana_voz', 'sabana_claro',
+            'sabana_gprs', 'sabana_voz', 'sabana_claro', 'sabana_movistar',
             'record_voz', 'record_gprs', 'record_claro',
         }:
             flash('Debe seleccionar un tipo de archivo válido.', 'warning')
@@ -1329,6 +1330,34 @@ def cargas_upload_unificado():
                     f'→ carga #{carga_gprs.id}.',
                     'success',
                 )
+            return redirect(url_for('sabana_llamadas.cargas_list'))
+
+        if tipo_carga == 'sabana_movistar':
+            if operadora != 'MOVISTAR':
+                flash('La sábana Movistar (TEMIS) requiere operadora MOVISTAR.', 'warning')
+                return redirect(url_for('sabana_llamadas.cargas_list', nuevo=1))
+            carga_voz, carga_gprs, stats, err = procesar_archivo_movistar(
+                f, current_user.unidad_id, current_user.id, sujeto_id or None,
+                operadora=operadora, caso_id=caso_id,
+            )
+            if err:
+                flash(f'Error cargando sábana Movistar: {err}', 'danger')
+            else:
+                partes = []
+                if carga_voz is not None:
+                    partes.append(
+                        f'VOZ {stats.get("voz", 0)} eventos '
+                        f'({stats.get("salientes", 0)} sal. / {stats.get("entrantes", 0)} ent.) '
+                        f'→ #{carga_voz.id}'
+                    )
+                if carga_gprs is not None:
+                    partes.append(
+                        f'GPRS/Datos {stats.get("gprs", 0)} eventos → #{carga_gprs.id}'
+                    )
+                if not partes:
+                    flash('Sábana Movistar procesada sin eventos.', 'warning')
+                else:
+                    flash('Sábana Movistar (TEMIS) procesada: ' + '; '.join(partes) + '.', 'success')
             return redirect(url_for('sabana_llamadas.cargas_list'))
 
         if tipo_carga == 'sabana_gprs':

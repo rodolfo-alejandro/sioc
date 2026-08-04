@@ -359,14 +359,15 @@
               <label class="form-label">Tipo de archivo</label>
               <select class="form-select" name="tipo_carga" id="tipo_carga" required>
                 <option value="">Seleccionar…</option>
-                <option value="sabana_gprs" data-operadoras="personal,movistar,otra">Sábana GPRS</option>
-                <option value="sabana_voz" data-operadoras="personal,movistar,otra">Sábana VOZ</option>
+                <option value="sabana_gprs" data-operadoras="personal,otra">Sábana GPRS</option>
+                <option value="sabana_voz" data-operadoras="personal,otra">Sábana VOZ</option>
+                <option value="sabana_movistar" data-operadoras="movistar">Sábana Movistar TEMIS (VOZ y/o Datos)</option>
                 <option value="sabana_claro" data-operadoras="claro">Sábana Claro (completa GPRS+VOZ)</option>
                 <option value="record_claro" data-operadoras="claro">Record Claro (completo GPRS+VOZ)</option>
                 <option value="record_voz" data-operadoras="personal,movistar,otra">Record VOZ</option>
                 <option value="record_gprs" data-operadoras="personal,movistar,otra">Record GPRS</option>
               </select>
-              <p id="tipo_carga_hint" class="form-text d-none mb-0">Un solo archivo: el sistema genera cargas VOZ y GPRS automáticamente.</p>
+              <p id="tipo_carga_hint" class="form-text d-none mb-0">Un solo archivo: el sistema genera cargas VOZ y/o GPRS automáticamente según el contenido.</p>
             </div>
             <div class="col-md-4">
               <label class="form-label">Archivo</label>
@@ -502,6 +503,10 @@
       var claroOpt = tipo.querySelector('option[value="sabana_claro"]');
       if (claroOpt && !claroOpt.disabled) tipo.value = 'sabana_claro';
     }
+    if (op === 'movistar' && !tipo.value) {
+      var movOpt = tipo.querySelector('option[value="sabana_movistar"]');
+      if (movOpt && !movOpt.disabled) tipo.value = 'sabana_movistar';
+    }
     if (op === 'claro' && tipo.value === 'record_voz') {
       var rc = tipo.querySelector('option[value="record_claro"]');
       if (rc && !rc.disabled) tipo.value = 'record_claro';
@@ -514,7 +519,10 @@
     var isSabana = t.indexOf('sabana_') === 0;
     wrapS.style.display = isSabana ? '' : 'none';
     if (hintClaro) {
-      hintClaro.classList.toggle('d-none', t !== 'sabana_claro' && t !== 'record_claro');
+      hintClaro.classList.toggle(
+        'd-none',
+        t !== 'sabana_claro' && t !== 'record_claro' && t !== 'sabana_movistar'
+      );
     }
   }
 
