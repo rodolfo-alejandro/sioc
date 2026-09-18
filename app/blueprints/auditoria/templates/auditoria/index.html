@@ -1,0 +1,108 @@
+{% extends "layouts/base.html" %}
+{% block title %}Auditoría - SIOC{% endblock %}
+{% block extra_head %}
+<style>
+.auditoria-card {
+    transition: all 0.3s ease;
+}
+.auditoria-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+.module-icon {
+    font-size: 3rem;
+    opacity: 0.8;
+}
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-clipboard-check"></i> Panel de Auditoría</h1>
+    <p class="text-muted">
+        Sistema de auditoría para revisión y control de calidad de datos cargados.
+        Los auditores pueden agregar observaciones sin modificar los datos originales.
+    </p>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-12">
+        <div class="alert alert-info">
+            <h5><i class="bi bi-info-circle"></i> Cómo funciona el sistema de auditoría</h5>
+            <ul class="mb-0">
+                <li><strong>Ver datos agrupados:</strong> Revise los registros por dependencia, actuario, estado, etc.</li>
+                <li><strong>Agregar observaciones:</strong> Registre observaciones generales o sobre campos específicos.</li>
+                <li><strong>Sin modificar datos:</strong> Las observaciones no afectan los datos reales, solo se registran aparte.</li>
+                <li><strong>Resolver observaciones:</strong> Marque observaciones como resueltas cuando se corrijan.</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-md-6">
+        <div class="card auditoria-card h-100">
+            <div class="card-body text-center">
+                <div class="module-icon text-primary mb-3">
+                    <i class="bi bi-table"></i>
+                </div>
+                <h3 class="card-title">Denuncias Web</h3>
+                <p class="text-muted">
+                    Auditoría de denuncias web de drogas cargadas en el sistema.
+                    Revise por dependencia, actuario, estado y más.
+                </p>
+                <a href="{{ url_for('auditoria.denuncias_web') }}" class="btn btn-primary">
+                    <i class="bi bi-arrow-right-circle"></i> Acceder
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card auditoria-card h-100">
+            <div class="card-body text-center">
+                <div class="module-icon text-success mb-3">
+                    <i class="bi bi-diagram-3"></i>
+                </div>
+                <h3 class="card-title">Intervenciones</h3>
+                <p class="text-muted">
+                    Auditoría de intervenciones e incautaciones registradas.
+                    Revise por DINAR, SINAR, departamento operativo y más.
+                </p>
+                <a href="{{ url_for('auditoria.intervenciones') }}" class="btn btn-success">
+                    <i class="bi bi-arrow-right-circle"></i> Acceder
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-12">
+        <div class="card auditoria-card">
+            <div class="card-body text-center">
+                <div class="module-icon text-info mb-3">
+                    <i class="bi bi-graph-up"></i>
+                </div>
+                <h3 class="card-title">Estadísticas de Auditoría</h3>
+                <p class="text-muted">
+                    Dashboard con estadísticas generales de auditorías realizadas.
+                </p>
+                <a href="{{ url_for('auditoria.estadisticas') }}" class="btn btn-info">
+                    <i class="bi bi-bar-chart"></i> Ver Estadísticas
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if can_create %}
+<div class="alert alert-success mt-4">
+    <i class="bi bi-check-circle"></i> Tiene permisos para <strong>crear observaciones</strong> de auditoría.
+</div>
+{% endif %}
+
+{% if can_resolve %}
+<div class="alert alert-warning mt-4">
+    <i class="bi bi-shield-check"></i> Tiene permisos para <strong>resolver observaciones</strong> de auditoría.
+</div>
+{% endif %}
+
+{% endblock %}

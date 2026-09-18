@@ -252,6 +252,22 @@
                 </li>
                 {% endif %}
 
+                <!-- Auditoría -->
+                {% if current_user.has_permission('AUDITORIA_VIEW') %}
+                <li class="nav-item">
+                    <a class="nav-link" href="#" data-bs-toggle="collapse" data-bs-target="#submenuAuditoria">
+                        <i class="bi bi-clipboard-check"></i> Auditoría
+                        <i class="bi bi-chevron-down ms-auto"></i>
+                    </a>
+                    <ul class="nav flex-column collapse" id="submenuAuditoria">
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('auditoria.index') }}"><i class="bi bi-house"></i> Panel Principal</a></li>
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('auditoria.denuncias_web') }}"><i class="bi bi-megaphone"></i> Denuncias Web</a></li>
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('auditoria.intervenciones') }}"><i class="bi bi-diagram-3"></i> Intervenciones</a></li>
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('auditoria.estadisticas') }}"><i class="bi bi-graph-up"></i> Estadísticas</a></li>
+                    </ul>
+                </li>
+                {% endif %}
+
                 <!-- DataLab -->
                 <li class="nav-item">
                     <a class="nav-link" href="#" data-bs-toggle="collapse" data-bs-target="#submenuDataLab">
