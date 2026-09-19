@@ -65,3 +65,99 @@
 .aud-acciones .btn {
   margin: 0 0.1rem;
 }
+
+/* —— Listado dual (scroll horizontal) —— */
+.aud-leyenda {
+  color: #64748b;
+}
+.aud-dot {
+  display: inline-block;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 0.15rem;
+  margin-right: 0.25rem;
+  vertical-align: middle;
+}
+.aud-dot-orig { background: #cbd5e1; }
+.aud-dot-pend { background: #fbbf24; }
+.aud-dot-ok { background: #22c55e; }
+
+.aud-listado-wrap {
+  max-height: min(70vh, 720px);
+  overflow: auto;
+}
+
+.aud-listado {
+  min-width: 1400px;
+}
+
+.aud-listado thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  white-space: nowrap;
+  font-size: 0.75rem;
+  background: #f8fafc;
+}
+
+.aud-listado .aud-sticky-col {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  min-width: 6.5rem;
+  background: inherit;
+  box-shadow: 2px 0 4px rgba(15, 23, 42, 0.06);
+}
+
+.aud-listado thead .aud-sticky-col {
+  z-index: 4;
+  background: #f8fafc;
+}
+
+.aud-list-orig > td {
+  background: #f1f5f9;
+  vertical-align: top;
+  border-bottom-color: #e2e8f0;
+}
+
+.aud-list-audit > td {
+  vertical-align: top;
+  border-bottom: 2px solid #94a3b8;
+}
+
+.aud-list-audit.aud-row-pend > td {
+  background: #fffbeb;
+}
+
+.aud-list-audit.aud-row-ok > td {
+  background: #f0fdf4;
+}
+
+.aud-list-audit .aud-sticky-col {
+  background: inherit;
+}
+
+.aud-cell-val {
+  font-size: 0.8rem;
+  max-width: 11rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.aud-cell-audit {
+  min-width: 8rem;
+}
+
+.aud-cell-pend {
+  background: #fef3c7 !important;
+}
+
+.aud-cell-ok {
+  background: #dcfce7 !important;
+}
+
+.aud-btn-campo {
+  padding: 0.1rem 0.35rem;
+  margin-top: 0.2rem;
+}

@@ -8,7 +8,7 @@ from urllib.parse import urlencode
 
 from flask import abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
-from sqlalchemy import case, func, inspect, text
+from sqlalchemy import case, func, inspect, or_, text
 
 from app.blueprints.analisis_denuncias import routes as ad_routes
 from app.blueprints.auditoria import bp
@@ -17,8 +17,10 @@ from app.models.analisis_denuncias import DenunciaWeb
 from app.models.auditoria import (
     CAMPO_GENERAL,
     CAMPOS_AUDITABLES_MAP,
+    CAMPOS_LISTADO,
     CAMPOS_PRINCIPALES,
     CAMPOS_SECUNDARIOS,
+    ESTADO_LABEL,
     AuditoriaObs,
 )
 
@@ -118,6 +120,26 @@ def _build_campos(row: DenunciaWeb, obs_by_campo: dict, spec: tuple) -> list[dic
     return out
 
 
+def _safe_next() -> str:
+    n = (request.form.get("next") or request.args.get("next") or "").strip()
+    if n.startswith("/auditoria") and not n.startswith("//"):
+        return n
+    return ""
+
+
+def _redirect_after(denuncia_id: int):
+    nxt = _safe_next()
+    if nxt:
+        return redirect(nxt)
+    return redirect(url_for("auditoria.detalle", denuncia_id=denuncia_id))
+
+
+def _estado_ui(code: str | None) -> str:
+    if not code:
+        return "Pendiente a auditar"
+    return ESTADO_LABEL.get(code, code)
+
+
 @bp.route("/")
 @login_required
 def index():
@@ -135,7 +157,6 @@ def listado():
     solo_obs = (request.args.get("solo_obs") or "").strip() == "1"
     estado_obs = (request.args.get("estado_obs") or "").strip()
 
-    # Mismos filtros avanzados que Denuncias Web
     q = ad_routes._apply_filters(ad_routes._base_q())
 
     obs_count_sq = (
@@ -153,7 +174,13 @@ def listado():
     if solo_obs:
         q = q.filter(obs_count_sq.c.obs_total > 0)
     if estado_obs == "pendiente":
-        q = q.filter(obs_count_sq.c.obs_pendientes > 0)
+        q = q.filter(
+            or_(
+                obs_count_sq.c.obs_total.is_(None),
+                obs_count_sq.c.obs_total == 0,
+                obs_count_sq.c.obs_pendientes > 0,
+            )
+        )
     elif estado_obs == "resuelta":
         q = q.filter(
             obs_count_sq.c.obs_total > 0,
@@ -161,13 +188,13 @@ def listado():
         )
 
     page = max(1, request.args.get("page", type=int) or 1)
-    per_page = min(200, max(20, request.args.get("per_page", type=int) or 50))
+    per_page = min(100, max(10, request.args.get("per_page", type=int) or 25))
     total = q.with_entities(func.count(DenunciaWeb.id)).scalar() or 0
     pages = max(1, (total + per_page - 1) // per_page)
     if page > pages:
         page = pages
 
-    rows = (
+    raw_rows = (
         q.with_entities(
             DenunciaWeb,
             func.coalesce(obs_count_sq.c.obs_total, 0).label("obs_total"),
@@ -179,9 +206,62 @@ def listado():
         .all()
     )
 
+    ids = [r.id for r, _, _ in raw_rows]
+    obs_by_den = {i: {} for i in ids}
+    if ids:
+        for o in AuditoriaObs.query.filter(
+            AuditoriaObs.unidad_id == current_user.unidad_id,
+            AuditoriaObs.denuncia_id.in_(ids),
+        ).all():
+            obs_by_den[o.denuncia_id][o.campo] = o
+
+    items = []
+    for r, obs_total, obs_pendientes in raw_rows:
+        obs_map = obs_by_den.get(r.id, {})
+        if obs_total and not obs_pendientes:
+            row_estado = "auditado"
+        else:
+            row_estado = "pendiente"
+        campos = []
+        for key, label in CAMPOS_LISTADO:
+            obs = obs_map.get(key)
+            valor = _valor_campo(r, key)
+            short = valor if len(valor) <= 80 else (valor[:77] + "…")
+            campos.append(
+                {
+                    "key": key,
+                    "label": label,
+                    "valor": valor,
+                    "short": short or "—",
+                    "obs": obs,
+                    "aud_short": (
+                        ((obs.valor_auditor or obs.nota or "")[:80] + ("…" if len(obs.valor_auditor or obs.nota or "") > 80 else ""))
+                        if obs and (obs.valor_auditor or obs.nota)
+                        else ""
+                    ),
+                }
+            )
+        items.append(
+            {
+                "row": r,
+                "obs_total": int(obs_total or 0),
+                "obs_pendientes": int(obs_pendientes or 0),
+                "row_estado": row_estado,
+                "campos": campos,
+                "general": obs_map.get(CAMPO_GENERAL),
+            }
+        )
+
     args_no_page = request.args.to_dict(flat=False)
     args_no_page.pop("page", None)
     qs_no_page = urlencode(args_no_page, doseq=True)
+    listado_url = url_for("auditoria.listado")
+    if qs_no_page:
+        listado_url = f"{listado_url}?{qs_no_page}"
+        if page > 1:
+            listado_url += f"&page={page}"
+    elif page > 1:
+        listado_url = f"{listado_url}?page={page}"
 
     selected = ad_routes._selected_filters()
     selected["solo_obs"] = solo_obs
@@ -189,15 +269,18 @@ def listado():
 
     return render_template(
         "auditoria/listado.html",
-        rows=rows,
+        items=items,
         total=total,
         page=page,
         pages=pages,
         per_page=per_page,
         qs_no_page=qs_no_page,
+        listado_url=listado_url,
+        columnas=CAMPOS_LISTADO,
         filtros=ad_routes._filter_options(),
         selected=selected,
         can_edit=_can_edit(),
+        campo_general=CAMPO_GENERAL,
     )
 
 
@@ -223,6 +306,7 @@ def detalle(denuncia_id: int):
         general=general,
         campo_general=CAMPO_GENERAL,
         can_edit=_can_edit(),
+        estado_label=ESTADO_LABEL,
     )
 
 
@@ -231,20 +315,20 @@ def detalle(denuncia_id: int):
 def guardar_obs(denuncia_id: int):
     if not _can_edit():
         flash("No tenés permiso para cargar observaciones de auditoría.", "warning")
-        return redirect(url_for("auditoria.detalle", denuncia_id=denuncia_id))
+        return _redirect_after(denuncia_id)
     _ensure_schema()
 
     row = _denuncia_or_404(denuncia_id)
     campo = (request.form.get("campo") or "").strip()
     if campo != CAMPO_GENERAL and campo not in CAMPOS_AUDITABLES_MAP:
         flash("Campo de auditoría inválido.", "danger")
-        return redirect(url_for("auditoria.detalle", denuncia_id=denuncia_id))
+        return _redirect_after(denuncia_id)
 
     valor_auditor = (request.form.get("valor_auditor") or "").strip() or None
     nota = (request.form.get("nota") or "").strip() or None
     if not valor_auditor and not nota:
         flash("Indicá al menos el valor según auditoría o una nota.", "warning")
-        return redirect(url_for("auditoria.detalle", denuncia_id=denuncia_id))
+        return _redirect_after(denuncia_id)
 
     valor_sistema = None if campo == CAMPO_GENERAL else (_valor_campo(row, campo) or None)
 
@@ -271,7 +355,7 @@ def guardar_obs(denuncia_id: int):
     db.session.commit()
 
     flash("Observación de auditoría guardada (el dato original no se modificó).", "success")
-    return redirect(url_for("auditoria.detalle", denuncia_id=denuncia_id))
+    return _redirect_after(denuncia_id)
 
 
 @bp.route("/denuncias/<int:denuncia_id>/obs/<int:obs_id>/estado", methods=["POST"])
@@ -279,7 +363,7 @@ def guardar_obs(denuncia_id: int):
 def cambiar_estado(denuncia_id: int, obs_id: int):
     if not _can_edit():
         flash("No tenés permiso para modificar observaciones.", "warning")
-        return redirect(url_for("auditoria.detalle", denuncia_id=denuncia_id))
+        return _redirect_after(denuncia_id)
     _ensure_schema()
     _denuncia_or_404(denuncia_id)
 
@@ -292,13 +376,13 @@ def cambiar_estado(denuncia_id: int, obs_id: int):
     nuevo = (request.form.get("estado") or "").strip()
     if nuevo not in ("pendiente", "resuelta"):
         flash("Estado inválido.", "danger")
-        return redirect(url_for("auditoria.detalle", denuncia_id=denuncia_id))
+        return _redirect_after(denuncia_id)
 
     obs.estado = nuevo
     obs.updated_at = datetime.utcnow()
     db.session.commit()
-    flash(f"Observación marcada como {nuevo}.", "success")
-    return redirect(url_for("auditoria.detalle", denuncia_id=denuncia_id))
+    flash(f"Marcado como {_estado_ui(nuevo)}.", "success")
+    return _redirect_after(denuncia_id)
 
 
 @bp.route("/denuncias/<int:denuncia_id>/obs/<int:obs_id>/borrar", methods=["POST"])
@@ -306,7 +390,7 @@ def cambiar_estado(denuncia_id: int, obs_id: int):
 def borrar_obs(denuncia_id: int, obs_id: int):
     if not _can_edit():
         flash("No tenés permiso para borrar observaciones.", "warning")
-        return redirect(url_for("auditoria.detalle", denuncia_id=denuncia_id))
+        return _redirect_after(denuncia_id)
     _ensure_schema()
     _denuncia_or_404(denuncia_id)
 
@@ -318,4 +402,4 @@ def borrar_obs(denuncia_id: int, obs_id: int):
     db.session.delete(obs)
     db.session.commit()
     flash("Observación eliminada.", "info")
-    return redirect(url_for("auditoria.detalle", denuncia_id=denuncia_id))
+    return _redirect_after(denuncia_id)

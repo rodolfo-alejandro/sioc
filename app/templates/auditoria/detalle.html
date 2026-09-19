@@ -51,7 +51,7 @@
                     <div class="mt-1"><strong>Nota:</strong> {{ general.nota }}</div>
                     {% endif %}
                     <div class="small text-muted mt-1">
-                        Estado: {{ general.estado }}
+                        Estado: {{ estado_label.get(general.estado, general.estado) }}
                         · {{ general.updated_at|localtime('%d/%m/%Y %H:%M') if general.updated_at else '' }}
                     </div>
                 </div>
@@ -61,10 +61,10 @@
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         {% if general.estado == 'pendiente' %}
                         <input type="hidden" name="estado" value="resuelta">
-                        <button class="btn btn-outline-success btn-sm" type="submit">Resolver</button>
+                        <button class="btn btn-outline-success btn-sm" type="submit">Marcar auditado</button>
                         {% else %}
                         <input type="hidden" name="estado" value="pendiente">
-                        <button class="btn btn-outline-warning btn-sm" type="submit">Reabrir</button>
+                        <button class="btn btn-outline-warning btn-sm" type="submit">Pendiente a auditar</button>
                         {% endif %}
                     </form>
                     <form method="post" action="{{ url_for('auditoria.borrar_obs', denuncia_id=row.id, obs_id=general.id) }}"
@@ -90,9 +90,9 @@
     </td>
     <td class="aud-estado text-muted" rowspan="2">
         {% if c.obs %}
-            <span class="badge {% if c.obs.estado == 'pendiente' %}bg-warning text-dark{% else %}bg-success{% endif %}">
-                {{ c.obs.estado }}
-            </span>
+                                <span class="badge {% if c.obs.estado == 'pendiente' %}bg-warning text-dark{% else %}bg-success{% endif %}">
+                                    {{ estado_label.get(c.obs.estado, c.obs.estado) }}
+                                </span>
         {% else %}
             —
         {% endif %}

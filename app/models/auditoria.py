@@ -40,6 +40,29 @@ CAMPOS_SECUNDARIOS = (
     ("longitud", "Longitud"),
 )
 
+# Columnas del listado (tabla ancha con scroll horizontal)
+CAMPOS_LISTADO = (
+    ("nro_actuacion", "Nro"),
+    ("fecha_denuncia", "Fecha"),
+    ("causa_estado", "Estado"),
+    ("desc_dep_registro", "Dependencia"),
+    ("desc_dep_actuario", "Dep. actuario"),
+    ("actuario_apenom", "Actuario"),
+    ("localidad", "Localidad"),
+    ("barrio", "Barrio"),
+    ("latitud", "Lat"),
+    ("longitud", "Lon"),
+    ("investigados", "Investigados"),
+    ("relato", "Relato"),
+)
+
+# Estados de observación (BD) → etiquetas UI
+ESTADO_LABEL = {
+    "pendiente": "Pendiente a auditar",
+    "resuelta": "Auditado",
+    "auditado": "Auditado",
+}
+
 CAMPOS_AUDITABLES = CAMPOS_PRINCIPALES + CAMPOS_SECUNDARIOS
 CAMPOS_AUDITABLES_MAP = {k: v for k, v in CAMPOS_AUDITABLES}
 CAMPOS_SECUNDARIOS_KEYS = {k for k, _ in CAMPOS_SECUNDARIOS}
