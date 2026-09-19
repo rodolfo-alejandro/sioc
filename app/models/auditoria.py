@@ -87,6 +87,8 @@ class AuditoriaObs(db.Model):
         nullable=False,
         index=True,
     )
+    # Clave de negocio: sobrevive reimportaciones (el id interno puede cambiar solo si se borra/recrea)
+    causas_id = db.Column(db.String(80), nullable=True, index=True)
     campo = db.Column(db.String(80), nullable=False, index=True)
     valor_sistema = db.Column(db.Text, nullable=True)
     valor_auditor = db.Column(db.Text, nullable=True)
@@ -104,6 +106,7 @@ class AuditoriaObs(db.Model):
     __table_args__ = (
         db.UniqueConstraint("denuncia_id", "campo", name="uq_auditoria_obs_denuncia_campo"),
         db.Index("ix_auditoria_obs_unidad_estado", "unidad_id", "estado"),
+        db.Index("ix_auditoria_obs_unidad_causas", "unidad_id", "causas_id"),
     )
 
     @property

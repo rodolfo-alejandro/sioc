@@ -446,7 +446,32 @@ def _import_from_text(text: str, replace_all: bool = False) -> dict:
         return {"error": f"Columnas faltantes: {', '.join(missing)}"}
 
     deleted = 0
+    obs_backup: list[dict] = []
     if replace_all:
+        # Preservar observaciones de auditoría por causas_id (el id interno cambia al recrear)
+        from app.models.auditoria import AuditoriaObs
+
+        for o in AuditoriaObs.query.filter_by(unidad_id=current_user.unidad_id).all():
+            cid = (o.causas_id or "").strip()
+            if not cid and o.denuncia_id:
+                d = DenunciaWeb.query.get(o.denuncia_id)
+                cid = (d.causas_id if d else "") or ""
+            if not cid:
+                continue
+            obs_backup.append(
+                {
+                    "causas_id": cid,
+                    "campo": o.campo,
+                    "valor_sistema": o.valor_sistema,
+                    "valor_auditor": o.valor_auditor,
+                    "nota": o.nota,
+                    "estado": o.estado,
+                    "auditor_id": o.auditor_id,
+                    "created_at": o.created_at,
+                    "updated_at": o.updated_at,
+                }
+            )
+        AuditoriaObs.query.filter_by(unidad_id=current_user.unidad_id).delete()
         deleted = DenunciaWeb.query.filter(DenunciaWeb.unidad_id == current_user.unidad_id).delete()
         db.session.commit()
 
@@ -505,7 +530,51 @@ def _import_from_text(text: str, replace_all: bool = False) -> dict:
             updated += 1
 
     db.session.commit()
-    return {"importados": imported, "actualizados": updated, "omitidos": skipped, "eliminados_previos": deleted}
+
+    restauradas = 0
+    if obs_backup:
+        from app.models.auditoria import AuditoriaObs
+
+        by_causa = {
+            d.causas_id: d
+            for d in DenunciaWeb.query.filter(
+                DenunciaWeb.unidad_id == current_user.unidad_id,
+                DenunciaWeb.activo.is_(True),
+            ).all()
+            if d.causas_id
+        }
+        for snap in obs_backup:
+            d = by_causa.get(snap["causas_id"])
+            if not d:
+                continue
+            exists = AuditoriaObs.query.filter_by(denuncia_id=d.id, campo=snap["campo"]).first()
+            if exists:
+                continue
+            db.session.add(
+                AuditoriaObs(
+                    unidad_id=current_user.unidad_id,
+                    denuncia_id=d.id,
+                    causas_id=snap["causas_id"],
+                    campo=snap["campo"],
+                    valor_sistema=snap["valor_sistema"],
+                    valor_auditor=snap["valor_auditor"],
+                    nota=snap["nota"],
+                    estado=snap["estado"] or "pendiente",
+                    auditor_id=snap["auditor_id"],
+                    created_at=snap["created_at"] or now,
+                    updated_at=snap["updated_at"] or now,
+                )
+            )
+            restauradas += 1
+        db.session.commit()
+
+    return {
+        "importados": imported,
+        "actualizados": updated,
+        "omitidos": skipped,
+        "eliminados_previos": deleted,
+        "auditorias_restauradas": restauradas,
+    }
 
 
 def _import_from_csv(file_storage) -> dict:
@@ -552,6 +621,8 @@ def importar():
             )
             if int(res.get("eliminados_previos") or 0) > 0:
                 msg = f"Se eliminaron {res['eliminados_previos']} registros previos. " + msg
+            if int(res.get("auditorias_restauradas") or 0) > 0:
+                msg += f" Observaciones de auditoría restauradas: {res['auditorias_restauradas']}."
             flash(msg, "success")
         return redirect(url_for("analisis_denuncias.importar"))
 
@@ -578,13 +649,13 @@ def importar_base():
     if res.get("error"):
         flash(res["error"], "danger")
     else:
-        flash(
-            (
-                f"Archivo base importado. Importados: {res['importados']}, actualizados: {res['actualizados']}, "
-                f"omitidos: {res['omitidos']}. La carga quedó compartida para toda la dependencia."
-            ),
-            "success",
+        msg = (
+            f"Archivo base importado. Importados: {res['importados']}, actualizados: {res['actualizados']}, "
+            f"omitidos: {res['omitidos']}. La carga quedó compartida para toda la dependencia."
         )
+        if int(res.get("auditorias_restauradas") or 0) > 0:
+            msg += f" Observaciones de auditoría restauradas: {res['auditorias_restauradas']}."
+        flash(msg, "success")
     return redirect(url_for("analisis_denuncias.importar"))
 
 
@@ -592,9 +663,12 @@ def importar_base():
 def limpiar_importado():
     if not _can_import():
         abort(403)
+    from app.models.auditoria import AuditoriaObs
+
+    AuditoriaObs.query.filter_by(unidad_id=current_user.unidad_id).delete()
     deleted = DenunciaWeb.query.filter(DenunciaWeb.unidad_id == current_user.unidad_id).delete()
     db.session.commit()
-    flash(f"Se eliminaron {deleted} denuncias cargadas en esta unidad.", "success")
+    flash(f"Se eliminaron {deleted} denuncias cargadas en esta unidad (y sus observaciones de auditoría).", "success")
     return redirect(url_for("analisis_denuncias.importar"))
 
 

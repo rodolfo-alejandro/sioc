@@ -60,6 +60,30 @@ def _ensure_schema():
 
     if AuditoriaObs.__tablename__ not in existing:
         AuditoriaObs.__table__.create(bind=db.engine)
+    else:
+        cols = {c.get("name") for c in insp.get_columns(AuditoriaObs.__tablename__)}
+        if "causas_id" not in cols:
+            db.session.execute(
+                text(f"ALTER TABLE {AuditoriaObs.__tablename__} ADD COLUMN causas_id VARCHAR(80) NULL")
+            )
+            db.session.execute(
+                text(
+                    f"CREATE INDEX ix_auditoria_obs_unidad_causas ON {AuditoriaObs.__tablename__} (unidad_id, causas_id)"
+                )
+            )
+            db.session.commit()
+        # Backfill causas_id desde la denuncia
+        db.session.execute(
+            text(
+                f"""
+                UPDATE {AuditoriaObs.__tablename__} o
+                INNER JOIN analisis_denuncias_web d ON d.id = o.denuncia_id
+                SET o.causas_id = d.causas_id
+                WHERE o.causas_id IS NULL OR o.causas_id = ''
+                """
+            )
+        )
+        db.session.commit()
 
     _schema_checked = True
 
@@ -352,6 +376,7 @@ def guardar_obs(denuncia_id: int):
         )
         db.session.add(obs)
 
+    obs.causas_id = row.causas_id
     obs.valor_sistema = valor_sistema
     obs.valor_auditor = valor_auditor
     obs.nota = nota
@@ -409,3 +434,128 @@ def borrar_obs(denuncia_id: int, obs_id: int):
     db.session.commit()
     flash("Observación eliminada.", "info")
     return _redirect_after(denuncia_id)
+
+
+def _filtered_denuncias_q():
+    return ad_routes._apply_filters(ad_routes._base_q())
+
+
+@bp.route("/export.xlsx")
+@login_required
+def export_xlsx():
+    """Exporta Excel según modo: completo | observaciones."""
+    if not _can_view():
+        flash("No tenés permiso para exportar auditoría.", "warning")
+        return redirect(url_for("core.dashboard"))
+    _ensure_schema()
+
+    modo = (request.args.get("modo") or "completo").strip().lower()
+    if modo not in ("completo", "observaciones"):
+        modo = "completo"
+
+    from io import BytesIO
+
+    import pandas as pd
+    from flask import send_file
+
+    q = _filtered_denuncias_q().order_by(DenunciaWeb.fecha_denuncia.desc(), DenunciaWeb.id.desc())
+    denuncias = q.limit(20000).all()
+    ids = [d.id for d in denuncias]
+
+    obs_rows = []
+    if ids:
+        obs_rows = (
+            AuditoriaObs.query.filter(
+                AuditoriaObs.unidad_id == current_user.unidad_id,
+                AuditoriaObs.denuncia_id.in_(ids),
+            )
+            .order_by(AuditoriaObs.denuncia_id.asc(), AuditoriaObs.campo.asc())
+            .all()
+        )
+    obs_by_den = {}
+    for o in obs_rows:
+        obs_by_den.setdefault(o.denuncia_id, []).append(o)
+
+    buf = BytesIO()
+    stamp = datetime.utcnow().strftime("%Y%m%d_%H%M")
+
+    if modo == "observaciones":
+        # Solo lo que anotó el auditor (para entregar / imprimir a auditados)
+        data = []
+        for d in denuncias:
+            for o in obs_by_den.get(d.id, []):
+                data.append(
+                    {
+                        "Nro actuación": d.nro_actuacion or "",
+                        "Causa ID": d.causas_id or o.causas_id or "",
+                        "Fecha denuncia": d.fecha_denuncia.strftime("%d/%m/%Y") if d.fecha_denuncia else "",
+                        "Dependencia": d.desc_dep_registro or "",
+                        "Actuario": f"{(d.actuario_grado or '').strip()} {(d.actuario_apenom or '').strip()}".strip(),
+                        "Campo": o.campo_label,
+                        "Valor según sistema (al auditar)": o.valor_sistema or "",
+                        "Valor según auditoría": o.valor_auditor or "",
+                        "Nota del auditor": o.nota or "",
+                        "Estado": ESTADO_LABEL.get(o.estado, o.estado),
+                        "Fecha observación": o.updated_at.strftime("%d/%m/%Y %H:%M") if o.updated_at else "",
+                    }
+                )
+        df = pd.DataFrame(data)
+        with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+            df.to_excel(writer, index=False, sheet_name="Observaciones auditoría")
+        fname = f"auditoria_solo_observaciones_{stamp}.xlsx"
+    else:
+        # Completo: datos cargados + columnas de auditoría por campo con obs
+        base_rows = []
+        for d in denuncias:
+            base = {
+                "Nro actuación": d.nro_actuacion or "",
+                "Causa ID": d.causas_id or "",
+                "Fecha denuncia": d.fecha_denuncia.strftime("%d/%m/%Y") if d.fecha_denuncia else "",
+                "Estado causa": d.causa_estado or "",
+                "Dependencia": d.desc_dep_registro or "",
+                "Dep. actuario": d.desc_dep_actuario or "",
+                "Actuario": f"{(d.actuario_grado or '').strip()} {(d.actuario_apenom or '').strip()}".strip(),
+                "Localidad": d.localidad or "",
+                "Barrio": d.barrio or "",
+                "Latitud": d.latitud if d.latitud is not None else "",
+                "Longitud": d.longitud if d.longitud is not None else "",
+                "Investigados": d.investigados or "",
+                "Relato": (d.relato_original or d.relato or ""),
+            }
+            obs_list = obs_by_den.get(d.id, [])
+            if not obs_list:
+                base["Estado auditoría"] = "Pendiente a auditar"
+                base_rows.append(base)
+            else:
+                pendientes = sum(1 for o in obs_list if o.estado == "pendiente")
+                base["Estado auditoría"] = "Pendiente a auditar" if pendientes else "Auditado"
+                base["Cant. observaciones"] = len(obs_list)
+                base_rows.append(base)
+
+        obs_data = []
+        for d in denuncias:
+            for o in obs_by_den.get(d.id, []):
+                obs_data.append(
+                    {
+                        "Nro actuación": d.nro_actuacion or "",
+                        "Causa ID": d.causas_id or "",
+                        "Campo": o.campo_label,
+                        "Valor cargado (snapshot)": o.valor_sistema or "",
+                        "Valor según auditoría": o.valor_auditor or "",
+                        "Nota": o.nota or "",
+                        "Estado": ESTADO_LABEL.get(o.estado, o.estado),
+                    }
+                )
+
+        with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+            pd.DataFrame(base_rows).to_excel(writer, index=False, sheet_name="Denuncias")
+            pd.DataFrame(obs_data).to_excel(writer, index=False, sheet_name="Observaciones")
+        fname = f"auditoria_completo_{stamp}.xlsx"
+
+    buf.seek(0)
+    return send_file(
+        buf,
+        as_attachment=True,
+        download_name=fname,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
