@@ -1,36 +1,50 @@
 {% extends "layouts/base.html" %}
 {% block title %}Auditoría Denuncias Web - SIOC{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/sabana_mapa.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/analisis_denuncias.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/auditoria.css') }}">
+{% endblock %}
 {% block content %}
 <div class="page-header">
     <h1><i class="bi bi-clipboard-check"></i> Auditoría — Denuncias Web</h1>
     <p class="text-muted mb-0">Control de calidad: observaciones por campo sin modificar el dato cargado.</p>
 </div>
 
-<form method="get" class="row g-2 align-items-end mb-3">
-    <div class="col-md-5">
-        <label class="form-label small mb-0">Buscar</label>
-        <input type="text" class="form-control form-control-sm" name="q" value="{{ q_text }}"
-               placeholder="Nro actuación, AP, estado, actuario, localidad…">
+{% include "analisis_denuncias/_filtros.html" %}
+
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="get" class="row g-2 align-items-end" id="aud-obs-filtros">
+            {# Conservar filtros avanzados al filtrar por observaciones #}
+            {% for key, vals in request.args.lists() %}
+                {% if key not in ('solo_obs', 'estado_obs', 'page') %}
+                    {% for v in vals %}
+                    <input type="hidden" name="{{ key }}" value="{{ v }}">
+                    {% endfor %}
+                {% endif %}
+            {% endfor %}
+            <div class="col-md-3">
+                <label class="form-label small mb-0">Estado de auditoría</label>
+                <select class="form-select form-select-sm" name="estado_obs">
+                    <option value="" {% if not selected.estado_obs %}selected{% endif %}>Todas</option>
+                    <option value="pendiente" {% if selected.estado_obs == 'pendiente' %}selected{% endif %}>Con pendientes</option>
+                    <option value="resuelta" {% if selected.estado_obs == 'resuelta' %}selected{% endif %}>Solo resueltas</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <div class="form-check mt-4">
+                    <input class="form-check-input" type="checkbox" name="solo_obs" value="1" id="soloObs"
+                           {% if selected.solo_obs %}checked{% endif %}>
+                    <label class="form-check-label" for="soloObs">Solo con observaciones</label>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-outline-primary btn-sm w-100">Aplicar auditoría</button>
+            </div>
+        </form>
     </div>
-    <div class="col-md-3">
-        <label class="form-label small mb-0">Observaciones</label>
-        <select class="form-select form-select-sm" name="estado_obs">
-            <option value="" {% if not estado_obs %}selected{% endif %}>Todas las denuncias</option>
-            <option value="pendiente" {% if estado_obs == 'pendiente' %}selected{% endif %}>Con pendientes</option>
-            <option value="resuelta" {% if estado_obs == 'resuelta' %}selected{% endif %}>Solo resueltas</option>
-        </select>
-    </div>
-    <div class="col-md-2">
-        <div class="form-check mt-3">
-            <input class="form-check-input" type="checkbox" name="solo_obs" value="1" id="soloObs"
-                   {% if solo_obs %}checked{% endif %}>
-            <label class="form-check-label small" for="soloObs">Solo con obs.</label>
-        </div>
-    </div>
-    <div class="col-md-2">
-        <button type="submit" class="btn btn-primary btn-sm w-100"><i class="bi bi-search"></i> Filtrar</button>
-    </div>
-</form>
+</div>
 
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
@@ -42,12 +56,13 @@
             <table class="table table-sm table-hover align-middle mb-0">
                 <thead class="table-light">
                     <tr>
-                        <th>Nro / AP</th>
+                        <th>Nro actuación</th>
                         <th>Fecha</th>
                         <th>Estado</th>
                         <th>Dependencia</th>
                         <th>Actuario</th>
                         <th>Localidad</th>
+                        <th>Investigados</th>
                         <th class="text-center">Obs.</th>
                         <th></th>
                     </tr>
@@ -55,15 +70,13 @@
                 <tbody>
                     {% for r, obs_total, obs_pendientes in rows %}
                     <tr>
-                        <td>
-                            <div class="fw-semibold">{{ r.nro_actuacion or '—' }}</div>
-                            <div class="small text-muted">{{ r.causas_id or '' }}</div>
-                        </td>
+                        <td class="fw-semibold">{{ r.nro_actuacion or '—' }}</td>
                         <td>{{ r.fecha_denuncia|localtime('%d/%m/%Y') if r.fecha_denuncia else '—' }}</td>
                         <td>{{ r.causa_estado or '—' }}</td>
                         <td>{{ r.desc_dep_registro or '—' }}</td>
                         <td>{{ r.actuario_apenom or '—' }}</td>
-                        <td>{{ r.localidad or '—' }}{% if r.barrio %} <span class="text-muted">/ {{ r.barrio }}</span>{% endif %}</td>
+                        <td>{{ r.localidad or '—' }}</td>
+                        <td class="small">{{ (r.investigados or '—')[:60] }}{% if r.investigados and r.investigados|length > 60 %}…{% endif %}</td>
                         <td class="text-center">
                             {% if obs_total %}
                                 <span class="badge {% if obs_pendientes %}bg-warning text-dark{% else %}bg-success{% endif %}"
@@ -80,7 +93,7 @@
                         </td>
                     </tr>
                     {% else %}
-                    <tr><td colspan="8" class="text-center text-muted py-4">Sin resultados.</td></tr>
+                    <tr><td colspan="9" class="text-center text-muted py-4">Sin resultados.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
@@ -101,4 +114,30 @@
         </li>
     </ul>
 </nav>
+{% endblock %}
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/analisis_denuncias_filtros.js') }}"></script>
+<script>
+(function () {
+  var form = document.getElementById('ad-form-filtros');
+  if (!form) return;
+  form.addEventListener('submit', function () {
+    ['estado_obs', 'solo_obs'].forEach(function (name) {
+      form.querySelectorAll('input[name="' + name + '"]').forEach(function (el) { el.remove(); });
+    });
+    var estado = document.querySelector('#aud-obs-filtros select[name="estado_obs"]');
+    if (estado && estado.value) {
+      var h = document.createElement('input');
+      h.type = 'hidden'; h.name = 'estado_obs'; h.value = estado.value;
+      form.appendChild(h);
+    }
+    var solo = document.querySelector('#aud-obs-filtros input[name="solo_obs"]');
+    if (solo && solo.checked) {
+      var h2 = document.createElement('input');
+      h2.type = 'hidden'; h2.name = 'solo_obs'; h2.value = '1';
+      form.appendChild(h2);
+    }
+  });
+})();
+</script>
 {% endblock %}

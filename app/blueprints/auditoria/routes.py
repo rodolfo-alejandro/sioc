@@ -8,20 +8,23 @@ from urllib.parse import urlencode
 
 from flask import abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
-from sqlalchemy import case, func, inspect, or_, text
+from sqlalchemy import case, func, inspect, text
 
+from app.blueprints.analisis_denuncias import routes as ad_routes
 from app.blueprints.auditoria import bp
 from app.extensions import db
 from app.models.analisis_denuncias import DenunciaWeb
 from app.models.auditoria import (
     CAMPO_GENERAL,
-    CAMPOS_AUDITABLES,
     CAMPOS_AUDITABLES_MAP,
+    CAMPOS_PRINCIPALES,
+    CAMPOS_SECUNDARIOS,
     AuditoriaObs,
 )
 
 _schema_checked = False
 _OLD_TABLES = ("auditoria_observaciones", "auditoria_resumenes")
+_LONG_FIELDS = frozenset({"relato", "investigados", "observacion_interna"})
 
 
 def _is_superadmin() -> bool:
@@ -66,15 +69,21 @@ def _fmt_valor(v) -> str:
     return str(v).strip()
 
 
-def _base_denuncias():
-    return DenunciaWeb.query.filter(
-        DenunciaWeb.unidad_id == current_user.unidad_id,
-        DenunciaWeb.activo.is_(True),
-    )
+def _valor_campo(row: DenunciaWeb, campo: str) -> str:
+    """Valor mostrado/guardado como snapshot. Relato unifica original + relato."""
+    if campo == "relato":
+        return _fmt_valor(row.relato_original or row.relato)
+    return _fmt_valor(getattr(row, campo, None))
 
 
 def _denuncia_or_404(denuncia_id: int) -> DenunciaWeb:
-    row = _base_denuncias().filter(DenunciaWeb.id == denuncia_id).first()
+    row = (
+        DenunciaWeb.query.filter(
+            DenunciaWeb.id == denuncia_id,
+            DenunciaWeb.unidad_id == current_user.unidad_id,
+            DenunciaWeb.activo.is_(True),
+        ).first()
+    )
     if not row:
         abort(404)
     return row
@@ -92,6 +101,23 @@ def _obs_map(denuncia_id: int) -> dict[str, AuditoriaObs]:
     return {o.campo: o for o in rows}
 
 
+def _build_campos(row: DenunciaWeb, obs_by_campo: dict, spec: tuple) -> list[dict]:
+    out = []
+    for key, label in spec:
+        obs = obs_by_campo.get(key)
+        valor = _valor_campo(row, key)
+        out.append(
+            {
+                "key": key,
+                "label": label,
+                "valor": valor,
+                "obs": obs,
+                "es_largo": key in _LONG_FIELDS or len(valor) > 180,
+            }
+        )
+    return out
+
+
 @bp.route("/")
 @login_required
 def index():
@@ -106,33 +132,17 @@ def listado():
         return redirect(url_for("core.dashboard"))
     _ensure_schema()
 
-    q_text = (request.args.get("q") or "").strip()
     solo_obs = (request.args.get("solo_obs") or "").strip() == "1"
     estado_obs = (request.args.get("estado_obs") or "").strip()
 
-    q = _base_denuncias()
-    if q_text:
-        pat = f"%{q_text}%"
-        q = q.filter(
-            or_(
-                DenunciaWeb.nro_actuacion.ilike(pat),
-                DenunciaWeb.causas_id.ilike(pat),
-                DenunciaWeb.causa_estado.ilike(pat),
-                DenunciaWeb.actuario_apenom.ilike(pat),
-                DenunciaWeb.desc_dep_registro.ilike(pat),
-                DenunciaWeb.localidad.ilike(pat),
-                DenunciaWeb.barrio.ilike(pat),
-                DenunciaWeb.investigados.ilike(pat),
-            )
-        )
+    # Mismos filtros avanzados que Denuncias Web
+    q = ad_routes._apply_filters(ad_routes._base_q())
 
     obs_count_sq = (
         db.session.query(
             AuditoriaObs.denuncia_id.label("denuncia_id"),
             func.count(AuditoriaObs.id).label("obs_total"),
-            func.sum(
-                case((AuditoriaObs.estado == "pendiente", 1), else_=0)
-            ).label("obs_pendientes"),
+            func.sum(case((AuditoriaObs.estado == "pendiente", 1), else_=0)).label("obs_pendientes"),
         )
         .filter(AuditoriaObs.unidad_id == current_user.unidad_id)
         .group_by(AuditoriaObs.denuncia_id)
@@ -150,10 +160,10 @@ def listado():
             obs_count_sq.c.obs_pendientes == 0,
         )
 
-    page = max(request.args.get("page", 1, type=int) or 1, 1)
-    per_page = 40
+    page = max(1, request.args.get("page", type=int) or 1)
+    per_page = min(200, max(20, request.args.get("per_page", type=int) or 50))
     total = q.with_entities(func.count(DenunciaWeb.id)).scalar() or 0
-    pages = max((total + per_page - 1) // per_page, 1)
+    pages = max(1, (total + per_page - 1) // per_page)
     if page > pages:
         page = pages
 
@@ -169,8 +179,13 @@ def listado():
         .all()
     )
 
-    args = {k: v for k, v in request.args.items() if k != "page" and v}
-    qs_no_page = urlencode(args)
+    args_no_page = request.args.to_dict(flat=False)
+    args_no_page.pop("page", None)
+    qs_no_page = urlencode(args_no_page, doseq=True)
+
+    selected = ad_routes._selected_filters()
+    selected["solo_obs"] = solo_obs
+    selected["estado_obs"] = estado_obs
 
     return render_template(
         "auditoria/listado.html",
@@ -178,10 +193,10 @@ def listado():
         total=total,
         page=page,
         pages=pages,
+        per_page=per_page,
         qs_no_page=qs_no_page,
-        q_text=q_text,
-        solo_obs=solo_obs,
-        estado_obs=estado_obs,
+        filtros=ad_routes._filter_options(),
+        selected=selected,
         can_edit=_can_edit(),
     )
 
@@ -197,23 +212,14 @@ def detalle(denuncia_id: int):
     row = _denuncia_or_404(denuncia_id)
     obs_by_campo = _obs_map(denuncia_id)
     general = obs_by_campo.get(CAMPO_GENERAL)
-
-    campos = []
-    for key, label in CAMPOS_AUDITABLES:
-        raw = getattr(row, key, None)
-        campos.append(
-            {
-                "key": key,
-                "label": label,
-                "valor": _fmt_valor(raw),
-                "obs": obs_by_campo.get(key),
-            }
-        )
+    campos = _build_campos(row, obs_by_campo, CAMPOS_PRINCIPALES)
+    campos_sec = _build_campos(row, obs_by_campo, CAMPOS_SECUNDARIOS)
 
     return render_template(
         "auditoria/detalle.html",
         row=row,
         campos=campos,
+        campos_sec=campos_sec,
         general=general,
         campo_general=CAMPO_GENERAL,
         can_edit=_can_edit(),
@@ -240,10 +246,7 @@ def guardar_obs(denuncia_id: int):
         flash("Indicá al menos el valor según auditoría o una nota.", "warning")
         return redirect(url_for("auditoria.detalle", denuncia_id=denuncia_id))
 
-    if campo == CAMPO_GENERAL:
-        valor_sistema = None
-    else:
-        valor_sistema = _fmt_valor(getattr(row, campo, None)) or None
+    valor_sistema = None if campo == CAMPO_GENERAL else (_valor_campo(row, campo) or None)
 
     obs = AuditoriaObs.query.filter_by(
         denuncia_id=row.id,

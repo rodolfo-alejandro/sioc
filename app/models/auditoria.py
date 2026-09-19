@@ -11,9 +11,8 @@ from app.extensions import db
 # Campo especial para la observación general del registro
 CAMPO_GENERAL = "__general__"
 
-# Campos auditables del detalle (clave modelo -> etiqueta UI)
-CAMPOS_AUDITABLES = (
-    ("causas_id", "Causa ID"),
+# Principales: lo que el auditor revisa primero
+CAMPOS_PRINCIPALES = (
     ("nro_actuacion", "Nro actuación"),
     ("anio_actuacion", "Año actuación"),
     ("causa_estado", "Estado"),
@@ -28,17 +27,22 @@ CAMPOS_AUDITABLES = (
     ("fecha_desestimada", "Fecha desestimada"),
     ("fecha_sol_allanamiento", "Solicitud allanamiento"),
     ("localidad", "Localidad"),
+    ("investigados", "Investigados"),
+    ("relato", "Relato"),  # relato_original o relato (uno solo)
+    ("observacion_interna", "Observación interna"),
+)
+
+# Secundarios: geo / barrio (menos prioritarios en la auditoría)
+CAMPOS_SECUNDARIOS = (
     ("barrio", "Barrio"),
     ("coord", "Coordenadas (texto)"),
     ("latitud", "Latitud"),
     ("longitud", "Longitud"),
-    ("investigados", "Investigados"),
-    ("relato", "Relato"),
-    ("relato_original", "Relato original"),
-    ("observacion_interna", "Observación interna"),
 )
 
+CAMPOS_AUDITABLES = CAMPOS_PRINCIPALES + CAMPOS_SECUNDARIOS
 CAMPOS_AUDITABLES_MAP = {k: v for k, v in CAMPOS_AUDITABLES}
+CAMPOS_SECUNDARIOS_KEYS = {k for k, _ in CAMPOS_SECUNDARIOS}
 
 
 class AuditoriaObs(db.Model):

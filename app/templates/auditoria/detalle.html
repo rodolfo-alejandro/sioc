@@ -1,12 +1,14 @@
 {% extends "layouts/base.html" %}
-{% block title %}Auditar denuncia {{ row.nro_actuacion or row.causas_id }} - SIOC{% endblock %}
+{% block title %}Auditar denuncia {{ row.nro_actuacion or '—' }} - SIOC{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/auditoria.css') }}">
+{% endblock %}
 {% block content %}
 <div class="page-header">
-    <h1><i class="bi bi-clipboard-check"></i> Auditar denuncia</h1>
+    <h1><i class="bi bi-clipboard-check"></i> Auditar denuncia {{ row.nro_actuacion or '—' }}</h1>
     <p class="text-muted mb-0">
-        Nro: <strong>{{ row.nro_actuacion or '—' }}</strong>
-        · Causa: <strong>{{ row.causas_id or '—' }}</strong>
-        · Estado cargado: <strong>{{ row.causa_estado or '—' }}</strong>
+        Estado cargado: <strong>{{ row.causa_estado or '—' }}</strong>
+        · Actuario: <strong>{{ row.actuario_apenom or '—' }}</strong>
     </p>
 </div>
 
@@ -19,9 +21,11 @@
     </a>
 </div>
 
-<div class="alert alert-info py-2 small">
-    Los botones <i class="bi bi-pencil-square"></i> abren un modal para anotar qué debería decir el campo
-    <em>sin cambiar</em> el valor del sistema. Ejemplo: cargado «Desestimada» → según auditoría «Etapa investigativa».
+<div class="alert alert-info py-2 small mb-3">
+    Cada campo muestra <strong>dos líneas</strong> en la misma tabla:
+    <span class="aud-chip aud-chip-orig">Cargado</span> (dato del sistema) y
+    <span class="aud-chip aud-chip-audit">Auditoría</span> (lo que anotó el auditor).
+    El lápiz abre el modal; el dato original <em>no se modifica</em>.
 </div>
 
 {# Observación general #}
@@ -77,75 +81,82 @@
     </div>
 </div>
 
-{# Campos #}
-<div class="card">
-    <div class="card-header"><h6 class="mb-0">Campos del registro</h6></div>
+{% macro campo_duo(c) %}
+<tr class="aud-row-orig">
+    <td class="aud-campo-label" rowspan="2">{{ c.label }}</td>
+    <td class="aud-tipo"><span class="aud-chip aud-chip-orig">Cargado</span></td>
+    <td>
+        <div class="aud-valor{% if c.es_largo %} aud-valor-largo{% endif %}">{{ c.valor or '—' }}</div>
+    </td>
+    <td class="aud-estado text-muted" rowspan="2">
+        {% if c.obs %}
+            <span class="badge {% if c.obs.estado == 'pendiente' %}bg-warning text-dark{% else %}bg-success{% endif %}">
+                {{ c.obs.estado }}
+            </span>
+        {% else %}
+            —
+        {% endif %}
+    </td>
+    <td class="text-nowrap aud-acciones" rowspan="2">
+        {% if can_edit %}
+        <button type="button" class="btn btn-outline-primary btn-sm btn-obs"
+                data-campo="{{ c.key }}"
+                data-label="{{ c.label }}"
+                title="Observar campo">
+            <i class="bi bi-pencil-square"></i>
+        </button>
+        {% if c.obs %}
+        <form class="d-inline" method="post"
+              action="{{ url_for('auditoria.cambiar_estado', denuncia_id=row.id, obs_id=c.obs.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% if c.obs.estado == 'pendiente' %}
+            <input type="hidden" name="estado" value="resuelta">
+            <button class="btn btn-outline-success btn-sm" type="submit" title="Resolver">
+                <i class="bi bi-check-lg"></i>
+            </button>
+            {% else %}
+            <input type="hidden" name="estado" value="pendiente">
+            <button class="btn btn-outline-warning btn-sm" type="submit" title="Reabrir">
+                <i class="bi bi-arrow-counterclockwise"></i>
+            </button>
+            {% endif %}
+        </form>
+        {% endif %}
+        {% endif %}
+    </td>
+</tr>
+<tr class="aud-row-audit{% if c.obs and c.obs.estado == 'pendiente' %} aud-has-pendiente{% elif c.obs %} aud-has-resuelta{% endif %}">
+    <td class="aud-tipo"><span class="aud-chip aud-chip-audit">Auditoría</span></td>
+    <td>
+        {% if c.obs %}
+            <div class="aud-valor{% if c.es_largo or (c.obs.valor_auditor and c.obs.valor_auditor|length > 180) %} aud-valor-largo{% endif %}">
+                {% if c.obs.valor_auditor %}{{ c.obs.valor_auditor }}{% else %}<span class="text-muted">—</span>{% endif %}
+                {% if c.obs.nota %}<div class="aud-nota"><em>{{ c.obs.nota }}</em></div>{% endif %}
+            </div>
+        {% else %}
+            <span class="text-muted">Sin observación</span>
+        {% endif %}
+    </td>
+</tr>
+{% endmacro %}
+
+<div class="card mb-3">
+    <div class="card-header"><h6 class="mb-0">Campos principales</h6></div>
     <div class="card-body p-0">
         <div class="table-responsive">
-            <table class="table table-sm align-middle mb-0">
+            <table class="table table-sm align-middle mb-0 aud-table">
                 <thead class="table-light">
                     <tr>
-                        <th style="width:18%">Campo</th>
-                        <th style="width:32%">Valor en sistema</th>
-                        <th style="width:28%">Según auditoría</th>
-                        <th style="width:12%">Estado</th>
+                        <th style="width:16%">Campo</th>
+                        <th style="width:10%">Origen</th>
+                        <th>Valor</th>
+                        <th style="width:10%">Estado</th>
                         <th style="width:10%"></th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for c in campos %}
-                    <tr class="{% if c.obs and c.obs.estado == 'pendiente' %}table-warning{% elif c.obs %}table-success{% endif %}">
-                        <td class="fw-semibold">{{ c.label }}</td>
-                        <td>
-                            <div class="small" style="max-height:4.5rem;overflow:auto;white-space:pre-wrap;">{{ c.valor or '—' }}</div>
-                        </td>
-                        <td>
-                            {% if c.obs %}
-                                <div class="small" style="max-height:4.5rem;overflow:auto;white-space:pre-wrap;">
-                                    {% if c.obs.valor_auditor %}<div>{{ c.obs.valor_auditor }}</div>{% endif %}
-                                    {% if c.obs.nota %}<div class="text-muted"><em>{{ c.obs.nota }}</em></div>{% endif %}
-                                </div>
-                            {% else %}
-                                <span class="text-muted">—</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if c.obs %}
-                                <span class="badge {% if c.obs.estado == 'pendiente' %}bg-warning text-dark{% else %}bg-success{% endif %}">
-                                    {{ c.obs.estado }}
-                                </span>
-                            {% else %}
-                                <span class="text-muted">—</span>
-                            {% endif %}
-                        </td>
-                        <td class="text-nowrap">
-                            {% if can_edit %}
-                            <button type="button" class="btn btn-outline-primary btn-sm btn-obs"
-                                    data-campo="{{ c.key }}"
-                                    data-label="{{ c.label }}"
-                                    title="Observar campo">
-                                <i class="bi bi-pencil-square"></i>
-                            </button>
-                            {% if c.obs %}
-                            <form class="d-inline" method="post"
-                                  action="{{ url_for('auditoria.cambiar_estado', denuncia_id=row.id, obs_id=c.obs.id) }}">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                {% if c.obs.estado == 'pendiente' %}
-                                <input type="hidden" name="estado" value="resuelta">
-                                <button class="btn btn-outline-success btn-sm" type="submit" title="Resolver">
-                                    <i class="bi bi-check-lg"></i>
-                                </button>
-                                {% else %}
-                                <input type="hidden" name="estado" value="pendiente">
-                                <button class="btn btn-outline-warning btn-sm" type="submit" title="Reabrir">
-                                    <i class="bi bi-arrow-counterclockwise"></i>
-                                </button>
-                                {% endif %}
-                            </form>
-                            {% endif %}
-                            {% endif %}
-                        </td>
-                    </tr>
+                    {{ campo_duo(c) }}
                     {% endfor %}
                 </tbody>
             </table>
@@ -153,7 +164,37 @@
     </div>
 </div>
 
-{# Modal observación #}
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0">Campos secundarios (barrio / coordenadas)</h6>
+        <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#audSecundarios">
+            Mostrar / Ocultar
+        </button>
+    </div>
+    <div class="collapse" id="audSecundarios">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0 aud-table">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width:16%">Campo</th>
+                            <th style="width:10%">Origen</th>
+                            <th>Valor</th>
+                            <th style="width:10%">Estado</th>
+                            <th style="width:10%"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for c in campos_sec %}
+                        {{ campo_duo(c) }}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% if can_edit %}
 <div class="modal fade" id="modalObs" tabindex="-1" aria-labelledby="modalObsLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
@@ -196,15 +237,21 @@
 <script>
 (function () {
   var CAMPO_GENERAL = {{ campo_general|tojson }};
-  var camposData = {
-    {% for c in campos %}
-    {{ c.key|tojson }}: {
-      valor: {{ c.valor|tojson }},
-      valorAuditor: {{ (c.obs.valor_auditor if c.obs else '')|tojson }},
-      nota: {{ (c.obs.nota if c.obs else '')|tojson }}
-    }{% if not loop.last %},{% endif %}
-    {% endfor %}
+  var camposData = {};
+  {% for c in campos %}
+  camposData[{{ c.key|tojson }}] = {
+    valor: {{ c.valor|tojson }},
+    valorAuditor: {{ (c.obs.valor_auditor if c.obs else '')|tojson }},
+    nota: {{ (c.obs.nota if c.obs else '')|tojson }}
   };
+  {% endfor %}
+  {% for c in campos_sec %}
+  camposData[{{ c.key|tojson }}] = {
+    valor: {{ c.valor|tojson }},
+    valorAuditor: {{ (c.obs.valor_auditor if c.obs else '')|tojson }},
+    nota: {{ (c.obs.nota if c.obs else '')|tojson }}
+  };
+  {% endfor %}
   camposData[CAMPO_GENERAL] = {
     valor: '',
     valorAuditor: {{ (general.valor_auditor if general else '')|tojson }},

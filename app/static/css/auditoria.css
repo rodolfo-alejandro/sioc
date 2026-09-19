@@ -1,0 +1,67 @@
+/* Auditoría Denuncias Web */
+
+.aud-chip {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.15rem 0.45rem;
+  border-radius: 0.25rem;
+}
+
+.aud-chip-orig {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.aud-chip-audit {
+  background: #fed7aa;
+  color: #9a3412;
+}
+
+.aud-table > tbody > tr.aud-row-orig > td {
+  background: #f1f5f9;
+  border-bottom-color: #e2e8f0;
+  vertical-align: top;
+}
+
+.aud-table > tbody > tr.aud-row-audit > td {
+  background: #fff7ed;
+  border-bottom: 2px solid #cbd5e1;
+  vertical-align: top;
+}
+
+.aud-table > tbody > tr.aud-row-audit.aud-has-pendiente > td {
+  background: #fef3c7;
+}
+
+.aud-table > tbody > tr.aud-row-audit.aud-has-resuelta > td {
+  background: #ecfdf5;
+}
+
+.aud-campo-label {
+  font-weight: 600;
+  background: #fff !important;
+  border-right: 1px solid #e2e8f0;
+}
+
+.aud-valor {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.875rem;
+}
+
+.aud-valor-largo {
+  max-height: 7rem;
+  overflow: auto;
+}
+
+.aud-nota {
+  margin-top: 0.25rem;
+  color: #64748b;
+  font-size: 0.8rem;
+}
+
+.aud-acciones .btn {
+  margin: 0 0.1rem;
+}
