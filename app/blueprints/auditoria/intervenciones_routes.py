@@ -38,6 +38,50 @@ from app.models.auditoria import (
 )
 
 
+def _fmt_num_ar(v: float, decimals: int = 2) -> str:
+    s = f"{v:,.{decimals}f}"
+    return s.replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _fmt_gramos(v: float | int | None) -> str:
+    n = float(v or 0)
+    if n == 0:
+        return "0 g"
+    if abs(n) >= 1000:
+        return f"{_fmt_num_ar(n / 1000, 3)} kg"
+    # enteros sin decimales innecesarios
+    if abs(n - round(n)) < 1e-9:
+        return f"{int(round(n))} g"
+    return f"{_fmt_num_ar(n, 2)} g"
+
+
+def _fmt_unidades(v: float | int | None, unidad: str = "u.") -> str:
+    n = float(v or 0)
+    if abs(n - round(n)) < 1e-9:
+        return f"{int(round(n))} {unidad}"
+    return f"{_fmt_num_ar(n, 2)} {unidad}"
+
+
+def _fmt_dinero(v: float | int | None, signo: str) -> str:
+    n = float(v or 0)
+    return f"{signo} {_fmt_num_ar(n, 2)}"
+
+
+_CAMPOS_GRAMOS = frozenset(
+    {"secuestro_marihuana", "secuestro_cocaina", "hojas_coca", "secuestro_dosis"}
+)
+_CAMPOS_UNIDADES = frozenset(
+    {"secuestro_plantas", "secuestro_plantines", "secuestro_semillas"}
+)
+_CAMPOS_DINERO = {
+    "pesos_arg": "$",
+    "dolares": "US$",
+    "euro": "€",
+    "reales": "R$",
+    "bolivianos": "Bs",
+}
+
+
 def _valor_campo_interv(row: AnalisisIntervencion, campo: str) -> str:
     if campo == "detenidos_total":
         total = (
@@ -46,7 +90,7 @@ def _valor_campo_interv(row: AnalisisIntervencion, campo: str) -> str:
             + (row.det_mujer_may or 0)
             + (row.det_mujer_men or 0)
         )
-        return str(total)
+        return str(int(total))
     if campo == "identificados_total":
         total = (
             (row.is_hombre_may or 0)
@@ -54,17 +98,27 @@ def _valor_campo_interv(row: AnalisisIntervencion, campo: str) -> str:
             + (row.is_mujer_may or 0)
             + (row.is_mujer_men or 0)
         )
-        return str(total)
+        return str(int(total))
     if campo == "interv_fecha":
         v = row.interv_fecha
         if isinstance(v, date):
             return v.strftime("%d/%m/%Y")
         return _fmt_valor(v)
+
     raw = getattr(row, campo, None)
+    if campo in _CAMPOS_GRAMOS:
+        return _fmt_gramos(raw)
+    if campo in _CAMPOS_UNIDADES:
+        return _fmt_unidades(raw)
+    if campo in _CAMPOS_DINERO:
+        return _fmt_dinero(raw, _CAMPOS_DINERO[campo])
+
     if isinstance(raw, float):
         if raw == int(raw):
             return str(int(raw))
-        return str(raw)
+        return _fmt_num_ar(raw, 2)
+    if isinstance(raw, time):
+        return raw.strftime("%H:%M")
     return _fmt_valor(raw)
 
 

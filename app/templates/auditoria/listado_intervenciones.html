@@ -281,7 +281,7 @@
   var collapse = document.getElementById('ai-filtros-collapse');
   if (collapse) collapse.classList.add('show');
 
-  var STORAGE_KEY = 'sioc_aud_cols_interv_v1';
+  var STORAGE_KEY = 'sioc_aud_cols_interv_v2';
   var DEFAULT_HIDDEN = {{ columnas_ocultables|list|tojson }};
   function loadColPrefs() {
     try {
