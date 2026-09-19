@@ -17,11 +17,18 @@ from app.models.analisis_denuncias import DenunciaWeb
 from app.models.auditoria import (
     CAMPO_GENERAL,
     CAMPOS_AUDITABLES_MAP,
+    CAMPOS_INTERV_LISTADO,
+    CAMPOS_INTERV_MAP,
+    CAMPOS_INTERV_PRINCIPALES,
+    CAMPOS_INTERV_SECUNDARIOS,
     CAMPOS_LISTADO,
     CAMPOS_PRINCIPALES,
     CAMPOS_SECUNDARIOS,
     COLUMNAS_OCULTABLES,
+    COLUMNAS_OCULTABLES_INTERV,
     ESTADO_LABEL,
+    MODULO_DENUNCIAS,
+    MODULO_INTERVENCIONES,
     AuditoriaObs,
 )
 
@@ -46,40 +53,91 @@ def _can_edit() -> bool:
 
 
 def _ensure_schema():
-    """Crea tabla limpia y elimina restos del módulo fallido."""
+    """Crea/migra tabla de observaciones (denuncias + intervenciones)."""
     global _schema_checked
     if _schema_checked:
         return
     insp = inspect(db.engine)
     existing = set(insp.get_table_names())
+    tname = AuditoriaObs.__tablename__
 
     for old in _OLD_TABLES:
         if old in existing:
             db.session.execute(text(f"DROP TABLE IF EXISTS `{old}`"))
             db.session.commit()
 
-    if AuditoriaObs.__tablename__ not in existing:
+    if tname not in existing:
         AuditoriaObs.__table__.create(bind=db.engine)
     else:
-        cols = {c.get("name") for c in insp.get_columns(AuditoriaObs.__tablename__)}
-        if "causas_id" not in cols:
-            db.session.execute(
-                text(f"ALTER TABLE {AuditoriaObs.__tablename__} ADD COLUMN causas_id VARCHAR(80) NULL")
-            )
-            db.session.execute(
+        cols = {c.get("name") for c in insp.get_columns(tname)}
+        # Quitar FK de denuncia_id si existe (para poder dejarla nullable)
+        try:
+            rows = db.session.execute(
                 text(
-                    f"CREATE INDEX ix_auditoria_obs_unidad_causas ON {AuditoriaObs.__tablename__} (unidad_id, causas_id)"
-                )
-            )
+                    """
+                    SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE
+                    WHERE TABLE_SCHEMA = DATABASE()
+                      AND TABLE_NAME = :t
+                      AND COLUMN_NAME = 'denuncia_id'
+                      AND REFERENCED_TABLE_NAME IS NOT NULL
+                    """
+                ),
+                {"t": tname},
+            ).fetchall()
+            for (cname,) in rows:
+                db.session.execute(text(f"ALTER TABLE `{tname}` DROP FOREIGN KEY `{cname}`"))
             db.session.commit()
-        # Backfill causas_id desde la denuncia
+        except Exception:
+            db.session.rollback()
+
+        alters = []
+        if "modulo" not in cols:
+            alters.append("ADD COLUMN modulo VARCHAR(40) NOT NULL DEFAULT 'denuncias_web'")
+        if "registro_id" not in cols:
+            alters.append("ADD COLUMN registro_id INT NULL")
+        if "intervencion_id" not in cols:
+            alters.append("ADD COLUMN intervencion_id INT NULL")
+        if "causas_id" not in cols:
+            alters.append("ADD COLUMN causas_id VARCHAR(80) NULL")
+        if alters:
+            db.session.execute(text(f"ALTER TABLE `{tname}` " + ", ".join(alters)))
+            db.session.commit()
+
+        try:
+            db.session.execute(text(f"ALTER TABLE `{tname}` MODIFY denuncia_id INT NULL"))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
+        for idx_sql in (
+            f"CREATE INDEX ix_auditoria_obs_unidad_causas ON `{tname}` (unidad_id, causas_id)",
+            f"CREATE INDEX ix_auditoria_obs_modulo_reg ON `{tname}` (unidad_id, modulo, registro_id)",
+        ):
+            try:
+                db.session.execute(text(idx_sql))
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+
+        # Backfill
         db.session.execute(
             text(
                 f"""
-                UPDATE {AuditoriaObs.__tablename__} o
-                INNER JOIN analisis_denuncias_web d ON d.id = o.denuncia_id
+                UPDATE `{tname}`
+                SET modulo = COALESCE(NULLIF(modulo, ''), 'denuncias_web'),
+                    registro_id = COALESCE(registro_id, denuncia_id)
+                WHERE registro_id IS NULL AND denuncia_id IS NOT NULL
+                """
+            )
+        )
+        db.session.execute(
+            text(
+                f"""
+                UPDATE `{tname}` o
+                INNER JOIN analisis_denuncias_web d ON d.id = COALESCE(o.registro_id, o.denuncia_id)
                 SET o.causas_id = d.causas_id
-                WHERE o.causas_id IS NULL OR o.causas_id = ''
+                WHERE (o.causas_id IS NULL OR o.causas_id = '')
+                  AND (o.modulo = 'denuncias_web' OR o.modulo IS NULL OR o.modulo = '')
                 """
             )
         )
@@ -122,9 +180,13 @@ def _denuncia_or_404(denuncia_id: int) -> DenunciaWeb:
 
 def _obs_map(denuncia_id: int) -> dict[str, AuditoriaObs]:
     rows = (
-        AuditoriaObs.query.filter_by(
-            unidad_id=current_user.unidad_id,
-            denuncia_id=denuncia_id,
+        AuditoriaObs.query.filter(
+            AuditoriaObs.unidad_id == current_user.unidad_id,
+            AuditoriaObs.modulo == MODULO_DENUNCIAS,
+            or_(
+                AuditoriaObs.registro_id == denuncia_id,
+                AuditoriaObs.denuncia_id == denuncia_id,
+            ),
         )
         .order_by(AuditoriaObs.updated_at.desc())
         .all()
@@ -190,12 +252,15 @@ def listado():
 
     obs_count_sq = (
         db.session.query(
-            AuditoriaObs.denuncia_id.label("denuncia_id"),
+            func.coalesce(AuditoriaObs.registro_id, AuditoriaObs.denuncia_id).label("denuncia_id"),
             func.count(AuditoriaObs.id).label("obs_total"),
             func.sum(case((AuditoriaObs.estado == "pendiente", 1), else_=0)).label("obs_pendientes"),
         )
-        .filter(AuditoriaObs.unidad_id == current_user.unidad_id)
-        .group_by(AuditoriaObs.denuncia_id)
+        .filter(
+            AuditoriaObs.unidad_id == current_user.unidad_id,
+            AuditoriaObs.modulo == MODULO_DENUNCIAS,
+        )
+        .group_by(func.coalesce(AuditoriaObs.registro_id, AuditoriaObs.denuncia_id))
         .subquery()
     )
 
@@ -240,9 +305,15 @@ def listado():
     if ids:
         for o in AuditoriaObs.query.filter(
             AuditoriaObs.unidad_id == current_user.unidad_id,
-            AuditoriaObs.denuncia_id.in_(ids),
+            AuditoriaObs.modulo == MODULO_DENUNCIAS,
+            or_(
+                AuditoriaObs.registro_id.in_(ids),
+                AuditoriaObs.denuncia_id.in_(ids),
+            ),
         ).all():
-            obs_by_den[o.denuncia_id][o.campo] = o
+            rid = o.registro_id or o.denuncia_id
+            if rid:
+                obs_by_den[rid][o.campo] = o
 
     items = []
     for r, obs_total, obs_pendientes in raw_rows:
@@ -362,20 +433,29 @@ def guardar_obs(denuncia_id: int):
 
     valor_sistema = None if campo == CAMPO_GENERAL else (_valor_campo(row, campo) or None)
 
-    obs = AuditoriaObs.query.filter_by(
-        denuncia_id=row.id,
-        campo=campo,
-        unidad_id=current_user.unidad_id,
+    obs = AuditoriaObs.query.filter(
+        AuditoriaObs.unidad_id == current_user.unidad_id,
+        AuditoriaObs.modulo == MODULO_DENUNCIAS,
+        AuditoriaObs.campo == campo,
+        or_(
+            AuditoriaObs.registro_id == row.id,
+            AuditoriaObs.denuncia_id == row.id,
+        ),
     ).first()
     if not obs:
         obs = AuditoriaObs(
             unidad_id=current_user.unidad_id,
+            modulo=MODULO_DENUNCIAS,
+            registro_id=row.id,
             denuncia_id=row.id,
             campo=campo,
             auditor_id=current_user.id,
         )
         db.session.add(obs)
 
+    obs.modulo = MODULO_DENUNCIAS
+    obs.registro_id = row.id
+    obs.denuncia_id = row.id
     obs.causas_id = row.causas_id
     obs.valor_sistema = valor_sistema
     obs.valor_auditor = valor_auditor
@@ -467,14 +547,20 @@ def export_xlsx():
         obs_rows = (
             AuditoriaObs.query.filter(
                 AuditoriaObs.unidad_id == current_user.unidad_id,
-                AuditoriaObs.denuncia_id.in_(ids),
+                AuditoriaObs.modulo == MODULO_DENUNCIAS,
+                or_(
+                    AuditoriaObs.registro_id.in_(ids),
+                    AuditoriaObs.denuncia_id.in_(ids),
+                ),
             )
-            .order_by(AuditoriaObs.denuncia_id.asc(), AuditoriaObs.campo.asc())
+            .order_by(AuditoriaObs.campo.asc())
             .all()
         )
     obs_by_den = {}
     for o in obs_rows:
-        obs_by_den.setdefault(o.denuncia_id, []).append(o)
+        rid = o.registro_id or o.denuncia_id
+        if rid:
+            obs_by_den.setdefault(rid, []).append(o)
 
     buf = BytesIO()
     stamp = datetime.utcnow().strftime("%Y%m%d_%H%M")

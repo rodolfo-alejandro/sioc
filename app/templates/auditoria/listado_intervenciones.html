@@ -1,20 +1,20 @@
 {% extends "layouts/base.html" %}
-{% block title %}Auditoría Denuncias Web - SIOC{% endblock %}
+{% block title %}Auditoría Intervenciones - SIOC{% endblock %}
 {% block extra_head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sabana_mapa.css') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/analisis_denuncias.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/analisis_intervenciones.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/auditoria.css') }}">
 {% endblock %}
 {% block content %}
 <div class="page-header">
-    <h1><i class="bi bi-clipboard-check"></i> Auditoría — Denuncias Web</h1>
+    <h1><i class="bi bi-clipboard-check"></i> Auditoría — Intervenciones</h1>
     <p class="text-muted mb-0">
-        Fila gris = dato cargado · Fila de abajo = auditoría (amarillo pendiente / verde auditado).
-        Podés auditar cada columna acá sin salir; el scroll horizontal está permitido.
+        Sin campo «actuario» ni «acusados» por nombre: el Excel trae <strong>personal interviniente</strong>,
+        <strong>conteos de detenidos/IS</strong>, sustancias y dinero. Fila gris = cargado · abajo = auditoría.
     </p>
 </div>
 
-{% include "analisis_denuncias/_filtros.html" %}
+{% include "analisis_intervenciones/_filtros.html" %}
 
 <div class="card mb-3">
     <div class="card-body py-2">
@@ -46,12 +46,12 @@
             </div>
             <div class="col-md-5 d-flex gap-2 justify-content-md-end flex-wrap">
                 <a class="btn btn-outline-success btn-sm"
-                   href="{{ url_for('auditoria.export_xlsx') }}?modo=completo{% if qs_no_page %}&{{ qs_no_page }}{% endif %}">
+                   href="{{ url_for('auditoria.export_intervenciones_xlsx') }}?modo=completo{% if qs_no_page %}&{{ qs_no_page }}{% endif %}">
                     <i class="bi bi-file-earmark-excel"></i> Excel completo
                 </a>
                 <a class="btn btn-success btn-sm"
-                   href="{{ url_for('auditoria.export_xlsx') }}?modo=observaciones{% if qs_no_page %}&{{ qs_no_page }}{% endif %}"
-                   title="Solo observaciones del auditor, para entregar a los auditados">
+                   href="{{ url_for('auditoria.export_intervenciones_xlsx') }}?modo=observaciones{% if qs_no_page %}&{{ qs_no_page }}{% endif %}"
+                   title="Solo observaciones del auditor">
                     <i class="bi bi-printer"></i> Excel solo observaciones
                 </a>
             </div>
@@ -82,10 +82,7 @@
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h6 class="mb-0">Denuncias</h6>
-        <div class="d-flex gap-2 align-items-center">
-            <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('auditoria.listado_intervenciones') }}">Ver intervenciones</a>
-            <span class="badge bg-light text-dark border">Total: {{ total|number_format }}</span>
-        </div>
+        <span class="badge bg-light text-dark border">Total: {{ total|number_format }}</span>
     </div>
     <div class="card-body p-0">
         <div class="table-responsive aud-listado-wrap">
@@ -123,7 +120,7 @@
                         </td>
                         <td>
                             <a class="btn btn-outline-secondary btn-sm"
-                               href="{{ url_for('auditoria.detalle', denuncia_id=r.id) }}"
+                               href="{{ url_for('auditoria.detalle_intervencion', interv_id=r.id) }}"
                                title="Vista detallada">Ficha</a>
                         </td>
                     </tr>
@@ -147,7 +144,7 @@
                             </button>
                             {% if c.obs %}
                             <form class="d-inline" method="post"
-                                  action="{{ url_for('auditoria.cambiar_estado', denuncia_id=r.id, obs_id=c.obs.id) }}">
+                                  action="{{ url_for('auditoria.cambiar_estado_intervencion', interv_id=r.id, obs_id=c.obs.id) }}">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <input type="hidden" name="next" value="{{ listado_url }}">
                                 {% if c.obs.estado == 'pendiente' %}
@@ -210,11 +207,11 @@
         {% set prev_page = page - 1 %}
         {% set next_page = page + 1 %}
         <li class="page-item {% if page <= 1 %}disabled{% endif %}">
-            <a class="page-link" href="{{ url_for('auditoria.listado') }}?{{ qs_no_page }}{% if qs_no_page %}&{% endif %}page={{ prev_page }}">Anterior</a>
+            <a class="page-link" href="{{ url_for('auditoria.listado_intervenciones') }}?{{ qs_no_page }}{% if qs_no_page %}&{% endif %}page={{ prev_page }}">Anterior</a>
         </li>
         <li class="page-item disabled"><span class="page-link">Página {{ page }} / {{ pages }}</span></li>
         <li class="page-item {% if page >= pages %}disabled{% endif %}">
-            <a class="page-link" href="{{ url_for('auditoria.listado') }}?{{ qs_no_page }}{% if qs_no_page %}&{% endif %}page={{ next_page }}">Siguiente</a>
+            <a class="page-link" href="{{ url_for('auditoria.listado_intervenciones') }}?{{ qs_no_page }}{% if qs_no_page %}&{% endif %}page={{ next_page }}">Siguiente</a>
         </li>
     </ul>
 </nav>
@@ -278,13 +275,13 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="{{ url_for('static', filename='js/analisis_denuncias_filtros.js') }}"></script>
+<script src="{{ url_for('static', filename='js/analisis_intervenciones_filtros.js') }}"></script>
 <script>
 (function () {
-  var collapse = document.getElementById('ad-filtros-collapse');
+  var collapse = document.getElementById('ai-filtros-collapse');
   if (collapse) collapse.classList.add('show');
 
-  var STORAGE_KEY = 'sioc_aud_cols_v1';
+  var STORAGE_KEY = 'sioc_aud_cols_interv_v1';
   var DEFAULT_HIDDEN = {{ columnas_ocultables|list|tojson }};
   function loadColPrefs() {
     try {
@@ -320,7 +317,7 @@
     });
   });
 
-  var form = document.getElementById('ad-form-filtros');
+  var form = document.getElementById('ai-form-filtros');
   if (form) {
     form.addEventListener('submit', function () {
       ['estado_obs', 'solo_obs'].forEach(function (name) {
@@ -356,7 +353,7 @@
       var id = btn.getAttribute('data-denuncia-id');
       var campo = btn.getAttribute('data-campo') || '';
       var pack = (DATA[id] || {})[campo] || { valor: '', valorAuditor: '', nota: '' };
-      formObs.action = '/auditoria/denuncias/' + id + '/obs';
+      formObs.action = '/auditoria/intervenciones/' + id + '/obs';
       document.getElementById('obsListCampo').value = campo;
       document.getElementById('obsListLabel').textContent = btn.getAttribute('data-label') || '';
       document.getElementById('obsListAuditor').value = pack.valorAuditor || '';

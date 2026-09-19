@@ -845,6 +845,44 @@ def _import_from_text(text: str) -> dict:
         return {"error": f"El archivo contiene más de un año ({years_sorted}). Subí un archivo por año."}
 
     anio = next(iter(years))
+    from app.models.auditoria import MODULO_INTERVENCIONES, AuditoriaObs
+
+    obs_backup: list[dict] = []
+    for o in AuditoriaObs.query.filter(
+        AuditoriaObs.unidad_id == current_user.unidad_id,
+        AuditoriaObs.modulo == MODULO_INTERVENCIONES,
+    ).all():
+        obs_backup.append(
+            {
+                "causas_id": (o.causas_id or "").strip(),
+                "campo": o.campo,
+                "valor_sistema": o.valor_sistema,
+                "valor_auditor": o.valor_auditor,
+                "nota": o.nota,
+                "estado": o.estado,
+                "auditor_id": o.auditor_id,
+                "created_at": o.created_at,
+                "updated_at": o.updated_at,
+            }
+        )
+
+    year_ids = [
+        r[0]
+        for r in AnalisisIntervencion.query.filter(
+            AnalisisIntervencion.unidad_id == current_user.unidad_id,
+            AnalisisIntervencion.anio == anio,
+        ).with_entities(AnalisisIntervencion.id).all()
+    ]
+    if year_ids:
+        AuditoriaObs.query.filter(
+            AuditoriaObs.unidad_id == current_user.unidad_id,
+            AuditoriaObs.modulo == MODULO_INTERVENCIONES,
+            or_(
+                AuditoriaObs.registro_id.in_(year_ids),
+                AuditoriaObs.intervencion_id.in_(year_ids),
+            ),
+        ).delete(synchronize_session=False)
+
     try:
         deleted = (
             AnalisisIntervencion.query.filter(
@@ -858,12 +896,55 @@ def _import_from_text(text: str) -> dict:
         db.session.rollback()
         return {"error": f"No se pudo importar el archivo: {exc}"}
 
+    restauradas = 0
+    if obs_backup:
+        by_key = {
+            str(r.causas_interv_id): r
+            for r in AnalisisIntervencion.query.filter(
+                AnalisisIntervencion.unidad_id == current_user.unidad_id,
+                AnalisisIntervencion.anio == anio,
+                AnalisisIntervencion.activo.is_(True),
+            ).all()
+        }
+        for snap in obs_backup:
+            d = by_key.get(snap["causas_id"])
+            if not d:
+                continue
+            exists = AuditoriaObs.query.filter_by(
+                unidad_id=current_user.unidad_id,
+                modulo=MODULO_INTERVENCIONES,
+                registro_id=d.id,
+                campo=snap["campo"],
+            ).first()
+            if exists:
+                continue
+            db.session.add(
+                AuditoriaObs(
+                    unidad_id=current_user.unidad_id,
+                    modulo=MODULO_INTERVENCIONES,
+                    registro_id=d.id,
+                    intervencion_id=d.id,
+                    causas_id=snap["causas_id"],
+                    campo=snap["campo"],
+                    valor_sistema=snap["valor_sistema"],
+                    valor_auditor=snap["valor_auditor"],
+                    nota=snap["nota"],
+                    estado=snap["estado"] or "pendiente",
+                    auditor_id=snap["auditor_id"],
+                    created_at=snap["created_at"] or now,
+                    updated_at=snap["updated_at"] or now,
+                )
+            )
+            restauradas += 1
+        db.session.commit()
+
     return {
         "anio": anio,
         "importados": len(parsed),
         "omitidos": skipped,
         "duplicados": duplicated,
         "eliminados_previos": deleted,
+        "auditorias_restauradas": restauradas,
     }
 
 
@@ -1325,17 +1406,17 @@ def importar():
         if result.get("error"):
             flash(result["error"], "danger")
         else:
-            flash(
-                (
-                    f"Año {result['anio']} importado. "
-                    f"Nuevas filas: {result['importados']}. "
-                    f"Reemplazadas previas: {result['eliminados_previos']}. "
-                    f"Omitidas: {result['omitidos']}. "
-                    f"Duplicadas internas: {result['duplicados']}. "
-                    "La carga quedó compartida para toda la dependencia."
-                ),
-                "success",
+            msg = (
+                f"Año {result['anio']} importado. "
+                f"Nuevas filas: {result['importados']}. "
+                f"Reemplazadas previas: {result['eliminados_previos']}. "
+                f"Omitidas: {result['omitidos']}. "
+                f"Duplicadas internas: {result['duplicados']}. "
+                "La carga quedó compartida para toda la dependencia."
             )
+            if int(result.get("auditorias_restauradas") or 0) > 0:
+                msg += f" Observaciones de auditoría restauradas: {result['auditorias_restauradas']}."
+            flash(msg, "success")
         return redirect(url_for("analisis_intervenciones.importar"))
 
     total = _base_q().count()

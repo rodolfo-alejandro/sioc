@@ -553,6 +553,8 @@ def _import_from_text(text: str, replace_all: bool = False) -> dict:
             db.session.add(
                 AuditoriaObs(
                     unidad_id=current_user.unidad_id,
+                    modulo="denuncias_web",
+                    registro_id=d.id,
                     denuncia_id=d.id,
                     causas_id=snap["causas_id"],
                     campo=snap["campo"],
@@ -663,9 +665,15 @@ def importar_base():
 def limpiar_importado():
     if not _can_import():
         abort(403)
+    # Botón oculto en UI: solo SUPERADMIN puede ejecutar (evita patadas accidentales).
+    try:
+        if not current_user.has_role("SUPERADMIN"):
+            abort(403)
+    except Exception:
+        abort(403)
     from app.models.auditoria import AuditoriaObs
 
-    AuditoriaObs.query.filter_by(unidad_id=current_user.unidad_id).delete()
+    AuditoriaObs.query.filter_by(unidad_id=current_user.unidad_id, modulo="denuncias_web").delete()
     deleted = DenunciaWeb.query.filter(DenunciaWeb.unidad_id == current_user.unidad_id).delete()
     db.session.commit()
     flash(f"Se eliminaron {deleted} denuncias cargadas en esta unidad (y sus observaciones de auditoría).", "success")

@@ -1,5 +1,5 @@
 """
-Auditoría de calidad sobre Denuncias Web.
+Auditoría de calidad: Denuncias Web e Intervenciones.
 
 No modifica los datos originales: guarda observaciones del auditor
 por campo (o una observación general) en tabla aparte.
@@ -8,10 +8,12 @@ from datetime import datetime
 
 from app.extensions import db
 
-# Campo especial para la observación general del registro
 CAMPO_GENERAL = "__general__"
 
-# Principales: lo que el auditor revisa primero
+MODULO_DENUNCIAS = "denuncias_web"
+MODULO_INTERVENCIONES = "intervenciones"
+
+# —— Denuncias Web ——
 CAMPOS_PRINCIPALES = (
     ("nro_actuacion", "Nro actuación"),
     ("anio_actuacion", "Año actuación"),
@@ -28,11 +30,10 @@ CAMPOS_PRINCIPALES = (
     ("fecha_sol_allanamiento", "Solicitud allanamiento"),
     ("localidad", "Localidad"),
     ("investigados", "Investigados"),
-    ("relato", "Relato"),  # relato_original o relato (uno solo)
+    ("relato", "Relato"),
     ("observacion_interna", "Observación interna"),
 )
 
-# Secundarios: geo / barrio (menos prioritarios en la auditoría)
 CAMPOS_SECUNDARIOS = (
     ("barrio", "Barrio"),
     ("coord", "Coordenadas (texto)"),
@@ -40,8 +41,6 @@ CAMPOS_SECUNDARIOS = (
     ("longitud", "Longitud"),
 )
 
-# Columnas del listado (tabla ancha con scroll horizontal)
-# actuario = virtual (grado + apellido/nombre)
 CAMPOS_LISTADO = (
     ("nro_actuacion", "Nro"),
     ("fecha_denuncia", "Fecha"),
@@ -57,10 +56,77 @@ CAMPOS_LISTADO = (
     ("relato", "Relato"),
 )
 
-# Ocultables por defecto en el listado (se pueden volver a mostrar)
 COLUMNAS_OCULTABLES = frozenset({"localidad", "barrio", "latitud", "longitud"})
 
-# Estados de observación (BD) → etiquetas UI
+# —— Intervenciones (no hay "actuario" ni "acusados" por nombre en el Excel) ——
+# Personal: pers_interviniente | Detenidos/IS: conteos | Sustancias + dinero: sí
+CAMPOS_INTERV_PRINCIPALES = (
+    ("causas_interv_id", "Nro intervención"),
+    ("causas_id", "Causa"),
+    ("interv_fecha", "Fecha"),
+    ("tipo_interv_desc", "Tipo intervención"),
+    ("causa_escala", "Escala"),
+    ("causa_actividad", "Actividad"),
+    ("tipo_operativo", "Tipo operativo"),
+    ("pers_interviniente", "Personal interviniente"),
+    ("dep_interviniente", "Dep. interviniente (SINAR)"),
+    ("departamento_operativo", "Depto. operativo"),
+    ("zona", "DINAR / Zona"),
+    ("distrito", "Distrito"),
+    ("dep_policial", "Dep. policial"),
+    ("detenidos_total", "Detenidos (total)"),
+    ("identificados_total", "Identificados / IS (total)"),
+    ("secuestro_marihuana", "Marihuana"),
+    ("secuestro_cocaina", "Cocaína"),
+    ("secuestro_plantas", "Plantas"),
+    ("secuestro_plantines", "Plantines"),
+    ("secuestro_semillas", "Semillas"),
+    ("hojas_coca", "Hojas de coca"),
+    ("pesos_arg", "Pesos ARS"),
+    ("dolares", "Dólares"),
+    ("euro", "Euros"),
+    ("reales", "Reales"),
+    ("bolivianos", "Bolivianos"),
+)
+
+CAMPOS_INTERV_SECUNDARIOS = (
+    ("localidad_nombre", "Localidad"),
+    ("barrios_nombre", "Barrio"),
+    ("coordx", "Lat (coordX)"),
+    ("coordy", "Lon (coordY)"),
+    ("det_hombre_may", "Det. hombre mayor"),
+    ("det_hombre_men", "Det. hombre menor"),
+    ("det_mujer_may", "Det. mujer mayor"),
+    ("det_mujer_men", "Det. mujer menor"),
+    ("is_hombre_may", "IS hombre mayor"),
+    ("is_hombre_men", "IS hombre menor"),
+    ("is_mujer_may", "IS mujer mayor"),
+    ("is_mujer_men", "IS mujer menor"),
+)
+
+CAMPOS_INTERV_LISTADO = (
+    ("causas_interv_id", "Nro interv"),
+    ("interv_fecha", "Fecha"),
+    ("tipo_interv_desc", "Tipo"),
+    ("pers_interviniente", "Personal interviniente"),
+    ("dep_interviniente", "SINAR"),
+    ("zona", "DINAR"),
+    ("detenidos_total", "Detenidos"),
+    ("identificados_total", "IS / Identif."),
+    ("secuestro_marihuana", "Marihuana"),
+    ("secuestro_cocaina", "Cocaína"),
+    ("pesos_arg", "Pesos"),
+    ("dolares", "USD"),
+    ("localidad_nombre", "Localidad"),
+    ("barrios_nombre", "Barrio"),
+    ("coordx", "Lat"),
+    ("coordy", "Lon"),
+)
+
+COLUMNAS_OCULTABLES_INTERV = frozenset(
+    {"localidad_nombre", "barrios_nombre", "coordx", "coordy", "secuestro_marihuana", "secuestro_cocaina", "pesos_arg", "dolares"}
+)
+
 ESTADO_LABEL = {
     "pendiente": "Pendiente a auditar",
     "resuelta": "Auditado",
@@ -69,25 +135,26 @@ ESTADO_LABEL = {
 
 CAMPOS_AUDITABLES = CAMPOS_PRINCIPALES + CAMPOS_SECUNDARIOS
 CAMPOS_AUDITABLES_MAP = {k: v for k, v in CAMPOS_AUDITABLES}
-# Campos virtuales del listado (no son columnas DB directas)
 CAMPOS_AUDITABLES_MAP["actuario"] = "Actuario"
-CAMPOS_SECUNDARIOS_KEYS = {k for k, _ in CAMPOS_SECUNDARIOS}
+
+CAMPOS_INTERV_AUDITABLES = CAMPOS_INTERV_PRINCIPALES + CAMPOS_INTERV_SECUNDARIOS
+CAMPOS_INTERV_MAP = {k: v for k, v in CAMPOS_INTERV_AUDITABLES}
 
 
 class AuditoriaObs(db.Model):
-    """Observación de auditoría sobre un campo (o general) de una denuncia web."""
+    """Observación de auditoría sobre un registro (denuncia o intervención)."""
 
     __tablename__ = "auditoria_obs"
 
     id = db.Column(db.Integer, primary_key=True)
     unidad_id = db.Column(db.Integer, db.ForeignKey("unidades.id"), nullable=False, index=True)
-    denuncia_id = db.Column(
-        db.Integer,
-        db.ForeignKey("analisis_denuncias_web.id"),
-        nullable=False,
-        index=True,
-    )
-    # Clave de negocio: sobrevive reimportaciones (el id interno puede cambiar solo si se borra/recrea)
+    modulo = db.Column(db.String(40), nullable=False, default=MODULO_DENUNCIAS, index=True)
+    # ID interno del registro en su tabla (denuncia o intervención)
+    registro_id = db.Column(db.Integer, nullable=True, index=True)
+    # Legacy denuncias (se mantiene por compatibilidad; preferir modulo+registro_id)
+    denuncia_id = db.Column(db.Integer, nullable=True, index=True)
+    intervencion_id = db.Column(db.Integer, nullable=True, index=True)
+    # Clave de negocio para sobrevivir reimportaciones
     causas_id = db.Column(db.String(80), nullable=True, index=True)
     campo = db.Column(db.String(80), nullable=False, index=True)
     valor_sistema = db.Column(db.Text, nullable=True)
@@ -104,9 +171,9 @@ class AuditoriaObs(db.Model):
     auditor = db.relationship("User", backref="auditoria_obs_cargadas", foreign_keys=[auditor_id])
 
     __table_args__ = (
-        db.UniqueConstraint("denuncia_id", "campo", name="uq_auditoria_obs_denuncia_campo"),
         db.Index("ix_auditoria_obs_unidad_estado", "unidad_id", "estado"),
         db.Index("ix_auditoria_obs_unidad_causas", "unidad_id", "causas_id"),
+        db.Index("ix_auditoria_obs_modulo_reg", "unidad_id", "modulo", "registro_id"),
     )
 
     @property
@@ -117,4 +184,6 @@ class AuditoriaObs(db.Model):
     def campo_label(self) -> str:
         if self.es_general:
             return "Observación general"
+        if self.modulo == MODULO_INTERVENCIONES:
+            return CAMPOS_INTERV_MAP.get(self.campo, self.campo)
         return CAMPOS_AUDITABLES_MAP.get(self.campo, self.campo)
