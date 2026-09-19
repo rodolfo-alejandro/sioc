@@ -41,13 +41,14 @@ CAMPOS_SECUNDARIOS = (
 )
 
 # Columnas del listado (tabla ancha con scroll horizontal)
+# actuario = virtual (grado + apellido/nombre)
 CAMPOS_LISTADO = (
     ("nro_actuacion", "Nro"),
     ("fecha_denuncia", "Fecha"),
     ("causa_estado", "Estado"),
     ("desc_dep_registro", "Dependencia"),
     ("desc_dep_actuario", "Dep. actuario"),
-    ("actuario_apenom", "Actuario"),
+    ("actuario", "Actuario"),
     ("localidad", "Localidad"),
     ("barrio", "Barrio"),
     ("latitud", "Lat"),
@@ -55,6 +56,9 @@ CAMPOS_LISTADO = (
     ("investigados", "Investigados"),
     ("relato", "Relato"),
 )
+
+# Ocultables por defecto en el listado (se pueden volver a mostrar)
+COLUMNAS_OCULTABLES = frozenset({"localidad", "barrio", "latitud", "longitud"})
 
 # Estados de observación (BD) → etiquetas UI
 ESTADO_LABEL = {
@@ -65,6 +69,8 @@ ESTADO_LABEL = {
 
 CAMPOS_AUDITABLES = CAMPOS_PRINCIPALES + CAMPOS_SECUNDARIOS
 CAMPOS_AUDITABLES_MAP = {k: v for k, v in CAMPOS_AUDITABLES}
+# Campos virtuales del listado (no son columnas DB directas)
+CAMPOS_AUDITABLES_MAP["actuario"] = "Actuario"
 CAMPOS_SECUNDARIOS_KEYS = {k for k, _ in CAMPOS_SECUNDARIOS}
 
 

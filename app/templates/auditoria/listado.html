@@ -48,10 +48,24 @@
     </div>
 </div>
 
-<div class="d-flex gap-3 mb-2 small aud-leyenda">
+<div class="d-flex flex-wrap gap-3 mb-2 small aud-leyenda align-items-center">
     <span><span class="aud-dot aud-dot-orig"></span> Cargado</span>
     <span><span class="aud-dot aud-dot-pend"></span> Pendiente a auditar</span>
     <span><span class="aud-dot aud-dot-ok"></span> Auditado</span>
+    <span class="text-muted">|</span>
+    <span class="fw-semibold">Columnas:</span>
+    {% for key, label in columnas %}
+        {% if key in columnas_ocultables %}
+        <label class="form-check form-check-inline mb-0">
+            <input class="form-check-input aud-col-toggle" type="checkbox" data-col="{{ key }}" id="col-{{ key }}">
+            <span class="form-check-label">{{ label }}</span>
+        </label>
+        {% endif %}
+    {% endfor %}
+    <label class="form-check form-check-inline mb-0">
+        <input class="form-check-input aud-col-toggle" type="checkbox" data-col="__general__" id="col-general" checked>
+        <span class="form-check-label" title="Nota libre del auditor sobre todo el registro (no es un campo del sistema)">Obs. general</span>
+    </label>
 </div>
 
 <div class="card">
@@ -61,14 +75,14 @@
     </div>
     <div class="card-body p-0">
         <div class="table-responsive aud-listado-wrap">
-            <table class="table table-sm align-middle mb-0 aud-listado">
+            <table class="table table-sm align-middle mb-0 aud-listado" id="aud-listado-table">
                 <thead class="table-light">
                     <tr>
                         <th class="aud-sticky-col">Fila</th>
                         {% for key, label in columnas %}
-                        <th>{{ label }}</th>
+                        <th data-col="{{ key }}">{{ label }}</th>
                         {% endfor %}
-                        <th>General</th>
+                        <th data-col="__general__" title="Observación general del auditor sobre el expediente completo">Obs. general</th>
                         <th>Estado</th>
                         <th></th>
                     </tr>
@@ -81,11 +95,11 @@
                             <span class="aud-chip aud-chip-orig">Cargado</span>
                         </td>
                         {% for c in it.campos %}
-                        <td title="{{ c.valor }}">
+                        <td data-col="{{ c.key }}" title="{{ c.valor }}">
                             <div class="aud-cell-val">{{ c.short }}</div>
                         </td>
                         {% endfor %}
-                        <td class="text-muted">—</td>
+                        <td data-col="__general__" class="text-muted">—</td>
                         <td>
                             {% if it.row_estado == 'auditado' %}
                             <span class="badge bg-success">Auditado</span>
@@ -104,7 +118,7 @@
                             <span class="aud-chip aud-chip-audit">Auditoría</span>
                         </td>
                         {% for c in it.campos %}
-                        <td class="aud-cell-audit {% if c.obs and c.obs.estado == 'pendiente' %}aud-cell-pend{% elif c.obs %}aud-cell-ok{% endif %}">
+                        <td data-col="{{ c.key }}" class="aud-cell-audit {% if c.obs and c.obs.estado == 'pendiente' %}aud-cell-pend{% elif c.obs %}aud-cell-ok{% endif %}">
                             <div class="aud-cell-val">
                                 {% if c.aud_short %}{{ c.aud_short }}{% else %}<span class="text-muted">—</span>{% endif %}
                             </div>
@@ -138,7 +152,7 @@
                             {% endif %}
                         </td>
                         {% endfor %}
-                        <td class="aud-cell-audit {% if it.general and it.general.estado == 'pendiente' %}aud-cell-pend{% elif it.general %}aud-cell-ok{% endif %}">
+                        <td data-col="__general__" class="aud-cell-audit {% if it.general and it.general.estado == 'pendiente' %}aud-cell-pend{% elif it.general %}aud-cell-ok{% endif %}">
                             <div class="aud-cell-val">
                                 {% if it.general and (it.general.valor_auditor or it.general.nota) %}
                                     {{ (it.general.valor_auditor or it.general.nota)[:60] }}{% if (it.general.valor_auditor or it.general.nota)|length > 60 %}…{% endif %}
@@ -152,7 +166,7 @@
                                     data-denuncia-id="{{ r.id }}"
                                     data-campo="{{ campo_general }}"
                                     data-label="Observación general"
-                                    title="Observación general">
+                                    title="Observación general del expediente">
                                 <i class="bi bi-pencil-square"></i>
                             </button>
                             {% endif %}
@@ -255,6 +269,42 @@
 (function () {
   var collapse = document.getElementById('ad-filtros-collapse');
   if (collapse) collapse.classList.add('show');
+
+  var STORAGE_KEY = 'sioc_aud_cols_v1';
+  var DEFAULT_HIDDEN = {{ columnas_ocultables|list|tojson }};
+  function loadColPrefs() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (e) {}
+    var prefs = {};
+    DEFAULT_HIDDEN.forEach(function (k) { prefs[k] = false; });
+    prefs['__general__'] = true;
+    return prefs;
+  }
+  function saveColPrefs(prefs) {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs)); } catch (e) {}
+  }
+  function applyColPrefs(prefs) {
+    document.querySelectorAll('.aud-col-toggle').forEach(function (cb) {
+      var col = cb.getAttribute('data-col');
+      var show = prefs[col] !== false;
+      if (prefs[col] === undefined) show = DEFAULT_HIDDEN.indexOf(col) === -1;
+      cb.checked = show;
+      document.querySelectorAll('#aud-listado-table [data-col="' + col + '"]').forEach(function (el) {
+        el.style.display = show ? '' : 'none';
+      });
+    });
+  }
+  var prefs = loadColPrefs();
+  applyColPrefs(prefs);
+  document.querySelectorAll('.aud-col-toggle').forEach(function (cb) {
+    cb.addEventListener('change', function () {
+      prefs[cb.getAttribute('data-col')] = cb.checked;
+      saveColPrefs(prefs);
+      applyColPrefs(prefs);
+    });
+  });
 
   var form = document.getElementById('ad-form-filtros');
   if (form) {

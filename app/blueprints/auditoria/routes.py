@@ -20,6 +20,7 @@ from app.models.auditoria import (
     CAMPOS_LISTADO,
     CAMPOS_PRINCIPALES,
     CAMPOS_SECUNDARIOS,
+    COLUMNAS_OCULTABLES,
     ESTADO_LABEL,
     AuditoriaObs,
 )
@@ -75,6 +76,10 @@ def _valor_campo(row: DenunciaWeb, campo: str) -> str:
     """Valor mostrado/guardado como snapshot. Relato unifica original + relato."""
     if campo == "relato":
         return _fmt_valor(row.relato_original or row.relato)
+    if campo == "actuario":
+        grado = (row.actuario_grado or "").strip()
+        nombre = (row.actuario_apenom or "").strip()
+        return f"{grado} {nombre}".strip()
     return _fmt_valor(getattr(row, campo, None))
 
 
@@ -277,6 +282,7 @@ def listado():
         qs_no_page=qs_no_page,
         listado_url=listado_url,
         columnas=CAMPOS_LISTADO,
+        columnas_ocultables=sorted(COLUMNAS_OCULTABLES),
         filtros=ad_routes._filter_options(),
         selected=selected,
         can_edit=_can_edit(),
