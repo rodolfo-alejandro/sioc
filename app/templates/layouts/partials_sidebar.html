@@ -132,7 +132,19 @@
                         {% if current_user.has_permission('DENUNCIAS_WEB_IMPORT') %}
                         <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('analisis_denuncias.importar') }}"><i class="bi bi-cloud-upload"></i> Importar CSV</a></li>
                         {% endif %}
+                        {% if current_user.has_permission('AUDITORIA_VIEW') %}
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('auditoria.listado') }}"><i class="bi bi-clipboard-check"></i> Auditoría</a></li>
+                        {% endif %}
                     </ul>
+                </li>
+                {% endif %}
+
+                <!-- Auditoría (acceso directo) -->
+                {% if current_user.has_permission('AUDITORIA_VIEW') and not (current_user.has_permission('DENUNCIAS_WEB_VIEW') or current_user.has_permission('DENUNCIAS_WEB_IMPORT')) %}
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('auditoria.listado') }}">
+                        <i class="bi bi-clipboard-check"></i> Auditoría
+                    </a>
                 </li>
                 {% endif %}
 

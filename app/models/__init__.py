@@ -67,6 +67,7 @@ from app.models.analisis_llamadas_se import LlamadaSE
 from app.models.analisis_intervenciones import AnalisisIntervencion
 from app.models.monitor_noticias import TemaNoticia, FuenteNoticia, Noticia
 from app.models.dunacc import DunaccLote, DunaccRegistro, DunaccLoteCompartido, DunaccComisariaAlias
+from app.models.auditoria import AuditoriaObs
 
 __all__ = [
     'User', 'Role', 'Permission', 'Unidad', 'AuditLog', 'Dataset', 'DenunciaWeb',
@@ -93,5 +94,6 @@ __all__ = [
     'LlamadaSE', 'AnalisisIntervencion',
     'TemaNoticia', 'FuenteNoticia', 'Noticia',
     'DunaccLote', 'DunaccRegistro', 'DunaccLoteCompartido', 'DunaccComisariaAlias',
+    'AuditoriaObs',
 ]
 

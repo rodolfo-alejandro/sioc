@@ -83,6 +83,7 @@ ADMIN_PERM_CODES = [
     'MONITOR_NOTICIAS_VIEW', 'MONITOR_NOTICIAS_MANAGE', 'MONITOR_NOTICIAS_EXPORT',
     'DUNACC_VIEW', 'DUNACC_MANAGE', 'DUNACC_EXPORT',
     'CAPACITACIONES_VIEW', 'CAPACITACIONES_ADMIN', 'CAPACITACIONES_ASISTENCIA',
+    'AUDITORIA_VIEW', 'AUDITORIA_EDIT',
 ]
 
 ANALISTA_PERM_CODES = [
@@ -97,6 +98,7 @@ ANALISTA_PERM_CODES = [
     'ANALISIS_INTERVENCIONES_MAPA',
     'MONITOR_NOTICIAS_VIEW', 'MONITOR_NOTICIAS_MANAGE', 'MONITOR_NOTICIAS_EXPORT',
     'DUNACC_VIEW', 'DUNACC_MANAGE', 'DUNACC_EXPORT',
+    'AUDITORIA_VIEW', 'AUDITORIA_EDIT',
 ]
 
 
@@ -221,6 +223,9 @@ def create_seed_data(*, create_tables: bool = True):
             ('CAPACITACIONES_VIEW', 'Ver módulo de capacitaciones, padrón e informes'),
             ('CAPACITACIONES_ADMIN', 'Gestionar padrón, eventos, inscriptos y momentos de asistencia'),
             ('CAPACITACIONES_ASISTENCIA', 'Registrar asistencia en eventos'),
+            # Auditoría de calidad (Denuncias Web)
+            ('AUDITORIA_VIEW', 'Ver módulo de auditoría de Denuncias Web'),
+            ('AUDITORIA_EDIT', 'Cargar y gestionar observaciones de auditoría'),
         ]
         
         permisos_creados = {}

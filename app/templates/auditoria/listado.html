@@ -1,0 +1,104 @@
+{% extends "layouts/base.html" %}
+{% block title %}Auditoría Denuncias Web - SIOC{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-clipboard-check"></i> Auditoría — Denuncias Web</h1>
+    <p class="text-muted mb-0">Control de calidad: observaciones por campo sin modificar el dato cargado.</p>
+</div>
+
+<form method="get" class="row g-2 align-items-end mb-3">
+    <div class="col-md-5">
+        <label class="form-label small mb-0">Buscar</label>
+        <input type="text" class="form-control form-control-sm" name="q" value="{{ q_text }}"
+               placeholder="Nro actuación, AP, estado, actuario, localidad…">
+    </div>
+    <div class="col-md-3">
+        <label class="form-label small mb-0">Observaciones</label>
+        <select class="form-select form-select-sm" name="estado_obs">
+            <option value="" {% if not estado_obs %}selected{% endif %}>Todas las denuncias</option>
+            <option value="pendiente" {% if estado_obs == 'pendiente' %}selected{% endif %}>Con pendientes</option>
+            <option value="resuelta" {% if estado_obs == 'resuelta' %}selected{% endif %}>Solo resueltas</option>
+        </select>
+    </div>
+    <div class="col-md-2">
+        <div class="form-check mt-3">
+            <input class="form-check-input" type="checkbox" name="solo_obs" value="1" id="soloObs"
+                   {% if solo_obs %}checked{% endif %}>
+            <label class="form-check-label small" for="soloObs">Solo con obs.</label>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <button type="submit" class="btn btn-primary btn-sm w-100"><i class="bi bi-search"></i> Filtrar</button>
+    </div>
+</form>
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0">Denuncias</h6>
+        <span class="badge bg-light text-dark border">Total: {{ total|number_format }}</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Nro / AP</th>
+                        <th>Fecha</th>
+                        <th>Estado</th>
+                        <th>Dependencia</th>
+                        <th>Actuario</th>
+                        <th>Localidad</th>
+                        <th class="text-center">Obs.</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r, obs_total, obs_pendientes in rows %}
+                    <tr>
+                        <td>
+                            <div class="fw-semibold">{{ r.nro_actuacion or '—' }}</div>
+                            <div class="small text-muted">{{ r.causas_id or '' }}</div>
+                        </td>
+                        <td>{{ r.fecha_denuncia|localtime('%d/%m/%Y') if r.fecha_denuncia else '—' }}</td>
+                        <td>{{ r.causa_estado or '—' }}</td>
+                        <td>{{ r.desc_dep_registro or '—' }}</td>
+                        <td>{{ r.actuario_apenom or '—' }}</td>
+                        <td>{{ r.localidad or '—' }}{% if r.barrio %} <span class="text-muted">/ {{ r.barrio }}</span>{% endif %}</td>
+                        <td class="text-center">
+                            {% if obs_total %}
+                                <span class="badge {% if obs_pendientes %}bg-warning text-dark{% else %}bg-success{% endif %}"
+                                      title="{{ obs_pendientes }} pendiente(s) / {{ obs_total }} total">
+                                    {{ obs_pendientes }}/{{ obs_total }}
+                                </span>
+                            {% else %}
+                                <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a class="btn btn-outline-primary btn-sm"
+                               href="{{ url_for('auditoria.detalle', denuncia_id=r.id) }}">Auditar</a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="8" class="text-center text-muted py-4">Sin resultados.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<nav class="mt-3">
+    <ul class="pagination pagination-sm">
+        {% set prev_page = page - 1 %}
+        {% set next_page = page + 1 %}
+        <li class="page-item {% if page <= 1 %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('auditoria.listado') }}?{{ qs_no_page }}{% if qs_no_page %}&{% endif %}page={{ prev_page }}">Anterior</a>
+        </li>
+        <li class="page-item disabled"><span class="page-link">Página {{ page }} / {{ pages }}</span></li>
+        <li class="page-item {% if page >= pages %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('auditoria.listado') }}?{{ qs_no_page }}{% if qs_no_page %}&{% endif %}page={{ next_page }}">Siguiente</a>
+        </li>
+    </ul>
+</nav>
+{% endblock %}
