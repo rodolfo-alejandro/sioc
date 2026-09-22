@@ -3,16 +3,22 @@ Importación y listado básico de Base Operativa (Excel Capital/Interior).
 
 Upsert por (unidad, ámbito, REGISTRO N° / CAP): reimportar no cambia IDs
 ni pierde observaciones de auditoría.
+
+El import corre en un hilo en background para no clavar Gunicorn.
 """
 from __future__ import annotations
 
+import json
+import logging
 import math
 import re
-from pathlib import Path
+import threading
+import traceback
 from datetime import date, datetime, time, timedelta
 from io import BytesIO
+from pathlib import Path
 
-from flask import flash, redirect, render_template, request, url_for
+from flask import current_app, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import func
 from werkzeug.utils import secure_filename
@@ -21,12 +27,17 @@ from app.blueprints.base_operativa import bp
 from app.extensions import db
 from app.models.base_operativa import BaseIdentificado, BaseProcedimiento
 
+_log = logging.getLogger(__name__)
+
 _XLS_EPOCH = datetime(1899, 12, 30)
 
 _SHEETS = (
     ("BASE CAPITAL", "IDENTIFICADOS CAPITAL", "capital"),
     ("BASE INTERIOR", "IDENTIFICADOS INTERIOR", "interior"),
 )
+
+_JOB_DIR = Path("/tmp/sioc_base_operativa_jobs")
+_import_lock = threading.Lock()
 
 
 def _can_view() -> bool:
@@ -52,12 +63,35 @@ def _can_import() -> bool:
     )
 
 
+def _job_path(unidad_id: int) -> Path:
+    _JOB_DIR.mkdir(parents=True, exist_ok=True)
+    return _JOB_DIR / f"unidad_{unidad_id}.json"
+
+
+def _write_job(unidad_id: int, data: dict) -> None:
+    data = dict(data)
+    data["updated_at"] = datetime.utcnow().isoformat() + "Z"
+    path = _job_path(unidad_id)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    tmp.replace(path)
+
+
+def _read_job(unidad_id: int) -> dict | None:
+    path = _job_path(unidad_id)
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
 def _norm_header(h) -> str:
     if h is None:
         return ""
     s = str(h).replace("\xa0", " ").strip().upper()
     s = re.sub(r"\s+", " ", s)
-    # normalizar grados / enie rotas
     s = s.replace("Á", "A").replace("É", "E").replace("Í", "I").replace("Ó", "O").replace("Ú", "U")
     s = s.replace("Ñ", "N").replace("º", "O").replace("°", "")
     return s
@@ -81,9 +115,7 @@ def _parse_float(v) -> float | None:
         if isinstance(v, float) and math.isnan(v):
             return None
         return float(v)
-    s = str(v).strip().replace(".", "").replace(",", ".") if False else str(v).strip()
-    s = s.replace(" ", "").replace("$", "")
-    # AR-style: 1.234,56 → try comma decimal
+    s = str(v).strip().replace(" ", "").replace("$", "")
     if re.match(r"^-?\d{1,3}(\.\d{3})+(,\d+)?$", s):
         s = s.replace(".", "").replace(",", ".")
     elif "," in s and "." not in s:
@@ -130,7 +162,6 @@ def _parse_time(v) -> time | None:
     if isinstance(v, datetime):
         return v.time()
     if isinstance(v, (int, float)) and not (isinstance(v, float) and math.isnan(v)):
-        # fracción de día Excel
         try:
             frac = float(v) % 1
             secs = int(round(frac * 86400))
@@ -158,36 +189,55 @@ def _get(row: dict, *aliases: str):
 
 def _row_dict(headers: list, values: list) -> dict:
     out = {}
-    for i, h in enumerate(headers):
-        nh = _norm_header(h)
+    n = min(len(headers), len(values))
+    for i in range(n):
+        nh = _norm_header(headers[i])
         if not nh or nh.startswith("UNNAMED"):
             continue
-        out[nh] = values[i] if i < len(values) else None
+        out[nh] = values[i]
     return out
 
 
-def _iter_sheet_rows(wb, sheet_name: str):
-    """Yields dict rows; works with pyxlsb workbook or openpyxl."""
-    # pyxlsb
+def _iter_sheet_rows(wb, sheet_name: str, max_cols: int = 120):
+    """Yields dict rows. Truncates wide sparse Excel ranges (crítico en .xlsb)."""
     if hasattr(wb, "get_sheet"):
         with wb.get_sheet(sheet_name) as sheet:
             headers = None
+            header_len = 0
+            empty_streak = 0
             for row in sheet.rows():
-                vals = [c.v for c in row]
                 if headers is None:
+                    vals = []
+                    for i, c in enumerate(row):
+                        if i >= max_cols:
+                            break
+                        vals.append(c.v)
+                    while vals and vals[-1] is None:
+                        vals.pop()
                     headers = vals
+                    header_len = len(headers) or 1
                     continue
+
+                vals = []
+                for i, c in enumerate(row):
+                    if i >= header_len:
+                        break
+                    vals.append(c.v)
+
                 if not any(v is not None and str(v).strip() for v in vals):
+                    empty_streak += 1
+                    if empty_streak >= 50:
+                        break
                     continue
+                empty_streak = 0
                 yield _row_dict(headers, vals)
         return
 
-    # openpyxl / pandas ExcelFile fallback via pandas
     import pandas as pd
 
-    df = pd.read_excel(wb, sheet_name=sheet_name, dtype=object)
+    df = pd.read_excel(wb, sheet_name=sheet_name, dtype=object, usecols=range(0, max_cols))
+    headers = list(df.columns)
     for _, series in df.iterrows():
-        headers = list(df.columns)
         vals = [series[c] for c in headers]
         if not any(v is not None and str(v).strip() not in ("", "nan", "NaN") for v in vals):
             continue
@@ -197,7 +247,6 @@ def _iter_sheet_rows(wb, sheet_name: str):
 def _map_procedimiento(row: dict, ambito: str) -> dict | None:
     reg = _clean(_get(row, "REGISTRO N", "REGISTRO NO", "REGISTRO NRO", "REGISTRO"))
     if not reg:
-        # a veces queda REGISTRO N° normalizado raro
         for k, v in row.items():
             if k.startswith("REGISTRO"):
                 reg = _clean(v)
@@ -216,7 +265,6 @@ def _map_procedimiento(row: dict, ambito: str) -> dict | None:
             "WHATSAPP",
         )
     )
-    # Interior: tipología en columna larga
     if not delito:
         for k, v in row.items():
             if "BOCA DE EXPENDIO" in k or k == "WHATSAPP":
@@ -267,7 +315,7 @@ def _map_procedimiento(row: dict, ambito: str) -> dict | None:
         "pastillas_cant": _parse_float(_get(row, "PASTILLAS CANTIDAD")) or 0,
         "otras_sustancias": _clean(_get(row, "OTRAS SUSTANCIAS/PASTILLAS TIPO")),
         "pesos_arg": _parse_float(_get(row, "DINERO")) or 0,
-        "dolares": _parse_float(_get(row, "DOLARES", "DOLARES")) or 0,
+        "dolares": _parse_float(_get(row, "DOLARES")) or 0,
         "euro": _parse_float(_get(row, "EURO")) or 0,
         "reales": _parse_float(_get(row, "REALES")) or 0,
         "bolivianos": _parse_float(_get(row, "BOLIVIANO", "BOLIVIANOS")) or 0,
@@ -326,23 +374,15 @@ def _map_identificado(row: dict, ambito: str) -> dict | None:
     }
 
 
-def _open_workbook(raw: bytes, filename: str):
-    name = (filename or "").lower()
+def _open_workbook(path: str | Path):
+    name = str(path).lower()
     if name.endswith(".xlsb"):
-        import tempfile
         from pyxlsb import open_workbook
 
-        tmp = tempfile.NamedTemporaryFile(suffix=".xlsb", delete=False)
-        try:
-            tmp.write(raw)
-            tmp.close()
-            return open_workbook(tmp.name), "pyxlsb", tmp.name
-        except Exception:
-            Path(tmp.name).unlink(missing_ok=True)
-            raise
+        return open_workbook(str(path)), "pyxlsb"
     import pandas as pd
 
-    return pd.ExcelFile(BytesIO(raw)), "pandas", None
+    return pd.ExcelFile(str(path)), "pandas"
 
 
 def _sheet_names(wb, kind: str) -> list[str]:
@@ -351,18 +391,16 @@ def _sheet_names(wb, kind: str) -> list[str]:
     return list(wb.sheet_names)
 
 
-def _import_file(raw: bytes, filename: str) -> dict:
-    tmp_path = None
+def _import_from_path(path: str | Path, unidad_id: int, user_id: int) -> dict:
     wb = None
     try:
         try:
-            wb, kind, tmp_path = _open_workbook(raw, filename)
+            wb, kind = _open_workbook(path)
         except Exception as exc:
             return {"error": f"No se pudo abrir el Excel: {exc}"}
 
         names = {_norm_header(n): n for n in _sheet_names(wb, kind)}
         now = datetime.utcnow()
-        unidad_id = current_user.unidad_id
 
         procs_data: dict[tuple[str, str], dict] = {}
         idents_data: list[dict] = []
@@ -375,23 +413,38 @@ def _import_file(raw: bytes, filename: str) -> dict:
             if not real_base:
                 continue
 
-            for row in _iter_sheet_rows(wb, real_base):
+            _write_job(
+                unidad_id,
+                {
+                    "status": "running",
+                    "message": f"Leyendo {base_name}…",
+                    "filename": Path(path).name,
+                },
+            )
+            max_cols = 110 if "BASE" in base_name.upper() else 20
+            for row in _iter_sheet_rows(wb, real_base, max_cols=max_cols):
                 mapped = _map_procedimiento(row, ambito)
                 if not mapped:
                     skipped_proc += 1
                     continue
-                key = (ambito, mapped["registro_nro"])
-                procs_data[key] = mapped
+                procs_data[(ambito, mapped["registro_nro"])] = mapped
 
             if real_ident:
-                for row in _iter_sheet_rows(wb, real_ident):
+                _write_job(
+                    unidad_id,
+                    {
+                        "status": "running",
+                        "message": f"Leyendo {ident_name}…",
+                        "filename": Path(path).name,
+                    },
+                )
+                for row in _iter_sheet_rows(wb, real_ident, max_cols=20):
                     mapped = _map_identificado(row, ambito)
                     if not mapped or not mapped.get("nombre"):
                         skipped_ident += 1
                         continue
                     idents_data.append(mapped)
 
-        # Cerrar workbook antes del commit largo / borrado temp
         try:
             if wb is not None and hasattr(wb, "close"):
                 wb.close()
@@ -401,6 +454,15 @@ def _import_file(raw: bytes, filename: str) -> dict:
 
         if not procs_data:
             return {"error": "No se encontraron filas en BASE CAPITAL / BASE INTERIOR."}
+
+        _write_job(
+            unidad_id,
+            {
+                "status": "running",
+                "message": f"Guardando {len(procs_data)} procedimientos…",
+                "filename": Path(path).name,
+            },
+        )
 
         existing = {
             (r.ambito, r.registro_nro): r
@@ -419,7 +481,7 @@ def _import_file(raw: bytes, filename: str) -> dict:
                 if obj is None:
                     obj = BaseProcedimiento(
                         unidad_id=unidad_id,
-                        creado_por=current_user.id,
+                        creado_por=user_id,
                         activo=True,
                         ambito=data["ambito"],
                         registro_nro=data["registro_nro"],
@@ -503,15 +565,74 @@ def _import_file(raw: bytes, filename: str) -> dict:
                 wb.close()
         except Exception:
             pass
-        if tmp_path:
+
+
+def _bg_import(app, path: Path, unidad_id: int, user_id: int, filename: str) -> None:
+    with app.app_context():
+        acquired = _import_lock.acquire(blocking=False)
+        if not acquired:
+            _write_job(
+                unidad_id,
+                {
+                    "status": "error",
+                    "message": "Ya hay una importación en curso. Esperá a que termine.",
+                    "filename": filename,
+                },
+            )
             try:
-                Path(tmp_path).unlink(missing_ok=True)
+                path.unlink(missing_ok=True)
+            except Exception:
+                pass
+            return
+        try:
+            _write_job(
+                unidad_id,
+                {
+                    "status": "running",
+                    "message": "Procesando Excel (puede tardar varios minutos)…",
+                    "filename": filename,
+                },
+            )
+            res = _import_from_path(path, unidad_id, user_id)
+            if res.get("error"):
+                _write_job(
+                    unidad_id,
+                    {"status": "error", "message": res["error"], "filename": filename},
+                )
+            else:
+                _write_job(
+                    unidad_id,
+                    {
+                        "status": "ok",
+                        "message": (
+                            f"Listo: {res['created']} nuevos, {res['updated']} actualizados, "
+                            f"{res['identificados']} identificados."
+                        ),
+                        "filename": filename,
+                        "result": res,
+                    },
+                )
+        except Exception as exc:
+            _log.exception("Import Base Operativa falló")
+            _write_job(
+                unidad_id,
+                {
+                    "status": "error",
+                    "message": f"Error inesperado: {exc}",
+                    "filename": filename,
+                    "trace": traceback.format_exc()[-1500:],
+                },
+            )
+        finally:
+            _import_lock.release()
+            try:
+                path.unlink(missing_ok=True)
             except Exception:
                 pass
 
 
 def _ensure_tables():
-    from sqlalchemy import inspect, text
+    from sqlalchemy import inspect
 
     insp = inspect(db.engine)
     if "base_operativa_procedimientos" not in insp.get_table_names():
@@ -520,13 +641,7 @@ def _ensure_tables():
         BaseIdentificado.__table__.create(db.engine, checkfirst=True)
 
 
-@bp.route("/")
-@login_required
-def index():
-    if not _can_view():
-        flash("No tenés permiso para ver Base Operativa.", "warning")
-        return redirect(url_for("core.dashboard"))
-    _ensure_tables()
+def _page_stats():
     total = (
         BaseProcedimiento.query.filter(
             BaseProcedimiento.unidad_id == current_user.unidad_id,
@@ -549,75 +664,92 @@ def index():
         .order_by(BaseProcedimiento.fecha_importacion.desc())
         .first()
     )
-    return render_template(
-        "base_operativa/importar.html",
-        total=total,
-        por_ambito=dict(por_ambito),
-        ultima=ultima,
-        can_import=_can_import(),
-    )
+    return total, dict(por_ambito), ultima
+
+
+@bp.route("/")
+@login_required
+def index():
+    return redirect(url_for("base_operativa.importar"))
 
 
 @bp.route("/importar", methods=["GET", "POST"])
 @login_required
 def importar():
-    if not _can_import():
-        flash("No tenés permiso para importar Base Operativa.", "warning")
-        return redirect(url_for("core.dashboard"))
-    _ensure_tables()
-
     if request.method == "POST":
+        if not _can_import():
+            flash("No tenés permiso para importar Base Operativa.", "warning")
+            return redirect(url_for("core.dashboard"))
+        _ensure_tables()
+
+        job = _read_job(current_user.unidad_id)
+        if job and job.get("status") == "running":
+            flash("Ya hay una importación en curso. Esperá a que termine.", "warning")
+            return redirect(url_for("base_operativa.importar"))
+
         f = request.files.get("archivo")
         if not f or not f.filename:
             flash("Seleccioná un archivo Excel (.xlsb / .xlsx).", "warning")
             return redirect(url_for("base_operativa.importar"))
-        filename = secure_filename(f.filename)
+        filename = secure_filename(f.filename) or "base.xlsb"
         if not filename.lower().endswith((".xlsb", ".xlsx", ".xlsm")):
             flash("Formato no soportado. Usá .xlsb o .xlsx.", "danger")
             return redirect(url_for("base_operativa.importar"))
-        raw = f.read()
-        if not raw:
+
+        upload_dir = _JOB_DIR / "uploads"
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        dest = upload_dir / f"u{current_user.unidad_id}_{int(datetime.utcnow().timestamp())}_{filename}"
+        f.save(str(dest))
+
+        if dest.stat().st_size == 0:
+            dest.unlink(missing_ok=True)
             flash("Archivo vacío.", "warning")
             return redirect(url_for("base_operativa.importar"))
 
-        res = _import_file(raw, filename)
-        if res.get("error"):
-            flash(res["error"], "danger")
-        else:
-            flash(
-                f"Import OK: {res['created']} nuevos, {res['updated']} actualizados, "
-                f"{res['identificados']} identificados. "
-                f"Auditoría intacta (upsert por CAP).",
-                "success",
-            )
+        _write_job(
+            current_user.unidad_id,
+            {
+                "status": "running",
+                "message": "Archivo recibido. Procesando en segundo plano…",
+                "filename": filename,
+            },
+        )
+
+        app = current_app._get_current_object()
+        th = threading.Thread(
+            target=_bg_import,
+            args=(app, dest, current_user.unidad_id, current_user.id, filename),
+            daemon=True,
+        )
+        th.start()
+
+        flash(
+            "Importación iniciada en segundo plano. Podés seguir usando SIOC; "
+            "esta página se actualiza sola cuando termine (el .xlsb puede tardar varios minutos).",
+            "info",
+        )
         return redirect(url_for("base_operativa.importar"))
 
-    total = (
-        BaseProcedimiento.query.filter(
-            BaseProcedimiento.unidad_id == current_user.unidad_id,
-            BaseProcedimiento.activo.is_(True),
-        ).count()
-    )
-    por_ambito = (
-        db.session.query(BaseProcedimiento.ambito, func.count(BaseProcedimiento.id))
-        .filter(
-            BaseProcedimiento.unidad_id == current_user.unidad_id,
-            BaseProcedimiento.activo.is_(True),
-        )
-        .group_by(BaseProcedimiento.ambito)
-        .all()
-    )
-    ultima = (
-        BaseProcedimiento.query.filter(
-            BaseProcedimiento.unidad_id == current_user.unidad_id,
-        )
-        .order_by(BaseProcedimiento.fecha_importacion.desc())
-        .first()
-    )
+    if not _can_view() and not _can_import():
+        flash("No tenés permiso para ver Base Operativa.", "warning")
+        return redirect(url_for("core.dashboard"))
+    _ensure_tables()
+    total, por_ambito, ultima = _page_stats()
+    job = _read_job(current_user.unidad_id)
     return render_template(
         "base_operativa/importar.html",
         total=total,
-        por_ambito=dict(por_ambito),
+        por_ambito=por_ambito,
         ultima=ultima,
-        can_import=True,
+        can_import=_can_import(),
+        job=job,
     )
+
+
+@bp.route("/importar/estado")
+@login_required
+def importar_estado():
+    if not _can_view() and not _can_import():
+        return {"error": "sin permiso"}, 403
+    job = _read_job(current_user.unidad_id) or {"status": "idle"}
+    return job

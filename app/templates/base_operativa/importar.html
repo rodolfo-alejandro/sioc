@@ -9,6 +9,32 @@
   </p>
 </div>
 
+{% if job and job.status == 'running' %}
+<div class="alert alert-warning" id="bo-job-alert">
+  <div class="d-flex align-items-center gap-2">
+    <div class="spinner-border spinner-border-sm" role="status"></div>
+    <div>
+      <strong>Importación en curso</strong>
+      {% if job.filename %}· {{ job.filename }}{% endif %}<br>
+      <span id="bo-job-msg">{{ job.message or 'Procesando…' }}</span>
+    </div>
+  </div>
+  <div class="small text-muted mt-2 mb-0">Podés seguir usando el resto de SIOC. Esta página se actualiza sola.</div>
+</div>
+{% elif job and job.status == 'ok' %}
+<div class="alert alert-success">
+  <strong>Última importación OK</strong>
+  {% if job.filename %}· {{ job.filename }}{% endif %}<br>
+  {{ job.message }}
+</div>
+{% elif job and job.status == 'error' %}
+<div class="alert alert-danger">
+  <strong>Error en importación</strong>
+  {% if job.filename %}· {{ job.filename }}{% endif %}<br>
+  {{ job.message }}
+</div>
+{% endif %}
+
 <div class="card">
   <div class="card-body">
     <div class="mb-2"><strong>Total vigente:</strong> {{ total }}</div>
@@ -20,14 +46,18 @@
     </div>
 
     {% if can_import %}
-    <form method="POST" action="{{ url_for('base_operativa.importar') }}" enctype="multipart/form-data" class="row g-2 align-items-end">
+    <form method="POST" action="{{ url_for('base_operativa.importar') }}" enctype="multipart/form-data" class="row g-2 align-items-end"
+          {% if job and job.status == 'running' %}onsubmit="return false;"{% endif %}>
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="col-md-8">
         <label class="form-label">Archivo Excel (.xlsb / .xlsx)</label>
-        <input type="file" name="archivo" class="form-control" accept=".xlsb,.xlsx,.xlsm" required>
+        <input type="file" name="archivo" class="form-control" accept=".xlsb,.xlsx,.xlsm" required
+               {% if job and job.status == 'running' %}disabled{% endif %}>
       </div>
       <div class="col-md-4 d-grid">
-        <button class="btn btn-success" type="submit"><i class="bi bi-upload"></i> Importar / Actualizar</button>
+        <button class="btn btn-success" type="submit" {% if job and job.status == 'running' %}disabled{% endif %}>
+          <i class="bi bi-upload"></i> Importar / Actualizar
+        </button>
       </div>
     </form>
     {% else %}
@@ -37,7 +67,8 @@
     <div class="alert alert-info mt-3 mb-0">
       Hojas leídas: <code>BASE CAPITAL</code>, <code>IDENTIFICADOS CAPITAL</code>,
       <code>BASE INTERIOR</code>, <code>IDENTIFICADOS INTERIOR</code>.
-      Clave estable: ámbito + CAP → los IDs no cambian al reimportar.
+      El import corre en <strong>segundo plano</strong> para no clavar el sistema.
+      Tip: si podés, guardá esas 4 hojas como <code>.xlsx</code> — suele ser más rápido que <code>.xlsb</code>.
     </div>
     <div class="mt-3">
       <a class="btn btn-outline-primary btn-sm" href="{{ url_for('auditoria.listado_base_operativa') }}">
@@ -46,4 +77,29 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+{% if job and job.status == 'running' %}
+<script>
+(function () {
+  var url = {{ url_for('base_operativa.importar_estado')|tojson }};
+  function tick() {
+    fetch(url, { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        var el = document.getElementById('bo-job-msg');
+        if (el && j.message) el.textContent = j.message;
+        if (j.status && j.status !== 'running') {
+          window.location.reload();
+          return;
+        }
+        setTimeout(tick, 4000);
+      })
+      .catch(function () { setTimeout(tick, 6000); });
+  }
+  setTimeout(tick, 3000);
+})();
+</script>
+{% endif %}
 {% endblock %}
