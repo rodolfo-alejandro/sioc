@@ -65,6 +65,7 @@ from app.models.oficios_judiciales import (
 )
 from app.models.analisis_llamadas_se import LlamadaSE
 from app.models.analisis_intervenciones import AnalisisIntervencion
+from app.models.base_operativa import BaseProcedimiento, BaseIdentificado
 from app.models.monitor_noticias import TemaNoticia, FuenteNoticia, Noticia
 from app.models.dunacc import DunaccLote, DunaccRegistro, DunaccLoteCompartido, DunaccComisariaAlias
 from app.models.auditoria import AuditoriaObs
@@ -91,7 +92,7 @@ __all__ = [
     'BilleteraCarga', 'BilleteraCargaCompartida', 'BilleteraMovimiento', 'BilleteraSalida',
     'DenunciaWebDroga',
     'ConsignaJudicial', 'ConsignaPersona', 'ConsignaDomicilio', 'ConsignaMedidaDetalle',
-    'LlamadaSE', 'AnalisisIntervencion',
+    'LlamadaSE', 'AnalisisIntervencion', 'BaseProcedimiento', 'BaseIdentificado',
     'TemaNoticia', 'FuenteNoticia', 'Noticia',
     'DunaccLote', 'DunaccRegistro', 'DunaccLoteCompartido', 'DunaccComisariaAlias',
     'AuditoriaObs',

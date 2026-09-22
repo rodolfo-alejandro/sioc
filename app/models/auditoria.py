@@ -12,6 +12,7 @@ CAMPO_GENERAL = "__general__"
 
 MODULO_DENUNCIAS = "denuncias_web"
 MODULO_INTERVENCIONES = "intervenciones"
+MODULO_BASE_OPERATIVA = "base_operativa"
 
 # —— Denuncias Web ——
 CAMPOS_PRINCIPALES = (
@@ -159,6 +160,116 @@ COLUMNAS_OCULTABLES_INTERV = frozenset(
     }
 )
 
+# —— Base Operativa (Excel manual Capital / Interior) ——
+CAMPOS_BASE_PRINCIPALES = (
+    ("registro_nro", "CAP / Registro"),
+    ("ambito", "Ámbito"),
+    ("fecha", "Fecha"),
+    ("hora", "Hora"),
+    ("lugar_proced", "Lugar de procedimiento"),
+    ("barrio", "Barrio"),
+    ("localidad", "Localidad"),
+    ("departamento", "Departamento"),
+    ("dependencia", "Dependencia"),
+    ("dur", "DUR"),
+    ("tipo_informe", "Tipo de informe"),
+    ("estado", "Estado"),
+    ("of_interviniente", "Oficial interviniente"),
+    ("sinar_interviniente", "SINAR interviniente"),
+    ("tipo_operativo", "Tipo operativo"),
+    ("micro_macro", "Micro / Macro"),
+    ("delito", "Delito / Tipología"),
+    ("acusados_texto", "Acusados / Identificados"),
+    ("total_detenidos", "Total detenidos"),
+    ("total_demorados", "Total demorados"),
+    ("marihuana_grs", "Marihuana (g/kg)"),
+    ("cocaina_grs", "Cocaína (g/kg)"),
+    ("hoja_coca_kg", "Hojas de coca (kg)"),
+    ("plantas", "Plantas (u.)"),
+    ("plantines", "Plantines (u.)"),
+    ("semillas", "Semillas (u.)"),
+    ("pesos_arg", "Pesos ARS ($)"),
+    ("dolares", "Dólares (US$)"),
+    ("euro", "Euros (€)"),
+    ("reales", "Reales (R$)"),
+    ("bolivianos", "Bolivianos (Bs)"),
+)
+
+CAMPOS_BASE_SECUNDARIOS = (
+    ("nro_ap", "N° AP"),
+    ("sector", "Sector"),
+    ("nro_expediente", "N° expediente"),
+    ("latitud", "Latitud"),
+    ("longitud", "Longitud"),
+    ("fiscalia", "Fiscalía"),
+    ("juzgado", "Juzgado"),
+    ("info_relev", "Inf. relevancia"),
+    ("otros_secuestros", "Otros secuestros"),
+    ("dominios", "Dominios"),
+    ("det_hombre_may", "Det. hombre mayor"),
+    ("det_hombre_men", "Det. hombre menor"),
+    ("det_mujer_may", "Det. mujer mayor"),
+    ("det_mujer_men", "Det. mujer menor"),
+    ("is_hombre_may", "IS hombre mayor"),
+    ("is_hombre_men", "IS hombre menor"),
+    ("is_mujer_may", "IS mujer mayor"),
+    ("is_mujer_men", "IS mujer menor"),
+)
+
+CAMPOS_BASE_LISTADO = (
+    ("registro_nro", "CAP"),
+    ("ambito", "Ámbito"),
+    ("fecha", "Fecha"),
+    ("lugar_proced", "Lugar"),
+    ("localidad", "Localidad"),
+    ("barrio", "Barrio"),
+    ("dependencia", "Dependencia"),
+    ("of_interviniente", "Oficial"),
+    ("sinar_interviniente", "SINAR"),
+    ("delito", "Delito"),
+    ("acusados_texto", "Acusados"),
+    ("total_detenidos", "Detenidos"),
+    ("total_demorados", "Demorados"),
+    ("marihuana_grs", "Marihuana"),
+    ("cocaina_grs", "Cocaína"),
+    ("pesos_arg", "$ ARS"),
+    ("dolares", "US$"),
+    ("tipo_informe", "Tipo informe"),
+    ("tipo_operativo", "Operativo"),
+    ("departamento", "Depto."),
+    ("dur", "DUR"),
+    ("latitud", "Lat"),
+    ("longitud", "Lon"),
+    ("plantas", "Plantas"),
+    ("plantines", "Plantines"),
+    ("hoja_coca_kg", "Hojas coca"),
+    ("euro", "€"),
+    ("reales", "R$"),
+    ("bolivianos", "Bs"),
+)
+
+COLUMNAS_OCULTABLES_BASE = frozenset(
+    {
+        "tipo_informe",
+        "tipo_operativo",
+        "departamento",
+        "dur",
+        "latitud",
+        "longitud",
+        "plantas",
+        "plantines",
+        "hoja_coca_kg",
+        "euro",
+        "reales",
+        "bolivianos",
+        "barrio",
+        "dependencia",
+    }
+)
+
+CAMPOS_BASE_AUDITABLES = CAMPOS_BASE_PRINCIPALES + CAMPOS_BASE_SECUNDARIOS
+CAMPOS_BASE_MAP = {k: v for k, v in CAMPOS_BASE_AUDITABLES}
+
 ESTADO_LABEL = {
     "pendiente": "Pendiente a auditar",
     "resuelta": "Auditado",
@@ -218,4 +329,6 @@ class AuditoriaObs(db.Model):
             return "Observación general"
         if self.modulo == MODULO_INTERVENCIONES:
             return CAMPOS_INTERV_MAP.get(self.campo, self.campo)
+        if self.modulo == MODULO_BASE_OPERATIVA:
+            return CAMPOS_BASE_MAP.get(self.campo, self.campo)
         return CAMPOS_AUDITABLES_MAP.get(self.campo, self.campo)

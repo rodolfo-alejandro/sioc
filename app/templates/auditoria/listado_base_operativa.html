@@ -1,0 +1,376 @@
+{% extends "layouts/base.html" %}
+{% block title %}Auditoría Base Operativa - SIOC{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/sabana_mapa.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/analisis_intervenciones.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/auditoria.css') }}">
+{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-clipboard-check"></i> Auditoría — Base Operativa</h1>
+    <p class="text-muted mb-0">
+        Excel manual Capital/Interior: hechos + acusados unidos por <strong>CAP</strong> (REGISTRO N°).
+        Fila gris = cargado · abajo = auditoría.
+    </p>
+</div>
+
+
+<div class="card mb-3"><div class="card-body py-2">
+<form method="get" class="row g-2 align-items-end" id="bo-filtros">
+<div class="col-md-2"><label class="form-label small mb-0">Ámbito</label>
+<select class="form-select form-select-sm" name="ambito">
+<option value="">Todos</option>
+<option value="capital" {% if selected.ambito == 'capital' %}selected{% endif %}>Capital</option>
+<option value="interior" {% if selected.ambito == 'interior' %}selected{% endif %}>Interior</option>
+</select></div>
+<div class="col-md-3"><label class="form-label small mb-0">Buscar (CAP, lugar, acusado…)</label>
+<input class="form-control form-control-sm" name="q" value="{{ selected.q }}"></div>
+<div class="col-md-2"><label class="form-label small mb-0">Localidad</label>
+<select class="form-select form-select-sm" name="localidad">
+<option value="">Todas</option>
+{% for loc in localidades %}<option value="{{ loc }}" {% if selected.localidad == loc %}selected{% endif %}>{{ loc }}</option>{% endfor %}
+</select></div>
+<div class="col-md-2"><label class="form-label small mb-0">Desde</label>
+<input type="date" class="form-control form-control-sm" name="desde" value="{{ selected.desde }}"></div>
+<div class="col-md-2"><label class="form-label small mb-0">Hasta</label>
+<input type="date" class="form-control form-control-sm" name="hasta" value="{{ selected.hasta }}"></div>
+<input type="hidden" name="estado_obs" value="{{ selected.estado_obs }}">
+{% if selected.solo_obs %}<input type="hidden" name="solo_obs" value="1">{% endif %}
+<div class="col-md-1 d-grid"><button class="btn btn-primary btn-sm" type="submit">Filtrar</button></div>
+</form></div></div>
+
+
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="get" class="row g-2 align-items-end" id="aud-obs-filtros">
+            {% for key, vals in request.args.lists() %}
+                {% if key not in ('solo_obs', 'estado_obs', 'page') %}
+                    {% for v in vals %}
+                    <input type="hidden" name="{{ key }}" value="{{ v }}">
+                    {% endfor %}
+                {% endif %}
+            {% endfor %}
+            <div class="col-md-3">
+                <label class="form-label small mb-0">Estado de auditoría</label>
+                <select class="form-select form-select-sm" name="estado_obs">
+                    <option value="" {% if not selected.estado_obs %}selected{% endif %}>Todas</option>
+                    <option value="pendiente" {% if selected.estado_obs == 'pendiente' %}selected{% endif %}>Pendiente a auditar</option>
+                    <option value="resuelta" {% if selected.estado_obs == 'resuelta' %}selected{% endif %}>Auditado</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <div class="form-check mt-4">
+                    <input class="form-check-input" type="checkbox" name="solo_obs" value="1" id="soloObs"
+                           {% if selected.solo_obs %}checked{% endif %}>
+                    <label class="form-check-label" for="soloObs">Solo con observaciones</label>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-outline-primary btn-sm w-100">Aplicar</button>
+            </div>
+            <div class="col-md-5 d-flex gap-2 justify-content-md-end flex-wrap">
+                <a class="btn btn-outline-success btn-sm"
+                   href="{{ url_for('auditoria.export_base_operativa_xlsx') }}?modo=completo{% if qs_no_page %}&{{ qs_no_page }}{% endif %}">
+                    <i class="bi bi-file-earmark-excel"></i> Excel completo
+                </a>
+                <a class="btn btn-success btn-sm"
+                   href="{{ url_for('auditoria.export_base_operativa_xlsx') }}?modo=observaciones{% if qs_no_page %}&{{ qs_no_page }}{% endif %}"
+                   title="Solo observaciones del auditor">
+                    <i class="bi bi-printer"></i> Excel solo observaciones
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="d-flex flex-wrap gap-3 mb-2 small aud-leyenda align-items-center">
+    <span><span class="aud-dot aud-dot-orig"></span> Cargado</span>
+    <span><span class="aud-dot aud-dot-pend"></span> Pendiente a auditar</span>
+    <span><span class="aud-dot aud-dot-ok"></span> Auditado</span>
+    <span class="text-muted">|</span>
+    <span class="fw-semibold">Columnas:</span>
+    {% for key, label in columnas %}
+        {% if key in columnas_ocultables %}
+        <label class="form-check form-check-inline mb-0">
+            <input class="form-check-input aud-col-toggle" type="checkbox" data-col="{{ key }}" id="col-{{ key }}">
+            <span class="form-check-label">{{ label }}</span>
+        </label>
+        {% endif %}
+    {% endfor %}
+    <label class="form-check form-check-inline mb-0">
+        <input class="form-check-input aud-col-toggle" type="checkbox" data-col="__general__" id="col-general" checked>
+        <span class="form-check-label" title="Nota libre del auditor sobre todo el registro (no es un campo del sistema)">Obs. general</span>
+    </label>
+</div>
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0">Procedimientos</h6>
+        <span class="badge bg-light text-dark border">Total: {{ total|number_format }}</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive aud-listado-wrap">
+            <table class="table table-sm align-middle mb-0 aud-listado" id="aud-listado-table">
+                <thead class="table-light">
+                    <tr>
+                        <th class="aud-sticky-col">Fila</th>
+                        {% for key, label in columnas %}
+                        <th data-col="{{ key }}">{{ label }}</th>
+                        {% endfor %}
+                        <th data-col="__general__" title="Observación general del auditor sobre el expediente completo">Obs. general</th>
+                        <th>Estado</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for it in items %}
+                    {% set r = it.row %}
+                    <tr class="aud-list-orig">
+                        <td class="aud-sticky-col">
+                            <span class="aud-chip aud-chip-orig">Cargado</span>
+                        </td>
+                        {% for c in it.campos %}
+                        <td data-col="{{ c.key }}" title="{{ c.valor }}">
+                            <div class="aud-cell-val">{{ c.short }}</div>
+                        </td>
+                        {% endfor %}
+                        <td data-col="__general__" class="text-muted">—</td>
+                        <td>
+                            {% if it.row_estado == 'auditado' %}
+                            <span class="badge bg-success">Auditado</span>
+                            {% else %}
+                            <span class="badge bg-warning text-dark">Pendiente a auditar</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a class="btn btn-outline-secondary btn-sm"
+                               href="{{ url_for('auditoria.detalle_base_operativa', proc_id=r.id) }}"
+                               title="Vista detallada">Ficha</a>
+                        </td>
+                    </tr>
+                    <tr class="aud-list-audit {% if it.row_estado == 'auditado' %}aud-row-ok{% else %}aud-row-pend{% endif %}">
+                        <td class="aud-sticky-col">
+                            <span class="aud-chip aud-chip-audit">Auditoría</span>
+                        </td>
+                        {% for c in it.campos %}
+                        <td data-col="{{ c.key }}" class="aud-cell-audit {% if c.obs and c.obs.estado == 'pendiente' %}aud-cell-pend{% elif c.obs %}aud-cell-ok{% endif %}">
+                            <div class="aud-cell-val">
+                                {% if c.aud_short %}{{ c.aud_short }}{% else %}<span class="text-muted">—</span>{% endif %}
+                            </div>
+                            {% if can_edit %}
+                            <button type="button"
+                                    class="btn btn-sm btn-outline-primary aud-btn-campo btn-obs-list"
+                                    data-denuncia-id="{{ r.id }}"
+                                    data-campo="{{ c.key }}"
+                                    data-label="{{ c.label }}"
+                                    title="Observar {{ c.label }}">
+                                <i class="bi bi-pencil-square"></i>
+                            </button>
+                            {% if c.obs %}
+                            <form class="d-inline" method="post"
+                                  action="{{ url_for('auditoria.cambiar_estado_base', proc_id=r.id, obs_id=c.obs.id) }}">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="next" value="{{ listado_url }}">
+                                {% if c.obs.estado == 'pendiente' %}
+                                <input type="hidden" name="estado" value="resuelta">
+                                <button class="btn btn-sm btn-outline-success" type="submit" title="Marcar auditado">
+                                    <i class="bi bi-check-lg"></i>
+                                </button>
+                                {% else %}
+                                <input type="hidden" name="estado" value="pendiente">
+                                <button class="btn btn-sm btn-outline-warning" type="submit" title="Volver a pendiente">
+                                    <i class="bi bi-arrow-counterclockwise"></i>
+                                </button>
+                                {% endif %}
+                            </form>
+                            {% endif %}
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                        <td data-col="__general__" class="aud-cell-audit {% if it.general and it.general.estado == 'pendiente' %}aud-cell-pend{% elif it.general %}aud-cell-ok{% endif %}">
+                            <div class="aud-cell-val">
+                                {% if it.general and (it.general.valor_auditor or it.general.nota) %}
+                                    {{ (it.general.valor_auditor or it.general.nota)[:60] }}{% if (it.general.valor_auditor or it.general.nota)|length > 60 %}…{% endif %}
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </div>
+                            {% if can_edit %}
+                            <button type="button"
+                                    class="btn btn-sm btn-outline-primary aud-btn-campo btn-obs-list"
+                                    data-denuncia-id="{{ r.id }}"
+                                    data-campo="{{ campo_general }}"
+                                    data-label="Observación general"
+                                    title="Observación general del expediente">
+                                <i class="bi bi-pencil-square"></i>
+                            </button>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if it.obs_total %}
+                            <span class="badge {% if it.obs_pendientes %}bg-warning text-dark{% else %}bg-success{% endif %}">
+                                {{ it.obs_pendientes }}/{{ it.obs_total }}
+                            </span>
+                            {% else %}
+                            <span class="text-muted">0</span>
+                            {% endif %}
+                        </td>
+                        <td></td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="{{ columnas|length + 4 }}" class="text-center text-muted py-4">Sin resultados.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<nav class="mt-3">
+    <ul class="pagination pagination-sm">
+        {% set prev_page = page - 1 %}
+        {% set next_page = page + 1 %}
+        <li class="page-item {% if page <= 1 %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('auditoria.listado_base_operativa') }}?{{ qs_no_page }}{% if qs_no_page %}&{% endif %}page={{ prev_page }}">Anterior</a>
+        </li>
+        <li class="page-item disabled"><span class="page-link">Página {{ page }} / {{ pages }}</span></li>
+        <li class="page-item {% if page >= pages %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('auditoria.listado_base_operativa') }}?{{ qs_no_page }}{% if qs_no_page %}&{% endif %}page={{ next_page }}">Siguiente</a>
+        </li>
+    </ul>
+</nav>
+
+{% if can_edit %}
+<script type="application/json" id="aud-list-data">
+{
+{% for it in items %}
+  "{{ it.row.id }}": {
+    {% for c in it.campos %}
+    {{ c.key|tojson }}: {
+      "valor": {{ c.valor|tojson }},
+      "valorAuditor": {{ (c.obs.valor_auditor if c.obs else '')|tojson }},
+      "nota": {{ (c.obs.nota if c.obs else '')|tojson }}
+    }{% if not loop.last %},{% endif %}
+    {% endfor %}
+    {% if it.campos %},{% endif %}
+    {{ campo_general|tojson }}: {
+      "valor": "",
+      "valorAuditor": {{ (it.general.valor_auditor if it.general else '')|tojson }},
+      "nota": {{ (it.general.nota if it.general else '')|tojson }}
+    }
+  }{% if not loop.last %},{% endif %}
+{% endfor %}
+}
+</script>
+<div class="modal fade" id="modalObsList" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <form method="post" id="formObsList" class="modal-content" action="#">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="next" value="{{ listado_url }}">
+            <input type="hidden" name="campo" id="obsListCampo" value="">
+            <div class="modal-header">
+                <h5 class="modal-title">Observación de auditoría</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted mb-3">Campo: <strong id="obsListLabel"></strong></p>
+                <div class="mb-3" id="obsListValorWrap">
+                    <label class="form-label">Valor cargado</label>
+                    <textarea class="form-control form-control-sm" id="obsListValor" rows="3" readonly></textarea>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="obsListAuditor">Valor según auditoría</label>
+                    <textarea class="form-control" name="valor_auditor" id="obsListAuditor" rows="3"
+                              placeholder="Ej.: Etapa investigativa"></textarea>
+                </div>
+                <div class="mb-0">
+                    <label class="form-label" for="obsListNota">Nota</label>
+                    <textarea class="form-control" name="nota" id="obsListNota" rows="2"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Guardar</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+  if (collapse) collapse.classList.add('show');
+
+  var STORAGE_KEY = 'sioc_aud_cols_base_v1';
+  var DEFAULT_HIDDEN = {{ columnas_ocultables|list|tojson }};
+  function loadColPrefs() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (e) {}
+    var prefs = {};
+    DEFAULT_HIDDEN.forEach(function (k) { prefs[k] = false; });
+    prefs['__general__'] = true;
+    return prefs;
+  }
+  function saveColPrefs(prefs) {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs)); } catch (e) {}
+  }
+  function applyColPrefs(prefs) {
+    document.querySelectorAll('.aud-col-toggle').forEach(function (cb) {
+      var col = cb.getAttribute('data-col');
+      var show = prefs[col] !== false;
+      if (prefs[col] === undefined) show = DEFAULT_HIDDEN.indexOf(col) === -1;
+      cb.checked = show;
+      document.querySelectorAll('#aud-listado-table [data-col="' + col + '"]').forEach(function (el) {
+        el.style.display = show ? '' : 'none';
+      });
+    });
+  }
+  var prefs = loadColPrefs();
+  applyColPrefs(prefs);
+  document.querySelectorAll('.aud-col-toggle').forEach(function (cb) {
+    cb.addEventListener('change', function () {
+      prefs[cb.getAttribute('data-col')] = cb.checked;
+      saveColPrefs(prefs);
+      applyColPrefs(prefs);
+    });
+  });
+
+  var CAMPO_GENERAL = {{ campo_general|tojson }};
+  var dataEl = document.getElementById('aud-list-data');
+  var DATA = {};
+  try { if (dataEl) DATA = JSON.parse(dataEl.textContent || '{}'); } catch (e) { DATA = {}; }
+
+  var modalEl = document.getElementById('modalObsList');
+  if (!modalEl || typeof bootstrap === 'undefined') return;
+  var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+  var formObs = document.getElementById('formObsList');
+
+  document.querySelectorAll('.btn-obs-list').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var id = btn.getAttribute('data-denuncia-id');
+      var campo = btn.getAttribute('data-campo') || '';
+      var pack = (DATA[id] || {})[campo] || { valor: '', valorAuditor: '', nota: '' };
+      formObs.action = '/auditoria/base-operativa/' + id + '/obs';
+      document.getElementById('obsListCampo').value = campo;
+      document.getElementById('obsListLabel').textContent = btn.getAttribute('data-label') || '';
+      document.getElementById('obsListAuditor').value = pack.valorAuditor || '';
+      document.getElementById('obsListNota').value = pack.nota || '';
+      var wrap = document.getElementById('obsListValorWrap');
+      var ta = document.getElementById('obsListValor');
+      if (campo === CAMPO_GENERAL) {
+        wrap.classList.add('d-none');
+        ta.value = '';
+      } else {
+        wrap.classList.remove('d-none');
+        ta.value = pack.valor || '';
+      }
+      modal.show();
+    });
+  });
+})();
+</script>
+{% endblock %}

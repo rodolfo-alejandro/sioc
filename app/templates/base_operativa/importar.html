@@ -1,0 +1,49 @@
+{% extends "layouts/base.html" %}
+{% block title %}Importar Base Operativa - SIOC{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-cloud-upload"></i> Base Operativa — Importar Excel</h1>
+  <p class="text-muted mb-0">
+    Subí el Excel manual (<strong>BASE CAPITAL / BASE INTERIOR</strong> + identificados).
+    Se une por <strong>CAP</strong> (REGISTRO N°). Reimportar actualiza sin borrar la auditoría.
+  </p>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <div class="mb-2"><strong>Total vigente:</strong> {{ total }}</div>
+    <div class="mb-3 small text-muted">
+      Capital: {{ por_ambito.get('capital', 0) }} · Interior: {{ por_ambito.get('interior', 0) }}
+      {% if ultima and ultima.fecha_importacion %}
+      · Última importación: {{ ultima.fecha_importacion|localtime('%d/%m/%Y %H:%M') }}
+      {% endif %}
+    </div>
+
+    {% if can_import %}
+    <form method="POST" action="{{ url_for('base_operativa.importar') }}" enctype="multipart/form-data" class="row g-2 align-items-end">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="col-md-8">
+        <label class="form-label">Archivo Excel (.xlsb / .xlsx)</label>
+        <input type="file" name="archivo" class="form-control" accept=".xlsb,.xlsx,.xlsm" required>
+      </div>
+      <div class="col-md-4 d-grid">
+        <button class="btn btn-success" type="submit"><i class="bi bi-upload"></i> Importar / Actualizar</button>
+      </div>
+    </form>
+    {% else %}
+    <div class="alert alert-warning mb-0">No tenés permiso de importación.</div>
+    {% endif %}
+
+    <div class="alert alert-info mt-3 mb-0">
+      Hojas leídas: <code>BASE CAPITAL</code>, <code>IDENTIFICADOS CAPITAL</code>,
+      <code>BASE INTERIOR</code>, <code>IDENTIFICADOS INTERIOR</code>.
+      Clave estable: ámbito + CAP → los IDs no cambian al reimportar.
+    </div>
+    <div class="mt-3">
+      <a class="btn btn-outline-primary btn-sm" href="{{ url_for('auditoria.listado_base_operativa') }}">
+        <i class="bi bi-clipboard-check"></i> Ir a Auditoría Base Operativa
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}
