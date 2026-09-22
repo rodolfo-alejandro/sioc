@@ -16,14 +16,15 @@
 
 
 <div class="card mb-3"><div class="card-body py-2">
-<form method="get" class="row g-2 align-items-end" id="bo-filtros">
+<form method="get" id="bo-filtros">
+<div class="row g-2 align-items-end mb-2">
 <div class="col-md-2"><label class="form-label small mb-0">Ámbito</label>
 <select class="form-select form-select-sm" name="ambito">
 <option value="">Todos</option>
 <option value="capital" {% if selected.ambito == 'capital' %}selected{% endif %}>Capital</option>
 <option value="interior" {% if selected.ambito == 'interior' %}selected{% endif %}>Interior</option>
 </select></div>
-<div class="col-md-3"><label class="form-label small mb-0">Buscar (CAP, lugar, acusado…)</label>
+<div class="col-md-4"><label class="form-label small mb-0">Buscar (CAP, lugar, acusado…)</label>
 <input class="form-control form-control-sm" name="q" value="{{ selected.q }}"></div>
 <div class="col-md-2"><label class="form-label small mb-0">Localidad</label>
 <select class="form-select form-select-sm" name="localidad">
@@ -34,9 +35,27 @@
 <input type="date" class="form-control form-control-sm" name="desde" value="{{ selected.desde }}"></div>
 <div class="col-md-2"><label class="form-label small mb-0">Hasta</label>
 <input type="date" class="form-control form-control-sm" name="hasta" value="{{ selected.hasta }}"></div>
+</div>
+<div class="row g-2 align-items-end">
+<div class="col-md-3"><label class="form-label small mb-0">DINARES</label>
+<select class="form-select form-select-sm" name="dinares">
+<option value="">Todos</option>
+{% for d in dinares_opts %}<option value="{{ d }}" {% if selected.dinares == d %}selected{% endif %}>{{ d }}</option>{% endfor %}
+</select></div>
+<div class="col-md-3"><label class="form-label small mb-0">SINAR</label>
+<select class="form-select form-select-sm" name="sinar">
+<option value="">Todos</option>
+{% for s in sinares %}<option value="{{ s }}" {% if selected.sinar == s %}selected{% endif %}>{{ s }}</option>{% endfor %}
+</select></div>
+<div class="col-md-4"><label class="form-label small mb-0">Oficial interviniente</label>
+<select class="form-select form-select-sm" name="oficial">
+<option value="">Todos</option>
+{% for o in oficiales %}<option value="{{ o }}" {% if selected.oficial == o %}selected{% endif %}>{{ o }}</option>{% endfor %}
+</select></div>
 <input type="hidden" name="estado_obs" value="{{ selected.estado_obs }}">
 {% if selected.solo_obs %}<input type="hidden" name="solo_obs" value="1">{% endif %}
-<div class="col-md-1 d-grid"><button class="btn btn-primary btn-sm" type="submit">Filtrar</button></div>
+<div class="col-md-2 d-grid"><button class="btn btn-primary btn-sm" type="submit">Filtrar</button></div>
+</div>
 </form></div></div>
 
 

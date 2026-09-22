@@ -158,6 +158,23 @@ def _base_q():
     )
 
 
+def _distinct_column(col, limit: int = 500) -> list[str]:
+    return [
+        x[0]
+        for x in db.session.query(col)
+        .filter(
+            BaseProcedimiento.unidad_id == current_user.unidad_id,
+            BaseProcedimiento.activo.is_(True),
+            col.isnot(None),
+            col != "",
+        )
+        .distinct()
+        .order_by(col)
+        .limit(limit)
+        .all()
+    ]
+
+
 def _apply_filters(q):
     ambito = (request.args.get("ambito") or "").strip().lower()
     if ambito in ("capital", "interior"):
@@ -182,6 +199,18 @@ def _apply_filters(q):
     localidad = (request.args.get("localidad") or "").strip()
     if localidad:
         q = q.filter(BaseProcedimiento.localidad == localidad)
+
+    sinar = (request.args.get("sinar") or "").strip()
+    if sinar:
+        q = q.filter(BaseProcedimiento.sinar_interviniente == sinar)
+
+    dinares = (request.args.get("dinares") or "").strip()
+    if dinares:
+        q = q.filter(BaseProcedimiento.dinares == dinares)
+
+    oficial = (request.args.get("oficial") or "").strip()
+    if oficial:
+        q = q.filter(BaseProcedimiento.of_interviniente == oficial)
 
     desde = (request.args.get("desde") or "").strip()
     hasta = (request.args.get("hasta") or "").strip()
@@ -316,20 +345,10 @@ def listado_base_operativa():
     elif page > 1:
         listado_url = f"{listado_url}?page={page}"
 
-    localidades = [
-        x[0]
-        for x in db.session.query(BaseProcedimiento.localidad)
-        .filter(
-            BaseProcedimiento.unidad_id == current_user.unidad_id,
-            BaseProcedimiento.activo.is_(True),
-            BaseProcedimiento.localidad.isnot(None),
-            BaseProcedimiento.localidad != "",
-        )
-        .distinct()
-        .order_by(BaseProcedimiento.localidad)
-        .limit(500)
-        .all()
-    ]
+    localidades = _distinct_column(BaseProcedimiento.localidad)
+    sinares = _distinct_column(BaseProcedimiento.sinar_interviniente)
+    dinares_opts = _distinct_column(BaseProcedimiento.dinares)
+    oficiales = _distinct_column(BaseProcedimiento.of_interviniente)
 
     return render_template(
         "auditoria/listado_base_operativa.html",
@@ -343,10 +362,16 @@ def listado_base_operativa():
         columnas=CAMPOS_BASE_LISTADO,
         columnas_ocultables=sorted(COLUMNAS_OCULTABLES_BASE),
         localidades=localidades,
+        sinares=sinares,
+        dinares_opts=dinares_opts,
+        oficiales=oficiales,
         selected={
             "ambito": (request.args.get("ambito") or "").strip(),
             "q": (request.args.get("q") or "").strip(),
             "localidad": (request.args.get("localidad") or "").strip(),
+            "sinar": (request.args.get("sinar") or "").strip(),
+            "dinares": (request.args.get("dinares") or "").strip(),
+            "oficial": (request.args.get("oficial") or "").strip(),
             "desde": (request.args.get("desde") or "").strip(),
             "hasta": (request.args.get("hasta") or "").strip(),
             "solo_obs": solo_obs,
