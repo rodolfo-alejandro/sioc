@@ -3,12 +3,31 @@
 
   var cfg = window.CV_APP || {};
   var KEY = "sioc_comando_vivo_v1";
-  var AUDIO_CLIP_MS = 4000;
-  var VIDEO_CLIP_MS = 3000;
+  var audioClipMs = 4000;
+  var videoClipMs = 3000;
+  var gpsIntervalMs = 5000;
   var watchId = null;
   var lastPos = null;
   var pingTimer = null;
   var session = null;
+
+  function applyConfig(c) {
+    if (!c) return;
+    if (c.audio_clip_sec) audioClipMs = Math.max(3000, Math.min(20000, c.audio_clip_sec * 1000));
+    if (c.video_clip_sec) videoClipMs = Math.max(2000, Math.min(15000, c.video_clip_sec * 1000));
+    if (c.gps_interval_sec) {
+      var next = Math.max(3000, Math.min(30000, c.gps_interval_sec * 1000));
+      if (next !== gpsIntervalMs) {
+        gpsIntervalMs = next;
+        if (pingTimer) {
+          clearInterval(pingTimer);
+          pingTimer = setInterval(function () {
+            sendPing("ping");
+          }, gpsIntervalMs);
+        }
+      }
+    }
+  }
 
   var mediaStream = null;
   var mediaRecorder = null;
@@ -191,7 +210,7 @@
     preferredMime = pickMime(kind === "video");
     var chunks = [];
     var opts = preferredMime ? { mimeType: preferredMime } : undefined;
-    var clipMs = kind === "video" ? VIDEO_CLIP_MS : AUDIO_CLIP_MS;
+    var clipMs = kind === "video" ? videoClipMs : audioClipMs;
     var rec;
     try {
       rec = new MediaRecorder(mediaStream, opts);
@@ -398,6 +417,7 @@
           now.toLocaleTimeString() +
           (evento === "panico" ? " · PÁNICO" : "") +
           extra;
+        if (res.body.config) applyConfig(res.body.config);
         if (res.body.estado === "panico") {
           setStatus("PÁNICO", "panic");
           elBtnOk.hidden = false;
@@ -451,7 +471,7 @@
     if (pingTimer) clearInterval(pingTimer);
     pingTimer = setInterval(function () {
       sendPing("ping");
-    }, 5000);
+    }, gpsIntervalMs);
     var tries = 0;
     var boot = setInterval(function () {
       tries += 1;
@@ -501,7 +521,9 @@
           token: res.body.token,
           participante_id: res.body.participante_id,
           operativo: res.body.operativo,
+          config: res.body.config || null,
         });
+        applyConfig(res.body.config);
         showLive(res.body.operativo);
         setStatus("Conectando…");
         startTracking();
@@ -553,6 +575,7 @@
   var prev = loadSession();
   if (prev && prev.token && prev.operativo) {
     session = prev;
+    applyConfig(prev.config);
     showLive(prev.operativo);
     setStatus("Reconectando…");
     startTracking();

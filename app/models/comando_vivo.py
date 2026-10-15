@@ -20,6 +20,15 @@ class ComandoOperativo(db.Model):
     # activo | cerrado
     estado = db.Column(db.String(20), nullable=False, default="activo", index=True)
 
+    # Grabar = retener en servidor (si False, solo en vivo / efímero)
+    grabar_gps = db.Column(db.Boolean, nullable=False, default=True)
+    grabar_audio = db.Column(db.Boolean, nullable=False, default=True)
+    grabar_video = db.Column(db.Boolean, nullable=False, default=True)
+    # Lapsos (segundos)
+    audio_clip_sec = db.Column(db.Integer, nullable=False, default=4)
+    video_clip_sec = db.Column(db.Integer, nullable=False, default=3)
+    gps_interval_sec = db.Column(db.Integer, nullable=False, default=5)
+
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
     closed_at = db.Column(db.DateTime, nullable=True)
 
@@ -113,6 +122,7 @@ class ComandoGpsPing(db.Model):
     battery = db.Column(db.Float, nullable=True)
     # ping | panico
     evento = db.Column(db.String(20), nullable=False, default="ping", index=True)
+    retenido = db.Column(db.Boolean, nullable=False, default=True, index=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
 
     __table_args__ = (
@@ -138,6 +148,7 @@ class ComandoAudioClip(db.Model):
     mime = db.Column(db.String(80), nullable=False, default="audio/webm")
     size_bytes = db.Column(db.Integer, nullable=False, default=0)
     duration_ms = db.Column(db.Integer, nullable=True)
+    retenido = db.Column(db.Boolean, nullable=False, default=True, index=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
 
     __table_args__ = (
@@ -163,6 +174,7 @@ class ComandoVideoClip(db.Model):
     mime = db.Column(db.String(80), nullable=False, default="video/webm")
     size_bytes = db.Column(db.Integer, nullable=False, default=0)
     duration_ms = db.Column(db.Integer, nullable=True)
+    retenido = db.Column(db.Boolean, nullable=False, default=True, index=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
 
     __table_args__ = (

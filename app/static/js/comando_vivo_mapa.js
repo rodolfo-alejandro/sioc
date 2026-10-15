@@ -39,6 +39,130 @@
   var elVideoStatus = document.getElementById("cv-video-status");
   var btnWatch = document.getElementById("cv-btn-watch");
   var btnWatchStop = document.getElementById("cv-btn-watch-stop");
+  var elSelCard = document.getElementById("cv-selected-card");
+  var elSelAlias = document.getElementById("cv-sel-alias");
+  var elSelEstado = document.getElementById("cv-sel-estado");
+  var elSelCoords = document.getElementById("cv-sel-coords");
+  var elSelMaps = document.getElementById("cv-sel-maps");
+  var elCfgStatus = document.getElementById("cv-cfg-status");
+
+  function updateResumen(r) {
+    r = r || {};
+    var o = document.getElementById("cv-stat-online");
+    var p = document.getElementById("cv-stat-panico");
+    var t = document.getElementById("cv-stat-total");
+    if (o) o.textContent = String(r.online || 0);
+    if (p) p.textContent = String(r.panico || 0);
+    if (t) t.textContent = String(r.total || 0);
+  }
+
+  function updateStatsText(stats, config) {
+    if (!elCfgStatus) return;
+    stats = stats || {};
+    config = config || cfg.config || {};
+    elCfgStatus.textContent =
+      "Guardados: GPS " +
+      (stats.gps_retenidos || 0) +
+      " · Audio " +
+      (stats.audio_retenidos || 0) +
+      " · Video " +
+      (stats.video_retenidos || 0) +
+      " · lapsos " +
+      (config.audio_clip_sec || "?") +
+      "s / " +
+      (config.video_clip_sec || "?") +
+      "s";
+  }
+
+  function updateSelectedCard(p) {
+    if (!elSelCard || !p) return;
+    elSelCard.hidden = false;
+    if (elSelAlias) elSelAlias.textContent = p.alias || "—";
+    if (elSelEstado) {
+      elSelEstado.textContent = p.estado || "—";
+      elSelEstado.className =
+        "badge " +
+        (p.estado === "panico"
+          ? "bg-danger"
+          : p.estado === "online"
+            ? "bg-success"
+            : "bg-secondary");
+    }
+    if (p.lat != null && p.lon != null) {
+      if (elSelCoords) {
+        elSelCoords.textContent =
+          p.lat.toFixed(6) +
+          ", " +
+          p.lon.toFixed(6) +
+          (p.accuracy != null ? " (±" + Math.round(p.accuracy) + " m)" : "");
+      }
+      if (elSelMaps) {
+        elSelMaps.href =
+          "https://www.google.com/maps?q=" + p.lat + "," + p.lon;
+        elSelMaps.hidden = false;
+      }
+    } else {
+      if (elSelCoords) elSelCoords.textContent = "Sin coordenadas aún";
+      if (elSelMaps) elSelMaps.hidden = true;
+    }
+  }
+
+  var btnSaveCfg = document.getElementById("cv-btn-save-cfg");
+  if (btnSaveCfg && cfg.canManage) {
+    btnSaveCfg.addEventListener("click", function () {
+      var body = {
+        grabar_gps: !!(document.getElementById("cfg-gps") || {}).checked,
+        grabar_audio: !!(document.getElementById("cfg-audio") || {}).checked,
+        grabar_video: !!(document.getElementById("cfg-video") || {}).checked,
+        gps_interval_sec: parseInt(
+          (document.getElementById("cfg-gps-sec") || {}).value || "5",
+          10
+        ),
+        audio_clip_sec: parseInt(
+          (document.getElementById("cfg-audio-sec") || {}).value || "4",
+          10
+        ),
+        video_clip_sec: parseInt(
+          (document.getElementById("cfg-video-sec") || {}).value || "3",
+          10
+        ),
+      };
+      btnSaveCfg.disabled = true;
+      btnSaveCfg.textContent = "Guardando…";
+      fetch(cfg.configUrl, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": cfg.csrfToken || "",
+        },
+        body: JSON.stringify(body),
+      })
+        .then(function (r) {
+          return r.json();
+        })
+        .then(function (data) {
+          if (data.ok) {
+            cfg.config = data.config;
+            updateStatsText(data.stats, data.config);
+            btnSaveCfg.textContent = "Aplicado ✓";
+            setTimeout(function () {
+              btnSaveCfg.textContent = "Aplicar lapsos / grabación";
+            }, 1500);
+          } else {
+            alert(data.error || "No se pudo guardar");
+            btnSaveCfg.textContent = "Aplicar lapsos / grabación";
+          }
+        })
+        .catch(function () {
+          alert("Error de red");
+          btnSaveCfg.textContent = "Aplicar lapsos / grabación";
+        })
+        .finally(function () {
+          btnSaveCfg.disabled = false;
+        });
+    });
+  }
 
   function estadoDot(estado) {
     if (estado === "panico") return "cv-dot-panico";
@@ -157,6 +281,10 @@
         aliasOf(id) +
         ". Escuchar audio o ver video (el efectivo debe transmitir).";
     }
+    var p = lastParticipantes.find(function (x) {
+      return x.id === id;
+    });
+    if (p) updateSelectedCard(p);
     renderLista(lastParticipantes);
   }
 
@@ -460,6 +588,15 @@
         lastParticipantes = list;
         renderLista(list);
         updateMarkers(list);
+        updateResumen(data.resumen);
+        if (data.config) cfg.config = data.config;
+        if (data.stats) updateStatsText(data.stats, data.config);
+        if (selectedId) {
+          var p = list.find(function (x) {
+            return x.id === selectedId;
+          });
+          if (p) updateSelectedCard(p);
+        }
       })
       .catch(function () {});
   }

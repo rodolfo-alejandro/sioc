@@ -1,39 +1,101 @@
 {% extends "layouts/base.html" %}
-{% block title %}Mapa en vivo — {{ op.nombre }}{% endblock %}
+{% block title %}Centro de comando — {{ op.nombre }}{% endblock %}
 {% block extra_head %}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/comando_vivo.css') }}">
 {% endblock %}
 {% block content %}
-<div class="page-header d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
-  <div>
-    <h1 class="h3 mb-1"><i class="bi bi-geo-alt-fill"></i> {{ op.nombre }}</h1>
-    <p class="mb-0 small">
-      Código: <code class="fs-5">{{ op.codigo }}</code>
-      · Estado: <span class="badge {% if op.estado == 'activo' %}bg-success{% else %}bg-secondary{% endif %}">{{ op.estado }}</span>
-      {% if op.tipo %} · {{ op.tipo }}{% endif %}
-    </p>
+<div class="cv-topbar">
+  <div class="cv-topbar-main">
+    <div>
+      <div class="cv-kicker">Centro de comando</div>
+      <h1 class="cv-title">{{ op.nombre }}</h1>
+      <div class="cv-meta">
+        <span class="cv-code-pill">Código <strong>{{ op.codigo }}</strong></span>
+        <span class="badge {% if op.estado == 'activo' %}bg-success{% else %}bg-secondary{% endif %}">{{ op.estado }}</span>
+        {% if op.tipo %}<span class="text-muted small">{{ op.tipo }}</span>{% endif %}
+      </div>
+    </div>
+    <div class="cv-stats" id="cv-resumen">
+      <div class="cv-stat"><span id="cv-stat-online">0</span><small>Online</small></div>
+      <div class="cv-stat cv-stat-warn"><span id="cv-stat-panico">0</span><small>Pánico</small></div>
+      <div class="cv-stat"><span id="cv-stat-total">0</span><small>Total</small></div>
+    </div>
   </div>
-  <div class="d-flex gap-2 flex-wrap">
+  <div class="cv-topbar-actions">
     <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('comando_vivo.listado') }}">Volver</a>
     <a class="btn btn-outline-primary btn-sm" href="{{ url_for('comando_vivo.app_campo') }}" target="_blank">
       <i class="bi bi-phone"></i> App campo
     </a>
     {% if can_manage and op.estado == 'activo' %}
     <form method="post" action="{{ url_for('comando_vivo.cerrar', op_id=op.id) }}"
-          onsubmit="return confirm('¿Cerrar este operativo?');">
+          onsubmit="return confirm('¿Cerrar este operativo?');" class="d-inline">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="btn btn-outline-danger btn-sm">Cerrar operativo</button>
+      <button type="submit" class="btn btn-outline-danger btn-sm">Cerrar</button>
     </form>
     {% endif %}
   </div>
 </div>
 
 <div class="cv-layout">
-  <div class="cv-map-wrap">
-    <div id="cv-map"></div>
+  <div class="cv-map-col">
+    <div class="cv-map-wrap">
+      <div id="cv-map"></div>
+      <div class="cv-map-overlay" id="cv-selected-card" hidden>
+        <div class="cv-selected-head">
+          <strong id="cv-sel-alias">—</strong>
+          <span class="badge bg-secondary" id="cv-sel-estado">—</span>
+        </div>
+        <div class="cv-selected-coords" id="cv-sel-coords">Sin coordenadas</div>
+        <a class="btn btn-sm btn-outline-light" id="cv-sel-maps" href="#" target="_blank" rel="noopener">Abrir en Maps</a>
+      </div>
+    </div>
   </div>
+
   <aside class="cv-side">
+    {% if can_manage and op.estado == 'activo' %}
+    <div class="cv-panel cv-panel-rec">
+      <div class="cv-panel-title"><i class="bi bi-record-circle"></i> Grabación en servidor</div>
+      <p class="small text-muted mb-2">
+        Si está apagado: se ve en vivo unos minutos y después se borra.
+        Si está encendido: queda guardado en el servidor.
+      </p>
+      <div class="cv-toggles">
+        <label class="cv-toggle"><input type="checkbox" id="cfg-gps" {% if cfg.grabar_gps %}checked{% endif %}> GPS / traza</label>
+        <label class="cv-toggle"><input type="checkbox" id="cfg-audio" {% if cfg.grabar_audio %}checked{% endif %}> Audio</label>
+        <label class="cv-toggle"><input type="checkbox" id="cfg-video" {% if cfg.grabar_video %}checked{% endif %}> Video</label>
+      </div>
+      <div class="row g-2 mt-2">
+        <div class="col-4">
+          <label class="form-label small mb-0">GPS (s)</label>
+          <input type="number" class="form-control form-control-sm" id="cfg-gps-sec" min="3" max="30" value="{{ cfg.gps_interval_sec }}">
+        </div>
+        <div class="col-4">
+          <label class="form-label small mb-0">Audio (s)</label>
+          <input type="number" class="form-control form-control-sm" id="cfg-audio-sec" min="3" max="20" value="{{ cfg.audio_clip_sec }}">
+        </div>
+        <div class="col-4">
+          <label class="form-label small mb-0">Video (s)</label>
+          <input type="number" class="form-control form-control-sm" id="cfg-video-sec" min="2" max="15" value="{{ cfg.video_clip_sec }}">
+        </div>
+      </div>
+      <button type="button" class="btn btn-sm btn-primary w-100 mt-2" id="cv-btn-save-cfg">Aplicar lapsos / grabación</button>
+      <p class="small text-muted mt-2 mb-0" id="cv-cfg-status">
+        Guardados: GPS {{ stats.gps_retenidos }} · Audio {{ stats.audio_retenidos }} · Video {{ stats.video_retenidos }}
+      </p>
+    </div>
+    {% else %}
+    <div class="cv-panel">
+      <div class="cv-panel-title">Grabación</div>
+      <p class="small mb-0" id="cv-cfg-status">
+        GPS {{ 'ON' if cfg.grabar_gps else 'solo vivo' }} ·
+        Audio {{ 'ON' if cfg.grabar_audio else 'solo vivo' }} ·
+        Video {{ 'ON' if cfg.grabar_video else 'solo vivo' }}
+        · clips {{ cfg.audio_clip_sec }}s / {{ cfg.video_clip_sec }}s
+      </p>
+    </div>
+    {% endif %}
+
     <div class="cv-side-head">
       <strong>Personal</strong>
       <span class="badge bg-light text-dark border" id="cv-count">0</span>
@@ -41,34 +103,26 @@
     <div id="cv-alertas" class="cv-alertas"></div>
     <ul class="list-group list-group-flush" id="cv-lista"></ul>
 
-    <div class="cv-audio-panel" id="cv-audio-panel">
-      <div class="cv-audio-title">
-        <i class="bi bi-mic-fill"></i>
-        <span id="cv-audio-label">Audio</span>
-      </div>
+    <div class="cv-panel" id="cv-audio-panel">
+      <div class="cv-panel-title"><i class="bi bi-mic-fill"></i> <span id="cv-audio-label">Audio</span></div>
       <p class="small text-muted mb-1" id="cv-audio-hint">Tocá un efectivo → escuchar / ver.</p>
       <audio id="cv-audio-player" controls preload="none"></audio>
       <div class="d-flex gap-2 mt-2 flex-wrap">
-        <button type="button" class="btn btn-sm btn-success" id="cv-btn-listen" disabled>Escuchar audio</button>
-        <button type="button" class="btn btn-sm btn-outline-secondary" id="cv-btn-listen-stop" disabled>Detener audio</button>
+        <button type="button" class="btn btn-sm btn-success" id="cv-btn-listen" disabled>Escuchar</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="cv-btn-listen-stop" disabled>Detener</button>
       </div>
-      <p class="small text-muted mt-2 mb-0" id="cv-audio-status">Sin escucha activa</p>
+      <p class="small text-muted mt-2 mb-0" id="cv-audio-status">Sin escucha</p>
     </div>
 
-    <div class="cv-audio-panel cv-video-panel" id="cv-video-panel">
-      <div class="cv-audio-title">
-        <i class="bi bi-camera-video-fill"></i>
-        <span id="cv-video-label">Video</span>
-      </div>
+    <div class="cv-panel cv-video-panel" id="cv-video-panel">
+      <div class="cv-panel-title"><i class="bi bi-camera-video-fill"></i> <span id="cv-video-label">Video</span></div>
       <video id="cv-video-player" controls playsinline preload="none"></video>
       <div class="d-flex gap-2 mt-2 flex-wrap">
-        <button type="button" class="btn btn-sm btn-primary" id="cv-btn-watch" disabled>Ver video en vivo</button>
-        <button type="button" class="btn btn-sm btn-outline-secondary" id="cv-btn-watch-stop" disabled>Detener video</button>
+        <button type="button" class="btn btn-sm btn-primary" id="cv-btn-watch" disabled>Ver en vivo</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="cv-btn-watch-stop" disabled>Detener</button>
       </div>
-      <p class="small text-muted mt-2 mb-0" id="cv-video-status">Sin video activo</p>
+      <p class="small text-muted mt-2 mb-0" id="cv-video-status">Sin video</p>
     </div>
-
-    <p class="small text-muted p-2 mb-0">GPS · audio ~4 s · video ~3 s · sin señal &gt; {{ offline_seconds }} s = offline</p>
   </aside>
 </div>
 
@@ -77,9 +131,13 @@
     positionsUrl: {{ positions_url|tojson }},
     audioListaUrl: {{ audio_lista_url|tojson }},
     videoListaUrl: {{ video_lista_url|tojson }},
+    configUrl: {{ config_url|tojson }},
     trazaUrlTpl: {{ url_for('comando_vivo.api_traza', participante_id=0)|tojson }},
     operativoId: {{ op.id }},
-    activo: {{ (op.estado == 'activo')|tojson }}
+    activo: {{ (op.estado == 'activo')|tojson }},
+    canManage: {{ can_manage|tojson }},
+    csrfToken: {{ csrf_token()|tojson }},
+    config: {{ cfg|tojson }}
   };
 </script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>

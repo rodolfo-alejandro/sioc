@@ -43,6 +43,28 @@ VIDEO_LIVE_SECONDS = 15
 TRACE_LIMIT = 80
 MAX_AUDIO_BYTES = 2 * 1024 * 1024  # 2 MB por clip
 MAX_VIDEO_BYTES = 6 * 1024 * 1024  # 6 MB por clip
+# Clips no retenidos se borran tras este tiempo (solo en vivo)
+EPHEMERAL_KEEP_SECONDS = 180
+
+
+def _clamp_int(v, lo: int, hi: int, default: int) -> int:
+    try:
+        n = int(v)
+    except (TypeError, ValueError):
+        return default
+    return max(lo, min(hi, n))
+
+
+def _ensure_column(table: str, column: str, ddl: str) -> None:
+    from sqlalchemy import inspect
+
+    insp = inspect(db.engine)
+    if table not in insp.get_table_names():
+        return
+    cols = {c["name"] for c in insp.get_columns(table)}
+    if column not in cols:
+        db.session.execute(text(f"ALTER TABLE {table} {ddl}"))
+        db.session.commit()
 
 
 def _ensure_tables():
@@ -59,19 +81,74 @@ def _ensure_tables():
     existing = set(insp.get_table_names())
     if not needed.issubset(existing):
         db.create_all()
-        insp = inspect(db.engine)
 
-    if "comando_participantes" in insp.get_table_names():
-        cols = {c["name"] for c in insp.get_columns("comando_participantes")}
-        alters = []
-        if "last_audio_at" not in cols:
-            alters.append("ADD COLUMN last_audio_at DATETIME NULL")
-        if "last_video_at" not in cols:
-            alters.append("ADD COLUMN last_video_at DATETIME NULL")
-        for frag in alters:
-            db.session.execute(text(f"ALTER TABLE comando_participantes {frag}"))
-        if alters:
-            db.session.commit()
+    _ensure_column("comando_participantes", "last_audio_at", "ADD COLUMN last_audio_at DATETIME NULL")
+    _ensure_column("comando_participantes", "last_video_at", "ADD COLUMN last_video_at DATETIME NULL")
+    _ensure_column("comando_operativos", "grabar_gps", "ADD COLUMN grabar_gps TINYINT(1) NOT NULL DEFAULT 1")
+    _ensure_column("comando_operativos", "grabar_audio", "ADD COLUMN grabar_audio TINYINT(1) NOT NULL DEFAULT 1")
+    _ensure_column("comando_operativos", "grabar_video", "ADD COLUMN grabar_video TINYINT(1) NOT NULL DEFAULT 1")
+    _ensure_column("comando_operativos", "audio_clip_sec", "ADD COLUMN audio_clip_sec INT NOT NULL DEFAULT 4")
+    _ensure_column("comando_operativos", "video_clip_sec", "ADD COLUMN video_clip_sec INT NOT NULL DEFAULT 3")
+    _ensure_column("comando_operativos", "gps_interval_sec", "ADD COLUMN gps_interval_sec INT NOT NULL DEFAULT 5")
+    _ensure_column("comando_gps_pings", "retenido", "ADD COLUMN retenido TINYINT(1) NOT NULL DEFAULT 1")
+    _ensure_column("comando_audio_clips", "retenido", "ADD COLUMN retenido TINYINT(1) NOT NULL DEFAULT 1")
+    _ensure_column("comando_video_clips", "retenido", "ADD COLUMN retenido TINYINT(1) NOT NULL DEFAULT 1")
+
+
+def _op_config(op: ComandoOperativo) -> dict:
+    return {
+        "grabar_gps": bool(getattr(op, "grabar_gps", True)),
+        "grabar_audio": bool(getattr(op, "grabar_audio", True)),
+        "grabar_video": bool(getattr(op, "grabar_video", True)),
+        "audio_clip_sec": int(getattr(op, "audio_clip_sec", None) or 4),
+        "video_clip_sec": int(getattr(op, "video_clip_sec", None) or 3),
+        "gps_interval_sec": int(getattr(op, "gps_interval_sec", None) or 5),
+    }
+
+
+def _delete_clip_file(rel_path: str) -> None:
+    try:
+        upload_root = Path(current_app.config.get("UPLOAD_FOLDER", "instance/uploads")).resolve()
+        path = (upload_root / rel_path).resolve()
+        if str(path).startswith(str(upload_root)) and path.is_file():
+            path.unlink(missing_ok=True)
+    except Exception:
+        pass
+
+
+def _purge_ephemeral(op_id: int) -> None:
+    """Borra GPS/audio/video no retenidos más viejos que EPHEMERAL_KEEP_SECONDS."""
+    cutoff = datetime.utcnow() - timedelta(seconds=EPHEMERAL_KEEP_SECONDS)
+    for clip in ComandoAudioClip.query.filter(
+        ComandoAudioClip.operativo_id == op_id,
+        ComandoAudioClip.retenido.is_(False),
+        ComandoAudioClip.created_at < cutoff,
+    ).limit(200).all():
+        _delete_clip_file(clip.rel_path)
+        db.session.delete(clip)
+    for clip in ComandoVideoClip.query.filter(
+        ComandoVideoClip.operativo_id == op_id,
+        ComandoVideoClip.retenido.is_(False),
+        ComandoVideoClip.created_at < cutoff,
+    ).limit(200).all():
+        _delete_clip_file(clip.rel_path)
+        db.session.delete(clip)
+    ComandoGpsPing.query.filter(
+        ComandoGpsPing.operativo_id == op_id,
+        ComandoGpsPing.retenido.is_(False),
+        ComandoGpsPing.created_at < cutoff,
+    ).delete(synchronize_session=False)
+    db.session.commit()
+
+
+def _storage_stats(op_id: int) -> dict:
+    return {
+        "gps_retenidos": ComandoGpsPing.query.filter_by(operativo_id=op_id, retenido=True).count(),
+        "audio_retenidos": ComandoAudioClip.query.filter_by(operativo_id=op_id, retenido=True).count(),
+        "video_retenidos": ComandoVideoClip.query.filter_by(operativo_id=op_id, retenido=True).count(),
+        "audio_efimeros": ComandoAudioClip.query.filter_by(operativo_id=op_id, retenido=False).count(),
+        "video_efimeros": ComandoVideoClip.query.filter_by(operativo_id=op_id, retenido=False).count(),
+    }
 
 
 def _media_dir(op_id: int, part_id: int, kind: str = "media") -> Path:
@@ -224,13 +301,17 @@ def mapa(op_id: int):
     if not _can_view_op(op):
         flash("No tenés acceso a este operativo.", "warning")
         return redirect(url_for("comando_vivo.listado"))
+    cfg = _op_config(op)
     return render_template(
         "comando_vivo/mapa.html",
         op=op,
+        cfg=cfg,
+        stats=_storage_stats(op.id),
         can_manage=current_user.has_permission("COMANDO_VIVO_MANAGE"),
         positions_url=url_for("comando_vivo.api_posiciones", op_id=op.id),
         audio_lista_url=url_for("comando_vivo.api_audio_lista", op_id=op.id),
         video_lista_url=url_for("comando_vivo.api_video_lista", op_id=op.id),
+        config_url=url_for("comando_vivo.api_config", op_id=op.id),
         offline_seconds=OFFLINE_SECONDS,
     )
 
@@ -249,6 +330,45 @@ def cerrar(op_id: int):
     db.session.commit()
     flash("Operativo cerrado.", "info")
     return redirect(url_for("comando_vivo.listado"))
+
+
+@bp.route("/api/config/<int:op_id>", methods=["GET", "POST"])
+@login_required
+def api_config(op_id: int):
+    """Ver / actualizar grabación y lapsos del operativo."""
+    _ensure_tables()
+    op = ComandoOperativo.query.get_or_404(op_id)
+    if not _can_view_op(op):
+        return jsonify({"error": "forbidden"}), 403
+
+    if request.method == "GET":
+        return jsonify({"ok": True, "config": _op_config(op), "stats": _storage_stats(op.id)})
+
+    if not current_user.has_permission("COMANDO_VIVO_MANAGE"):
+        return jsonify({"error": "forbidden"}), 403
+    if op.estado != "activo":
+        return jsonify({"ok": False, "error": "operativo_cerrado"}), 409
+
+    data = request.get_json(silent=True) or {}
+
+    def _bool(key, current):
+        if key not in data:
+            return current
+        v = data.get(key)
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, (int, float)):
+            return bool(v)
+        return str(v).strip().lower() in ("1", "true", "si", "yes", "on")
+
+    op.grabar_gps = _bool("grabar_gps", op.grabar_gps)
+    op.grabar_audio = _bool("grabar_audio", op.grabar_audio)
+    op.grabar_video = _bool("grabar_video", op.grabar_video)
+    op.audio_clip_sec = _clamp_int(data.get("audio_clip_sec", op.audio_clip_sec), 3, 20, 4)
+    op.video_clip_sec = _clamp_int(data.get("video_clip_sec", op.video_clip_sec), 2, 15, 3)
+    op.gps_interval_sec = _clamp_int(data.get("gps_interval_sec", op.gps_interval_sec), 3, 30, 5)
+    db.session.commit()
+    return jsonify({"ok": True, "config": _op_config(op), "stats": _storage_stats(op.id)})
 
 
 # ─── App de campo (PWA) ──────────────────────────────────────────────────────
@@ -273,6 +393,7 @@ def api_posiciones(op_id: int):
     if not _can_view_op(op):
         return jsonify({"error": "forbidden"}), 403
 
+    _purge_ephemeral(op.id)
     participantes = ComandoParticipante.query.filter_by(operativo_id=op.id).all()
     _mark_offline(participantes)
     db.session.commit()
@@ -283,6 +404,8 @@ def api_posiciones(op_id: int):
         .limit(20)
         .all()
     )
+    online = sum(1 for p in participantes if p.estado == "online")
+    panico_n = sum(1 for p in participantes if p.estado == "panico")
 
     return jsonify(
         {
@@ -291,6 +414,14 @@ def api_posiciones(op_id: int):
                 "nombre": op.nombre,
                 "codigo": op.codigo,
                 "estado": op.estado,
+            },
+            "config": _op_config(op),
+            "stats": _storage_stats(op.id),
+            "resumen": {
+                "total": len(participantes),
+                "online": online,
+                "panico": panico_n,
+                "offline": len(participantes) - online - panico_n,
             },
             "participantes": [_serialize_participante(p) for p in participantes],
             "panicos": [
@@ -391,6 +522,7 @@ def api_join():
                 "nombre": op.nombre,
                 "codigo": op.codigo,
             },
+            "config": _op_config(op),
         }
     )
 
@@ -430,6 +562,8 @@ def _ingest_ping(evento: str = "ping"):
     heading = _opt_float("heading")
     battery = _opt_float("battery")
 
+    # Posición en vivo siempre; retenido=True guarda historial (pánico siempre retenido)
+    retenido = bool(getattr(op, "grabar_gps", True)) or evento == "panico"
     ping = ComandoGpsPing(
         operativo_id=op.id,
         participante_id=part.id,
@@ -440,6 +574,7 @@ def _ingest_ping(evento: str = "ping"):
         heading=heading,
         battery=battery,
         evento=evento,
+        retenido=retenido,
     )
     db.session.add(ping)
 
@@ -454,7 +589,14 @@ def _ingest_ping(evento: str = "ping"):
         part.estado = "online"
 
     db.session.commit()
-    return jsonify({"ok": True, "evento": evento, "estado": part.estado})
+    return jsonify(
+        {
+            "ok": True,
+            "evento": evento,
+            "estado": part.estado,
+            "config": _op_config(op),
+        }
+    )
 
 
 @bp.route("/api/ping", methods=["POST"])
@@ -548,6 +690,7 @@ def api_audio_upload():
     upload_root = Path(current_app.config.get("UPLOAD_FOLDER", "instance/uploads")).resolve()
     rel = str(dest.resolve().relative_to(upload_root)).replace("\\", "/")
 
+    retenido = bool(getattr(op, "grabar_audio", True))
     clip = ComandoAudioClip(
         operativo_id=op.id,
         participante_id=part.id,
@@ -555,6 +698,7 @@ def api_audio_upload():
         mime="audio/webm" if "webm" in mime else mime,
         size_bytes=len(raw),
         duration_ms=duration_ms,
+        retenido=retenido,
     )
     db.session.add(clip)
     part.last_audio_at = datetime.utcnow()
@@ -567,7 +711,9 @@ def api_audio_upload():
         {
             "ok": True,
             "clip_id": clip.id,
+            "retenido": retenido,
             "url": url_for("comando_vivo.api_audio_file", clip_id=clip.id),
+            "config": _op_config(op),
         }
     )
 
@@ -684,6 +830,7 @@ def api_video_upload():
     upload_root = Path(current_app.config.get("UPLOAD_FOLDER", "instance/uploads")).resolve()
     rel = str(dest.resolve().relative_to(upload_root)).replace("\\", "/")
 
+    retenido = bool(getattr(op, "grabar_video", True))
     clip = ComandoVideoClip(
         operativo_id=op.id,
         participante_id=part.id,
@@ -691,6 +838,7 @@ def api_video_upload():
         mime="video/webm" if "webm" in mime else mime,
         size_bytes=len(raw),
         duration_ms=duration_ms,
+        retenido=retenido,
     )
     db.session.add(clip)
     now = datetime.utcnow()
@@ -705,7 +853,9 @@ def api_video_upload():
         {
             "ok": True,
             "clip_id": clip.id,
+            "retenido": retenido,
             "url": url_for("comando_vivo.api_video_file", clip_id=clip.id),
+            "config": _op_config(op),
         }
     )
 
