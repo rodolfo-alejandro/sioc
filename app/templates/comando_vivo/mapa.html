@@ -1,0 +1,57 @@
+{% extends "layouts/base.html" %}
+{% block title %}Mapa en vivo — {{ op.nombre }}{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/comando_vivo.css') }}">
+{% endblock %}
+{% block content %}
+<div class="page-header d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
+  <div>
+    <h1 class="h3 mb-1"><i class="bi bi-geo-alt-fill"></i> {{ op.nombre }}</h1>
+    <p class="mb-0 small">
+      Código: <code class="fs-5">{{ op.codigo }}</code>
+      · Estado: <span class="badge {% if op.estado == 'activo' %}bg-success{% else %}bg-secondary{% endif %}">{{ op.estado }}</span>
+      {% if op.tipo %} · {{ op.tipo }}{% endif %}
+    </p>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('comando_vivo.listado') }}">Volver</a>
+    <a class="btn btn-outline-primary btn-sm" href="{{ url_for('comando_vivo.app_campo') }}" target="_blank">
+      <i class="bi bi-phone"></i> App campo
+    </a>
+    {% if can_manage and op.estado == 'activo' %}
+    <form method="post" action="{{ url_for('comando_vivo.cerrar', op_id=op.id) }}"
+          onsubmit="return confirm('¿Cerrar este operativo?');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-outline-danger btn-sm">Cerrar operativo</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+<div class="cv-layout">
+  <div class="cv-map-wrap">
+    <div id="cv-map"></div>
+  </div>
+  <aside class="cv-side">
+    <div class="cv-side-head">
+      <strong>Personal</strong>
+      <span class="badge bg-light text-dark border" id="cv-count">0</span>
+    </div>
+    <div id="cv-alertas" class="cv-alertas"></div>
+    <ul class="list-group list-group-flush" id="cv-lista"></ul>
+    <p class="small text-muted p-2 mb-0">Actualiza cada 4 s · sin señal &gt; {{ offline_seconds }} s = offline</p>
+  </aside>
+</div>
+
+<script>
+  window.CV_MAP = {
+    positionsUrl: {{ positions_url|tojson }},
+    trazaUrlTpl: {{ url_for('comando_vivo.api_traza', participante_id=0)|tojson }},
+    operativoId: {{ op.id }},
+    activo: {{ (op.estado == 'activo')|tojson }}
+  };
+</script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="{{ url_for('static', filename='js/comando_vivo_mapa.js') }}"></script>
+{% endblock %}

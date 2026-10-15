@@ -69,6 +69,7 @@ from app.models.base_operativa import BaseProcedimiento, BaseIdentificado
 from app.models.monitor_noticias import TemaNoticia, FuenteNoticia, Noticia
 from app.models.dunacc import DunaccLote, DunaccRegistro, DunaccLoteCompartido, DunaccComisariaAlias
 from app.models.auditoria import AuditoriaObs
+from app.models.comando_vivo import ComandoOperativo, ComandoParticipante, ComandoGpsPing
 
 __all__ = [
     'User', 'Role', 'Permission', 'Unidad', 'AuditLog', 'Dataset', 'DenunciaWeb',
@@ -96,5 +97,6 @@ __all__ = [
     'TemaNoticia', 'FuenteNoticia', 'Noticia',
     'DunaccLote', 'DunaccRegistro', 'DunaccLoteCompartido', 'DunaccComisariaAlias',
     'AuditoriaObs',
+    'ComandoOperativo', 'ComandoParticipante', 'ComandoGpsPing',
 ]
 

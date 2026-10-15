@@ -103,6 +103,9 @@ def create_app(config_class=Config):
     from app.blueprints.auditoria import bp as auditoria_bp
     app.register_blueprint(auditoria_bp)
 
+    from app.blueprints.comando_vivo import bp as comando_vivo_bp
+    app.register_blueprint(comando_vivo_bp)
+
     # Crear directorios necesarios
     upload_folder = app.config.get('UPLOAD_FOLDER', 'instance/uploads')
     os.makedirs(upload_folder, exist_ok=True)

@@ -85,6 +85,7 @@ ADMIN_PERM_CODES = [
     'DUNACC_VIEW', 'DUNACC_MANAGE', 'DUNACC_EXPORT',
     'CAPACITACIONES_VIEW', 'CAPACITACIONES_ADMIN', 'CAPACITACIONES_ASISTENCIA',
     'AUDITORIA_VIEW', 'AUDITORIA_EDIT',
+    'COMANDO_VIVO_VIEW', 'COMANDO_VIVO_MANAGE', 'COMANDO_VIVO_FIELD',
 ]
 
 ANALISTA_PERM_CODES = [
@@ -231,6 +232,10 @@ def create_seed_data(*, create_tables: bool = True):
             # Auditoría de calidad (Denuncias Web)
             ('AUDITORIA_VIEW', 'Ver módulo de auditoría de Denuncias Web'),
             ('AUDITORIA_EDIT', 'Cargar y gestionar observaciones de auditoría'),
+            # Centro de Comando / Operativos en vivo (piloto GPS)
+            ('COMANDO_VIVO_VIEW', 'Ver centro de comando y mapa GPS en vivo'),
+            ('COMANDO_VIVO_MANAGE', 'Crear y cerrar operativos en vivo'),
+            ('COMANDO_VIVO_FIELD', 'Reservado para app de campo (piloto)'),
         ]
         
         permisos_creados = {}

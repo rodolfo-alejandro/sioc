@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#0d3b2e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="SIOC Campo">
+  <title>SIOC Campo — GPS</title>
+  <link rel="manifest" href="{{ url_for('static', filename='comando_vivo/manifest.json') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/comando_vivo.css') }}">
+</head>
+<body class="cv-app-body">
+  <header class="cv-app-header">
+    <strong>SIOC Campo</strong>
+    <span class="cv-app-badge" id="cv-status">Desconectado</span>
+  </header>
+
+  <main class="cv-app-main">
+    <section id="cv-join" class="cv-card">
+      <h1>Unirse a operativo</h1>
+      <p class="cv-muted">Pedí el código en el centro de comando. Activá ubicación del celular.</p>
+      <label>Código</label>
+      <input id="cv-codigo" type="text" inputmode="text" autocomplete="off" maxlength="12" placeholder="Ej. AB3K9X">
+      <label>Tu nombre / alias</label>
+      <input id="cv-alias" type="text" maxlength="80" placeholder="Ej. Of. García">
+      <button type="button" class="cv-btn cv-btn-primary" id="cv-btn-join">Entrar y compartir GPS</button>
+      <p class="cv-err" id="cv-join-err" hidden></p>
+    </section>
+
+    <section id="cv-live" class="cv-card" hidden>
+      <h2 id="cv-op-nombre">—</h2>
+      <p class="cv-muted">Código <code id="cv-op-codigo"></code></p>
+      <div class="cv-coords" id="cv-coords">Esperando GPS…</div>
+      <p class="cv-muted small" id="cv-ping-info"></p>
+      <button type="button" class="cv-btn cv-btn-danger cv-btn-lg" id="cv-btn-panico">🚨 PÁNICO</button>
+      <button type="button" class="cv-btn cv-btn-ok" id="cv-btn-ok" hidden>Estoy bien (quitar pánico)</button>
+      <button type="button" class="cv-btn cv-btn-ghost" id="cv-btn-salir">Salir / dejar de enviar</button>
+    </section>
+  </main>
+
+  <footer class="cv-app-foot">Piloto GPS · audio/video en fases siguientes</footer>
+
+  <script>
+    window.CV_APP = {
+      joinUrl: {{ url_for('comando_vivo.api_join')|tojson }},
+      pingUrl: {{ url_for('comando_vivo.api_ping')|tojson }},
+      panicoUrl: {{ url_for('comando_vivo.api_panico')|tojson }},
+      okUrl: {{ url_for('comando_vivo.api_ok')|tojson }},
+      swUrl: {{ url_for('static', filename='comando_vivo/sw.js')|tojson }}
+    };
+  </script>
+  <script src="{{ url_for('static', filename='js/comando_vivo_app.js') }}"></script>
+</body>
+</html>

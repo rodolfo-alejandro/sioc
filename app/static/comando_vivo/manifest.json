@@ -1,0 +1,18 @@
+{
+  "name": "SIOC Campo",
+  "short_name": "SIOC Campo",
+  "description": "Piloto GPS — Centro de Comando SIOC",
+  "start_url": "/comando-vivo/app",
+  "display": "standalone",
+  "background_color": "#0b1f18",
+  "theme_color": "#0d3b2e",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "/static/comando_vivo/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

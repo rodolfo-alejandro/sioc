@@ -200,6 +200,23 @@
                 </li>
                 {% endif %}
 
+                <!-- Centro de Comando (piloto GPS en vivo) -->
+                {% if current_user.has_permission('COMANDO_VIVO_VIEW') or current_user.has_permission('COMANDO_VIVO_MANAGE') %}
+                <li class="nav-item">
+                    <a class="nav-link" href="#" data-bs-toggle="collapse" data-bs-target="#submenuComandoVivo">
+                        <i class="bi bi-broadcast-pin"></i> Centro de Comando
+                        <i class="bi bi-chevron-down ms-auto"></i>
+                    </a>
+                    <ul class="nav flex-column collapse" id="submenuComandoVivo">
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('comando_vivo.listado') }}"><i class="bi bi-list-ul"></i> Operativos en vivo</a></li>
+                        {% if current_user.has_permission('COMANDO_VIVO_MANAGE') %}
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('comando_vivo.nuevo') }}"><i class="bi bi-plus-lg"></i> Nuevo operativo</a></li>
+                        {% endif %}
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('comando_vivo.app_campo') }}" target="_blank"><i class="bi bi-phone"></i> App de campo</a></li>
+                    </ul>
+                </li>
+                {% endif %}
+
                 <!-- Base Operativa (Excel manual Capital / Interior) -->
                 {% if current_user.has_permission('BASE_OPERATIVA_VIEW') or current_user.has_permission('BASE_OPERATIVA_IMPORT') or current_user.has_permission('AUDITORIA_VIEW') %}
                 <li class="nav-item">

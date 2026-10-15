@@ -1,0 +1,75 @@
+{% extends "layouts/base.html" %}
+{% block title %}Centro de Comando - SIOC{% endblock %}
+{% block content %}
+<div class="page-header d-flex flex-wrap justify-content-between align-items-start gap-2">
+  <div>
+    <h1><i class="bi bi-broadcast-pin"></i> Centro de Comando</h1>
+    <p class="text-muted mb-0">Piloto GPS en vivo — audio/video después. Solo personal de prueba.</p>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('comando_vivo.app_campo') }}" target="_blank">
+      <i class="bi bi-phone"></i> App de campo
+    </a>
+    {% if can_manage %}
+    <a class="btn btn-primary btn-sm" href="{{ url_for('comando_vivo.nuevo') }}">
+      <i class="bi bi-plus-lg"></i> Nuevo operativo
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header"><strong>Activos</strong></div>
+  <div class="card-body p-0">
+    {% if activos %}
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Nombre</th>
+            <th>Código</th>
+            <th>Tipo</th>
+            <th>Personal</th>
+            <th>Inicio</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for o in activos %}
+          <tr>
+            <td>{{ o.nombre }}</td>
+            <td><code class="fs-6">{{ o.codigo }}</code></td>
+            <td>{{ o.tipo or '—' }}</td>
+            <td>{{ counts.get(o.id, 0) }}</td>
+            <td>{{ o.created_at|localtime }}</td>
+            <td class="text-end">
+              <a class="btn btn-sm btn-primary" href="{{ url_for('comando_vivo.mapa', op_id=o.id) }}">
+                <i class="bi bi-map"></i> Mapa
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-muted p-3 mb-0">No hay operativos activos. Creá uno y compartí el código al personal.</p>
+    {% endif %}
+  </div>
+</div>
+
+{% if cerrados %}
+<div class="card">
+  <div class="card-header"><strong>Cerrados recientes</strong></div>
+  <div class="list-group list-group-flush">
+    {% for o in cerrados %}
+    <a class="list-group-item list-group-item-action d-flex justify-content-between"
+       href="{{ url_for('comando_vivo.mapa', op_id=o.id) }}">
+      <span>{{ o.nombre }} <span class="text-muted small">({{ o.codigo }})</span></span>
+      <span class="text-muted small">{{ o.closed_at|localtime if o.closed_at else '' }}</span>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}
