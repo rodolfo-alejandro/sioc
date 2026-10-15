@@ -29,8 +29,6 @@
   var elBtnAudio = document.getElementById("cv-btn-audio");
   var elBtnVideo = document.getElementById("cv-btn-video");
   var elAudioInfo = document.getElementById("cv-audio-info");
-  var elPreviewWrap = document.getElementById("cv-preview-wrap");
-  var elPreview = document.getElementById("cv-preview");
 
   function deviceId() {
     var k = "sioc_cv_device";
@@ -148,9 +146,9 @@
         elBtnVideo.textContent = "📹 Transmitir video";
       }
     }
-    if (elPreviewWrap) elPreviewWrap.hidden = !videoOn;
     if (!audioOn && !videoOn && elAudioInfo) {
-      elAudioInfo.textContent = "Audio o video: el comando te ve/escucha en clips cortos.";
+      elAudioInfo.textContent =
+        "Sin vista previa en el celu: audio/video solo se ven en el centro de comando.";
     }
   }
 
@@ -262,9 +260,6 @@
       });
       mediaStream = null;
     }
-    if (elPreview) {
-      elPreview.srcObject = null;
-    }
   }
 
   function stopAudio() {
@@ -343,12 +338,9 @@
         mediaStream = stream;
         videoOn = true;
         mode = "video";
-        if (elPreview) {
-          elPreview.srcObject = stream;
-          elPreview.play().catch(function () {});
-        }
         updateMediaButtons();
         setStatus("GPS + Video", "on");
+        elAudioInfo.textContent = "Transmitiendo video (sin preview). Solo lo ve el comando.";
         mediaLoop("video");
       })
       .catch(function () {
@@ -362,12 +354,9 @@
             mediaStream = stream;
             videoOn = true;
             mode = "video";
-            if (elPreview) {
-              elPreview.srcObject = stream;
-              elPreview.play().catch(function () {});
-            }
             updateMediaButtons();
             setStatus("GPS + Video", "on");
+            elAudioInfo.textContent = "Transmitiendo video (sin preview). Solo lo ve el comando.";
             mediaLoop("video");
           });
       })
