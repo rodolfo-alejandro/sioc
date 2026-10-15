@@ -11,7 +11,20 @@
   var markers = {};
   var fittedOnce = false;
   var selectedId = null;
+  var lastParticipantes = [];
   var trazaLayer = null;
+
+  var listenOn = false;
+  var lastClipId = 0;
+  var playQueue = [];
+  var playing = false;
+  var audioPollTimer = null;
+  var player = document.getElementById("cv-audio-player");
+  var elAudioLabel = document.getElementById("cv-audio-label");
+  var elAudioHint = document.getElementById("cv-audio-hint");
+  var elAudioStatus = document.getElementById("cv-audio-status");
+  var btnListen = document.getElementById("cv-btn-listen");
+  var btnListenStop = document.getElementById("cv-btn-listen-stop");
 
   function estadoDot(estado) {
     if (estado === "panico") return "cv-dot-panico";
@@ -21,9 +34,10 @@
 
   function iconFor(p) {
     var cls = "cv-marker-label" + (p.estado === "panico" ? " cv-marker-panico" : "");
+    var mic = p.audio_vivo ? " 🎤" : "";
     return L.divIcon({
       className: "",
-      html: '<div class="' + cls + '">' + escapeHtml(p.alias) + "</div>",
+      html: '<div class="' + cls + '">' + escapeHtml(p.alias) + mic + "</div>",
       iconSize: [0, 0],
       iconAnchor: [0, 0],
     });
@@ -45,6 +59,13 @@
     if (sec < 60) return sec + " s";
     if (sec < 3600) return Math.floor(sec / 60) + " min";
     return Math.floor(sec / 3600) + " h";
+  }
+
+  function aliasOf(id) {
+    var p = lastParticipantes.find(function (x) {
+      return x.id === id;
+    });
+    return p ? p.alias : "#" + id;
   }
 
   function renderLista(participantes) {
@@ -71,9 +92,15 @@
       .map(function (p) {
         var bat =
           p.battery != null ? " · bat " + Math.round(p.battery) + "%" : "";
+        var mic = p.audio_vivo
+          ? '<span class="cv-mic-badge">MIC</span>'
+          : "";
+        var sel =
+          selectedId === p.id ? " list-group-item-primary" : "";
         return (
-          '<li class="list-group-item list-group-item-action py-2"' +
-          ' data-id="' +
+          '<li class="list-group-item list-group-item-action py-2' +
+          sel +
+          '" data-id="' +
           p.id +
           '" style="cursor:pointer">' +
           '<span class="cv-dot ' +
@@ -82,6 +109,7 @@
           "<strong>" +
           escapeHtml(p.alias) +
           "</strong>" +
+          mic +
           '<div class="small text-muted">' +
           escapeHtml(p.estado) +
           " · hace " +
@@ -97,8 +125,22 @@
         var id = parseInt(el.getAttribute("data-id"), 10);
         focusParticipante(id, participantes);
         loadTraza(id);
+        selectForAudio(id);
       });
     });
+  }
+
+  function selectForAudio(id) {
+    selectedId = id;
+    if (btnListen) btnListen.disabled = false;
+    if (elAudioLabel) elAudioLabel.textContent = "Audio — " + aliasOf(id);
+    if (elAudioHint) {
+      elAudioHint.textContent =
+        "Seleccionaste a " +
+        aliasOf(id) +
+        ". Tocá «Escuchar en vivo» (el efectivo debe transmitir audio).";
+    }
+    renderLista(lastParticipantes);
   }
 
   function focusParticipante(id, participantes) {
@@ -132,7 +174,11 @@
             return [x.lat, x.lon];
           });
         if (pts.length >= 2) {
-          trazaLayer = L.polyline(pts, { color: "#0d6efd", weight: 3, opacity: 0.75 }).addTo(map);
+          trazaLayer = L.polyline(pts, {
+            color: "#0d6efd",
+            weight: 3,
+            opacity: 0.75,
+          }).addTo(map);
           map.fitBounds(trazaLayer.getBounds(), { padding: [30, 30], maxZoom: 17 });
         }
       })
@@ -151,6 +197,7 @@
         escapeHtml(p.alias) +
         "</strong><br>" +
         escapeHtml(p.estado) +
+        (p.audio_vivo ? " · 🎤 audio" : "") +
         "<br>hace " +
         ago(p.last_seen_at);
       if (markers[p.id]) {
@@ -175,6 +222,110 @@
     }
   }
 
+  function setListenUi(on) {
+    listenOn = on;
+    if (btnListen) btnListen.disabled = !selectedId || on;
+    if (btnListenStop) btnListenStop.disabled = !on;
+    if (!on && elAudioStatus) elAudioStatus.textContent = "Sin escucha activa";
+  }
+
+  function playNext() {
+    if (!listenOn || playing) return;
+    if (!playQueue.length) {
+      if (elAudioStatus) elAudioStatus.textContent = "Escuchando… esperando clips";
+      return;
+    }
+    var clip = playQueue.shift();
+    playing = true;
+    if (elAudioStatus) {
+      elAudioStatus.textContent =
+        "Reproduciendo clip #" + clip.id + " · " + aliasOf(clip.participante_id);
+    }
+    player.src = clip.url;
+    var p = player.play();
+    if (p && p.catch) {
+      p.catch(function () {
+        playing = false;
+        if (elAudioStatus) {
+          elAudioStatus.textContent =
+            "Activá el sonido del navegador / tocá play una vez.";
+        }
+      });
+    }
+  }
+
+  if (player) {
+    player.addEventListener("ended", function () {
+      playing = false;
+      playNext();
+    });
+    player.addEventListener("error", function () {
+      playing = false;
+      playNext();
+    });
+  }
+
+  function pollAudio() {
+    if (!listenOn || !selectedId || !cfg.audioListaUrl) return;
+    var url =
+      cfg.audioListaUrl +
+      "?participante_id=" +
+      selectedId +
+      "&after_id=" +
+      lastClipId;
+    fetch(url, { credentials: "same-origin" })
+      .then(function (r) {
+        return r.json();
+      })
+      .then(function (data) {
+        var clips = data.clips || [];
+        clips.forEach(function (c) {
+          if (c.id > lastClipId) lastClipId = c.id;
+          playQueue.push(c);
+        });
+        playNext();
+      })
+      .catch(function () {});
+  }
+
+  function startListen() {
+    if (!selectedId) {
+      alert("Primero tocá un efectivo en la lista.");
+      return;
+    }
+    lastClipId = 0;
+    playQueue = [];
+    playing = false;
+    setListenUi(true);
+    if (elAudioStatus) {
+      elAudioStatus.textContent =
+        "Escuchando a " + aliasOf(selectedId) + "…";
+    }
+    pollAudio();
+    if (audioPollTimer) clearInterval(audioPollTimer);
+    audioPollTimer = setInterval(pollAudio, 2500);
+  }
+
+  function stopListen() {
+    if (audioPollTimer) {
+      clearInterval(audioPollTimer);
+      audioPollTimer = null;
+    }
+    playQueue = [];
+    playing = false;
+    if (player) {
+      try {
+        player.pause();
+        player.removeAttribute("src");
+        player.load();
+      } catch (e) {}
+    }
+    setListenUi(false);
+  }
+
+  if (btnListen) btnListen.addEventListener("click", startListen);
+  if (btnListenStop) btnListenStop.addEventListener("click", stopListen);
+
   function poll() {
     if (!cfg.positionsUrl) return;
     fetch(cfg.positionsUrl, { credentials: "same-origin" })
@@ -183,6 +334,7 @@
       })
       .then(function (data) {
         var list = data.participantes || [];
+        lastParticipantes = list;
         renderLista(list);
         updateMarkers(list);
       })

@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0d3b2e">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="SIOC Campo">
-  <title>SIOC Campo — GPS</title>
+  <title>SIOC Campo — GPS + Audio</title>
   <link rel="manifest" href="{{ url_for('static', filename='comando_vivo/manifest.json') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/comando_vivo.css') }}">
 </head>
@@ -19,7 +19,7 @@
   <main class="cv-app-main">
     <section id="cv-join" class="cv-card">
       <h1>Unirse a operativo</h1>
-      <p class="cv-muted">Pedí el código en el centro de comando. Activá ubicación del celular.</p>
+      <p class="cv-muted">Pedí el código en el centro de comando. Activá ubicación y micrófono.</p>
       <label>Código</label>
       <input id="cv-codigo" type="text" inputmode="text" autocomplete="off" maxlength="12" placeholder="Ej. AB3K9X">
       <label>Tu nombre / alias</label>
@@ -33,13 +33,17 @@
       <p class="cv-muted">Código <code id="cv-op-codigo"></code></p>
       <div class="cv-coords" id="cv-coords">Esperando GPS…</div>
       <p class="cv-muted small" id="cv-ping-info"></p>
+
+      <button type="button" class="cv-btn cv-btn-audio" id="cv-btn-audio">🎤 Transmitir audio</button>
+      <p class="cv-muted small" id="cv-audio-info">El comando podrá escucharte casi en vivo.</p>
+
       <button type="button" class="cv-btn cv-btn-danger cv-btn-lg" id="cv-btn-panico">🚨 PÁNICO</button>
       <button type="button" class="cv-btn cv-btn-ok" id="cv-btn-ok" hidden>Estoy bien (quitar pánico)</button>
       <button type="button" class="cv-btn cv-btn-ghost" id="cv-btn-salir">Salir / dejar de enviar</button>
     </section>
   </main>
 
-  <footer class="cv-app-foot">Piloto GPS · audio/video en fases siguientes</footer>
+  <footer class="cv-app-foot">Piloto GPS + Audio · video después</footer>
 
   <script>
     window.CV_APP = {
@@ -47,6 +51,7 @@
       pingUrl: {{ url_for('comando_vivo.api_ping')|tojson }},
       panicoUrl: {{ url_for('comando_vivo.api_panico')|tojson }},
       okUrl: {{ url_for('comando_vivo.api_ok')|tojson }},
+      audioUrl: {{ url_for('comando_vivo.api_audio_upload')|tojson }},
       swUrl: {{ url_for('static', filename='comando_vivo/sw.js')|tojson }}
     };
   </script>

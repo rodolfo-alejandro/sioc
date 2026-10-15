@@ -1,32 +1,45 @@
 """
-Rutas Centro de Comando / Operativos en vivo (piloto GPS).
+Rutas Centro de Comando / Operativos en vivo (piloto GPS + audio).
 """
 from __future__ import annotations
 
+import os
 import secrets
 import string
+import uuid
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from flask import (
+    current_app,
     flash,
     jsonify,
     redirect,
     render_template,
     request,
+    send_file,
     url_for,
 )
 from flask_login import current_user, login_required
-from sqlalchemy import func
+from sqlalchemy import func, text
 
 from app.blueprints.comando_vivo import bp
 from app.extensions import csrf, db
-from app.models.comando_vivo import ComandoGpsPing, ComandoOperativo, ComandoParticipante
+from app.models.comando_vivo import (
+    ComandoAudioClip,
+    ComandoGpsPing,
+    ComandoOperativo,
+    ComandoParticipante,
+)
 from app.services.rbac import require_permission
 
 # Sin señal si no hay ping en este intervalo
 OFFLINE_SECONDS = 90
+# Audio reciente = "transmitiendo"
+AUDIO_LIVE_SECONDS = 12
 # Retener pings recientes para traza corta en mapa
 TRACE_LIMIT = 80
+MAX_AUDIO_BYTES = 2 * 1024 * 1024  # 2 MB por clip
 
 
 def _ensure_tables():
@@ -37,10 +50,30 @@ def _ensure_tables():
         "comando_operativos",
         "comando_participantes",
         "comando_gps_pings",
+        "comando_audio_clips",
     }
     existing = set(insp.get_table_names())
     if not needed.issubset(existing):
         db.create_all()
+        insp = inspect(db.engine)
+
+    if "comando_participantes" in insp.get_table_names():
+        cols = {c["name"] for c in insp.get_columns("comando_participantes")}
+        if "last_audio_at" not in cols:
+            db.session.execute(
+                text(
+                    "ALTER TABLE comando_participantes "
+                    "ADD COLUMN last_audio_at DATETIME NULL"
+                )
+            )
+            db.session.commit()
+
+
+def _audio_dir(op_id: int, part_id: int) -> Path:
+    base = Path(current_app.config.get("UPLOAD_FOLDER", "instance/uploads"))
+    d = base / "comando_vivo" / str(op_id) / str(part_id)
+    d.mkdir(parents=True, exist_ok=True)
+    return d
 
 
 def _gen_codigo(n: int = 6) -> str:
@@ -81,6 +114,9 @@ def _mark_offline(participantes: list[ComandoParticipante]) -> None:
 
 
 def _serialize_participante(p: ComandoParticipante) -> dict:
+    audio_vivo = False
+    if p.last_audio_at:
+        audio_vivo = (datetime.utcnow() - p.last_audio_at).total_seconds() <= AUDIO_LIVE_SECONDS
     return {
         "id": p.id,
         "alias": p.alias,
@@ -90,6 +126,8 @@ def _serialize_participante(p: ComandoParticipante) -> dict:
         "accuracy": p.last_accuracy,
         "battery": p.last_battery,
         "last_seen_at": p.last_seen_at.isoformat() + "Z" if p.last_seen_at else None,
+        "last_audio_at": p.last_audio_at.isoformat() + "Z" if p.last_audio_at else None,
+        "audio_vivo": audio_vivo,
     }
 
 
@@ -173,6 +211,7 @@ def mapa(op_id: int):
         op=op,
         can_manage=current_user.has_permission("COMANDO_VIVO_MANAGE"),
         positions_url=url_for("comando_vivo.api_posiciones", op_id=op.id),
+        audio_lista_url=url_for("comando_vivo.api_audio_lista", op_id=op.id),
         offline_seconds=OFFLINE_SECONDS,
     )
 
@@ -425,3 +464,152 @@ def api_ok():
     part.last_seen_at = datetime.utcnow()
     db.session.commit()
     return jsonify({"ok": True, "estado": part.estado})
+
+
+# ─── Audio ───────────────────────────────────────────────────────────────────
+
+
+@bp.route("/api/audio", methods=["POST"])
+@csrf.exempt
+def api_audio_upload():
+    """Sube un clip corto (webm/ogg/mp4) desde la app de campo."""
+    _ensure_tables()
+    token = (request.form.get("token") or "").strip()
+    part = _participante_from_token(token)
+    if not part:
+        return jsonify({"ok": False, "error": "token_invalido"}), 401
+
+    op = part.operativo
+    if op.estado != "activo":
+        return jsonify({"ok": False, "error": "operativo_cerrado"}), 409
+
+    f = request.files.get("audio")
+    if not f or not f.filename:
+        return jsonify({"ok": False, "error": "audio_requerido"}), 400
+
+    raw = f.read()
+    if not raw:
+        return jsonify({"ok": False, "error": "audio_vacio"}), 400
+    if len(raw) > MAX_AUDIO_BYTES:
+        return jsonify({"ok": False, "error": "audio_muy_grande"}), 413
+
+    mime = (f.mimetype or request.form.get("mime") or "audio/webm").split(";")[0].strip()
+    allowed = {
+        "audio/webm",
+        "audio/ogg",
+        "audio/mp4",
+        "audio/mpeg",
+        "audio/wav",
+        "video/webm",  # algunos browsers mandan webm como video/*
+    }
+    if mime not in allowed:
+        # Aceptar si la extensión parece audio
+        if not any(x in mime for x in ("webm", "ogg", "mp4", "mpeg", "wav")):
+            return jsonify({"ok": False, "error": "mime_no_soportado", "mime": mime}), 400
+
+    ext = "webm"
+    if "ogg" in mime:
+        ext = "ogg"
+    elif "mp4" in mime or "mpeg" in mime:
+        ext = "m4a"
+    elif "wav" in mime:
+        ext = "wav"
+
+    duration_ms = None
+    try:
+        duration_ms = int(request.form.get("duration_ms") or 0) or None
+    except (TypeError, ValueError):
+        duration_ms = None
+
+    fname = f"{uuid.uuid4().hex}.{ext}"
+    dest_dir = _audio_dir(op.id, part.id)
+    dest = dest_dir / fname
+    dest.write_bytes(raw)
+
+    upload_root = Path(current_app.config.get("UPLOAD_FOLDER", "instance/uploads")).resolve()
+    rel = str(dest.resolve().relative_to(upload_root)).replace("\\", "/")
+
+    clip = ComandoAudioClip(
+        operativo_id=op.id,
+        participante_id=part.id,
+        rel_path=rel,
+        mime="audio/webm" if "webm" in mime else mime,
+        size_bytes=len(raw),
+        duration_ms=duration_ms,
+    )
+    db.session.add(clip)
+    part.last_audio_at = datetime.utcnow()
+    part.last_seen_at = datetime.utcnow()
+    if part.estado != "panico":
+        part.estado = "online"
+    db.session.commit()
+
+    return jsonify(
+        {
+            "ok": True,
+            "clip_id": clip.id,
+            "url": url_for("comando_vivo.api_audio_file", clip_id=clip.id),
+        }
+    )
+
+
+@bp.route("/api/audio/lista/<int:op_id>")
+@login_required
+@require_permission("COMANDO_VIVO_VIEW")
+def api_audio_lista(op_id: int):
+    """Lista clips nuevos (para escucha casi en vivo en el mapa)."""
+    _ensure_tables()
+    op = ComandoOperativo.query.get_or_404(op_id)
+    if not _can_view_op(op):
+        return jsonify({"error": "forbidden"}), 403
+
+    after_id = request.args.get("after_id", type=int) or 0
+    part_id = request.args.get("participante_id", type=int)
+
+    q = ComandoAudioClip.query.filter(
+        ComandoAudioClip.operativo_id == op.id,
+        ComandoAudioClip.id > after_id,
+    )
+    if part_id:
+        q = q.filter(ComandoAudioClip.participante_id == part_id)
+
+    rows = q.order_by(ComandoAudioClip.id.asc()).limit(40).all()
+    return jsonify(
+        {
+            "clips": [
+                {
+                    "id": c.id,
+                    "participante_id": c.participante_id,
+                    "mime": c.mime,
+                    "duration_ms": c.duration_ms,
+                    "created_at": c.created_at.isoformat() + "Z",
+                    "url": url_for("comando_vivo.api_audio_file", clip_id=c.id),
+                }
+                for c in rows
+            ]
+        }
+    )
+
+
+@bp.route("/api/audio/<int:clip_id>")
+@login_required
+@require_permission("COMANDO_VIVO_VIEW")
+def api_audio_file(clip_id: int):
+    _ensure_tables()
+    clip = ComandoAudioClip.query.get_or_404(clip_id)
+    op = clip.operativo
+    if not _can_view_op(op):
+        return jsonify({"error": "forbidden"}), 403
+
+    upload_root = Path(current_app.config.get("UPLOAD_FOLDER", "instance/uploads")).resolve()
+    path = (upload_root / clip.rel_path).resolve()
+    if not str(path).startswith(str(upload_root)) or not path.is_file():
+        return jsonify({"error": "archivo_no_encontrado"}), 404
+
+    return send_file(
+        path,
+        mimetype=clip.mime or "audio/webm",
+        as_attachment=False,
+        download_name=os.path.basename(path),
+        conditional=True,
+    )
