@@ -47,7 +47,9 @@
   var elBtnOk = document.getElementById("cv-btn-ok");
   var elBtnAudio = document.getElementById("cv-btn-audio");
   var elBtnVideo = document.getElementById("cv-btn-video");
+  var elBtnFlip = document.getElementById("cv-btn-flip");
   var elAudioInfo = document.getElementById("cv-audio-info");
+  var cameraFacing = "environment"; // trasera por defecto; "user" = frontal
 
   function deviceId() {
     var k = "sioc_cv_device";
@@ -164,6 +166,13 @@
         elBtnVideo.classList.remove("on");
         elBtnVideo.textContent = "📹 Transmitir video";
       }
+    }
+    if (elBtnFlip) {
+      elBtnFlip.hidden = !videoOn;
+      elBtnFlip.textContent =
+        cameraFacing === "environment"
+          ? "🔄 Usar cámara frontal"
+          : "🔄 Usar cámara trasera";
     }
     if (!audioOn && !videoOn && elAudioInfo) {
       elAudioInfo.textContent =
@@ -332,7 +341,29 @@
       });
   }
 
-  function startVideo() {
+  function openVideoStream(facing) {
+    var constraints = {
+      audio: true,
+      video: {
+        facingMode: { ideal: facing || "environment" },
+        width: { ideal: 640, max: 854 },
+        height: { ideal: 480, max: 480 },
+        frameRate: { ideal: 15, max: 24 },
+      },
+    };
+    return navigator.mediaDevices.getUserMedia(constraints).catch(function () {
+      return navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: {
+          facingMode: facing || "user",
+          width: { ideal: 480 },
+          frameRate: { ideal: 15 },
+        },
+      });
+    });
+  }
+
+  function startVideo(facing) {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       alert("Este celular no permite cámara desde el navegador.");
       return;
@@ -341,46 +372,42 @@
       alert("MediaRecorder no disponible. Probá Chrome.");
       return;
     }
+    if (facing) cameraFacing = facing;
     stopAudio();
-    var constraints = {
-      audio: true,
-      video: {
-        facingMode: { ideal: "environment" },
-        width: { ideal: 640, max: 854 },
-        height: { ideal: 480, max: 480 },
-        frameRate: { ideal: 15, max: 24 },
-      },
-    };
-    navigator.mediaDevices
-      .getUserMedia(constraints)
+    // Si ya había video, cortar tracks previos sin apagar el modo
+    if (mediaStream && mode === "video") {
+      mediaStream.getTracks().forEach(function (t) {
+        t.stop();
+      });
+      mediaStream = null;
+      if (mediaLoopTimer) {
+        clearTimeout(mediaLoopTimer);
+        mediaLoopTimer = null;
+      }
+      if (mediaRecorder && mediaRecorder.state !== "inactive") {
+        try {
+          mediaRecorder.stop();
+        } catch (e) {}
+      }
+      mediaRecorder = null;
+    }
+    openVideoStream(cameraFacing)
       .then(function (stream) {
         mediaStream = stream;
         videoOn = true;
         mode = "video";
         updateMediaButtons();
         setStatus("GPS + Video", "on");
-        elAudioInfo.textContent = "Transmitiendo video (sin preview). Solo lo ve el comando.";
+        elAudioInfo.textContent =
+          "Transmitiendo (" +
+          (cameraFacing === "environment" ? "trasera" : "frontal") +
+          "). Solo lo ve el comando.";
         mediaLoop("video");
       })
-      .catch(function () {
-        // Fallback cámara frontal
-        return navigator.mediaDevices
-          .getUserMedia({
-            audio: true,
-            video: { facingMode: "user", width: { ideal: 480 }, frameRate: { ideal: 15 } },
-          })
-          .then(function (stream) {
-            mediaStream = stream;
-            videoOn = true;
-            mode = "video";
-            updateMediaButtons();
-            setStatus("GPS + Video", "on");
-            elAudioInfo.textContent = "Transmitiendo video (sin preview). Solo lo ve el comando.";
-            mediaLoop("video");
-          });
-      })
       .catch(function (err) {
-        alert("Permiso de cámara denegado: " + (err.message || err.name));
+        videoOn = false;
+        updateMediaButtons();
+        alert("No se pudo abrir la cámara: " + (err.message || err.name));
       });
   }
 
@@ -542,7 +569,14 @@
   if (elBtnVideo) {
     elBtnVideo.addEventListener("click", function () {
       if (videoOn) stopVideo();
-      else startVideo();
+      else startVideo(cameraFacing);
+    });
+  }
+  if (elBtnFlip) {
+    elBtnFlip.addEventListener("click", function () {
+      if (!videoOn) return;
+      cameraFacing = cameraFacing === "environment" ? "user" : "environment";
+      startVideo(cameraFacing);
     });
   }
 

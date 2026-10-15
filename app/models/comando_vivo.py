@@ -20,11 +20,12 @@ class ComandoOperativo(db.Model):
     # activo | cerrado
     estado = db.Column(db.String(20), nullable=False, default="activo", index=True)
 
-    # Grabar = retener en servidor (si False, solo en vivo / efímero)
+    # GPS: traza retenida si True. Audio/video: solo se retienen mientras now < grabar_media_hasta
     grabar_gps = db.Column(db.Boolean, nullable=False, default=True)
-    grabar_audio = db.Column(db.Boolean, nullable=False, default=True)
-    grabar_video = db.Column(db.Boolean, nullable=False, default=True)
-    # Lapsos (segundos)
+    grabar_audio = db.Column(db.Boolean, nullable=False, default=False)
+    grabar_video = db.Column(db.Boolean, nullable=False, default=False)
+    grabar_media_hasta = db.Column(db.DateTime, nullable=True, index=True)
+    # Lapsos de clip / ping (segundos)
     audio_clip_sec = db.Column(db.Integer, nullable=False, default=4)
     video_clip_sec = db.Column(db.Integer, nullable=False, default=3)
     gps_interval_sec = db.Column(db.Integer, nullable=False, default=5)

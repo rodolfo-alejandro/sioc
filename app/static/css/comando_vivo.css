@@ -128,6 +128,13 @@
   border-color: #f1c0c0;
   background: #fff8f8;
 }
+.cv-rec-live {
+  color: #b91c1c;
+  font-weight: 700;
+  font-size: 0.95rem;
+  margin-bottom: 0.35rem;
+  animation: cv-blink 1.2s infinite;
+}
 .cv-toggles { display: flex; flex-direction: column; gap: 0.25rem; }
 .cv-toggle {
   font-size: 0.9rem;

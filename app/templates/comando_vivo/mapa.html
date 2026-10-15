@@ -55,42 +55,69 @@
   <aside class="cv-side">
     {% if can_manage and op.estado == 'activo' %}
     <div class="cv-panel cv-panel-rec">
-      <div class="cv-panel-title"><i class="bi bi-record-circle"></i> Grabación en servidor</div>
+      <div class="cv-panel-title"><i class="bi bi-record-circle"></i> Grabar en servidor</div>
       <p class="small text-muted mb-2">
-        Si está apagado: se ve en vivo unos minutos y después se borra.
-        Si está encendido: queda guardado en el servidor.
+        Por defecto <strong>no se guarda</strong> audio/video (solo en vivo).
+        Cuando quieras conservar, iniciá una grabación por el tiempo que elijas.
       </p>
-      <div class="cv-toggles">
-        <label class="cv-toggle"><input type="checkbox" id="cfg-gps" {% if cfg.grabar_gps %}checked{% endif %}> GPS / traza</label>
-        <label class="cv-toggle"><input type="checkbox" id="cfg-audio" {% if cfg.grabar_audio %}checked{% endif %}> Audio</label>
-        <label class="cv-toggle"><input type="checkbox" id="cfg-video" {% if cfg.grabar_video %}checked{% endif %}> Video</label>
+      <div id="cv-rec-idle" {% if cfg.grabando %}hidden{% endif %}>
+        <div class="cv-toggles mb-2">
+          <label class="cv-toggle"><input type="checkbox" id="cfg-rec-audio" checked> Guardar audio</label>
+          <label class="cv-toggle"><input type="checkbox" id="cfg-rec-video" checked> Guardar video</label>
+        </div>
+        <label class="form-label small mb-0">Duración</label>
+        <select class="form-select form-select-sm" id="cfg-rec-min">
+          <option value="1">1 minuto</option>
+          <option value="2">2 minutos</option>
+          <option value="5" selected>5 minutos</option>
+          <option value="10">10 minutos</option>
+          <option value="15">15 minutos</option>
+          <option value="30">30 minutos</option>
+          <option value="60">60 minutos</option>
+        </select>
+        <button type="button" class="btn btn-sm btn-danger w-100 mt-2" id="cv-btn-start-rec">
+          ● Iniciar grabación
+        </button>
       </div>
-      <div class="row g-2 mt-2">
+      <div id="cv-rec-active" {% if not cfg.grabando %}hidden{% endif %}>
+        <div class="cv-rec-live">● GRABANDO <span id="cv-rec-countdown">{{ cfg.segundos_restantes }}s</span></div>
+        <p class="small mb-2" id="cv-rec-what">
+          {% if cfg.grabar_audio %}Audio{% endif %}
+          {% if cfg.grabar_audio and cfg.grabar_video %} + {% endif %}
+          {% if cfg.grabar_video %}Video{% endif %}
+        </p>
+        <button type="button" class="btn btn-sm btn-outline-danger w-100" id="cv-btn-stop-rec">Detener grabación</button>
+      </div>
+      <hr class="my-2">
+      <label class="cv-toggle mb-2"><input type="checkbox" id="cfg-gps" {% if cfg.grabar_gps %}checked{% endif %}> Guardar traza GPS</label>
+      <div class="row g-2">
         <div class="col-4">
           <label class="form-label small mb-0">GPS (s)</label>
           <input type="number" class="form-control form-control-sm" id="cfg-gps-sec" min="3" max="30" value="{{ cfg.gps_interval_sec }}">
         </div>
         <div class="col-4">
-          <label class="form-label small mb-0">Audio (s)</label>
+          <label class="form-label small mb-0">Clip aud.</label>
           <input type="number" class="form-control form-control-sm" id="cfg-audio-sec" min="3" max="20" value="{{ cfg.audio_clip_sec }}">
         </div>
         <div class="col-4">
-          <label class="form-label small mb-0">Video (s)</label>
+          <label class="form-label small mb-0">Clip vid.</label>
           <input type="number" class="form-control form-control-sm" id="cfg-video-sec" min="2" max="15" value="{{ cfg.video_clip_sec }}">
         </div>
       </div>
-      <button type="button" class="btn btn-sm btn-primary w-100 mt-2" id="cv-btn-save-cfg">Aplicar lapsos / grabación</button>
+      <button type="button" class="btn btn-sm btn-outline-primary w-100 mt-2" id="cv-btn-save-cfg">Aplicar lapsos / GPS</button>
+      <button type="button" class="btn btn-sm btn-outline-secondary w-100 mt-2" id="cv-btn-purge"
+              title="Borra audio y video guardados de este operativo">
+        Borrar audio/video guardados
+      </button>
       <p class="small text-muted mt-2 mb-0" id="cv-cfg-status">
-        Guardados: GPS {{ stats.gps_retenidos }} · Audio {{ stats.audio_retenidos }} · Video {{ stats.video_retenidos }}
+        Guardados: Audio {{ stats.audio_retenidos }} · Video {{ stats.video_retenidos }} · GPS {{ stats.gps_retenidos }}
       </p>
     </div>
     {% else %}
     <div class="cv-panel">
       <div class="cv-panel-title">Grabación</div>
       <p class="small mb-0" id="cv-cfg-status">
-        GPS {{ 'ON' if cfg.grabar_gps else 'solo vivo' }} ·
-        Audio {{ 'ON' if cfg.grabar_audio else 'solo vivo' }} ·
-        Video {{ 'ON' if cfg.grabar_video else 'solo vivo' }}
+        {% if cfg.grabando %}Grabando {{ cfg.segundos_restantes }}s restantes{% else %}Sin grabación (solo en vivo){% endif %}
         · clips {{ cfg.audio_clip_sec }}s / {{ cfg.video_clip_sec }}s
       </p>
     </div>

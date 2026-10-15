@@ -60,18 +60,55 @@
     if (!elCfgStatus) return;
     stats = stats || {};
     config = config || cfg.config || {};
+    var extra = config.grabando
+      ? " · GRABANDO " + (config.segundos_restantes || 0) + "s"
+      : " · sin grabación";
     elCfgStatus.textContent =
-      "Guardados: GPS " +
-      (stats.gps_retenidos || 0) +
-      " · Audio " +
+      "Guardados: Audio " +
       (stats.audio_retenidos || 0) +
       " · Video " +
       (stats.video_retenidos || 0) +
-      " · lapsos " +
-      (config.audio_clip_sec || "?") +
-      "s / " +
-      (config.video_clip_sec || "?") +
-      "s";
+      " · GPS " +
+      (stats.gps_retenidos || 0) +
+      extra;
+  }
+
+  function fmtCountdown(sec) {
+    sec = Math.max(0, parseInt(sec || 0, 10));
+    var m = Math.floor(sec / 60);
+    var s = sec % 60;
+    return m + ":" + (s < 10 ? "0" : "") + s;
+  }
+
+  function syncRecUi(config) {
+    config = config || cfg.config || {};
+    var idle = document.getElementById("cv-rec-idle");
+    var active = document.getElementById("cv-rec-active");
+    var cd = document.getElementById("cv-rec-countdown");
+    var what = document.getElementById("cv-rec-what");
+    if (idle) idle.hidden = !!config.grabando;
+    if (active) active.hidden = !config.grabando;
+    if (cd) cd.textContent = fmtCountdown(config.segundos_restantes || 0);
+    if (what) {
+      var parts = [];
+      if (config.grabar_audio) parts.push("Audio");
+      if (config.grabar_video) parts.push("Video");
+      what.textContent = parts.length ? parts.join(" + ") : "—";
+    }
+  }
+
+  function postConfig(body) {
+    return fetch(cfg.configUrl, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": cfg.csrfToken || "",
+      },
+      body: JSON.stringify(body),
+    }).then(function (r) {
+      return r.json();
+    });
   }
 
   function updateSelectedCard(p) {
@@ -108,12 +145,17 @@
   }
 
   var btnSaveCfg = document.getElementById("cv-btn-save-cfg");
+  var btnStartRec = document.getElementById("cv-btn-start-rec");
+  var btnStopRec = document.getElementById("cv-btn-stop-rec");
+  var btnPurge = document.getElementById("cv-btn-purge");
+
   if (btnSaveCfg && cfg.canManage) {
     btnSaveCfg.addEventListener("click", function () {
-      var body = {
+      btnSaveCfg.disabled = true;
+      btnSaveCfg.textContent = "Guardando…";
+      postConfig({
+        action: "update",
         grabar_gps: !!(document.getElementById("cfg-gps") || {}).checked,
-        grabar_audio: !!(document.getElementById("cfg-audio") || {}).checked,
-        grabar_video: !!(document.getElementById("cfg-video") || {}).checked,
         gps_interval_sec: parseInt(
           (document.getElementById("cfg-gps-sec") || {}).value || "5",
           10
@@ -126,43 +168,106 @@
           (document.getElementById("cfg-video-sec") || {}).value || "3",
           10
         ),
-      };
-      btnSaveCfg.disabled = true;
-      btnSaveCfg.textContent = "Guardando…";
-      fetch(cfg.configUrl, {
-        method: "POST",
-        credentials: "same-origin",
-        headers: {
-          "Content-Type": "application/json",
-          "X-CSRFToken": cfg.csrfToken || "",
-        },
-        body: JSON.stringify(body),
       })
-        .then(function (r) {
-          return r.json();
-        })
         .then(function (data) {
           if (data.ok) {
             cfg.config = data.config;
             updateStatsText(data.stats, data.config);
+            syncRecUi(data.config);
             btnSaveCfg.textContent = "Aplicado ✓";
             setTimeout(function () {
-              btnSaveCfg.textContent = "Aplicar lapsos / grabación";
+              btnSaveCfg.textContent = "Aplicar lapsos / GPS";
             }, 1500);
           } else {
             alert(data.error || "No se pudo guardar");
-            btnSaveCfg.textContent = "Aplicar lapsos / grabación";
+            btnSaveCfg.textContent = "Aplicar lapsos / GPS";
           }
         })
         .catch(function () {
           alert("Error de red");
-          btnSaveCfg.textContent = "Aplicar lapsos / grabación";
+          btnSaveCfg.textContent = "Aplicar lapsos / GPS";
         })
         .finally(function () {
           btnSaveCfg.disabled = false;
         });
     });
   }
+
+  if (btnStartRec && cfg.canManage) {
+    btnStartRec.addEventListener("click", function () {
+      var mins = parseInt((document.getElementById("cfg-rec-min") || {}).value || "5", 10);
+      btnStartRec.disabled = true;
+      postConfig({
+        action: "start_recording",
+        minutos: mins,
+        grabar_audio: !!(document.getElementById("cfg-rec-audio") || {}).checked,
+        grabar_video: !!(document.getElementById("cfg-rec-video") || {}).checked,
+      })
+        .then(function (data) {
+          if (!data.ok) {
+            alert(data.error === "elegí_audio_o_video" ? "Elegí audio y/o video." : data.error || "Error");
+            return;
+          }
+          cfg.config = data.config;
+          syncRecUi(data.config);
+          updateStatsText(data.stats, data.config);
+        })
+        .catch(function () {
+          alert("Error de red");
+        })
+        .finally(function () {
+          btnStartRec.disabled = false;
+        });
+    });
+  }
+
+  if (btnStopRec && cfg.canManage) {
+    btnStopRec.addEventListener("click", function () {
+      postConfig({ action: "stop_recording" }).then(function (data) {
+        if (data.ok) {
+          cfg.config = data.config;
+          syncRecUi(data.config);
+          updateStatsText(data.stats, data.config);
+        }
+      });
+    });
+  }
+
+  if (btnPurge && cfg.canManage) {
+    btnPurge.addEventListener("click", function () {
+      if (
+        !confirm(
+          "¿Borrar TODO el audio y video guardados de este operativo? No se puede deshacer."
+        )
+      ) {
+        return;
+      }
+      btnPurge.disabled = true;
+      postConfig({ action: "purge_media" })
+        .then(function (data) {
+          if (data.ok) {
+            updateStatsText(data.stats, data.config || cfg.config);
+            alert(
+              "Borrados: " +
+                (data.purged && data.purged.audio) +
+                " audios, " +
+                (data.purged && data.purged.video) +
+                " videos."
+            );
+          } else {
+            alert(data.error || "No se pudo borrar");
+          }
+        })
+        .catch(function () {
+          alert("Error de red");
+        })
+        .finally(function () {
+          btnPurge.disabled = false;
+        });
+    });
+  }
+
+  syncRecUi(cfg.config);
 
   function estadoDot(estado) {
     if (estado === "panico") return "cv-dot-panico";
@@ -589,7 +694,10 @@
         renderLista(list);
         updateMarkers(list);
         updateResumen(data.resumen);
-        if (data.config) cfg.config = data.config;
+        if (data.config) {
+          cfg.config = data.config;
+          syncRecUi(data.config);
+        }
         if (data.stats) updateStatsText(data.stats, data.config);
         if (selectedId) {
           var p = list.find(function (x) {
