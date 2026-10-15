@@ -59,12 +59,28 @@ def _ensure_column(table: str, column: str, ddl: str) -> None:
     from sqlalchemy import inspect
 
     insp = inspect(db.engine)
+    try:
+        insp.clear_cache()
+    except Exception:
+        pass
     if table not in insp.get_table_names():
         return
     cols = {c["name"] for c in insp.get_columns(table)}
-    if column not in cols:
+    if column in cols:
+        return
+    try:
         db.session.execute(text(f"ALTER TABLE {table} {ddl}"))
         db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        # Idempotente: si otro proceso ya la creó, seguimos
+        if "Duplicate column" not in str(e) and "1060" not in str(e):
+            raise
+    try:
+        insp.clear_cache()
+    except Exception:
+        pass
+
 
 
 def _ensure_tables():
