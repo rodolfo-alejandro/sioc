@@ -3,7 +3,8 @@
 
   var cfg = window.CV_APP || {};
   var KEY = "sioc_comando_vivo_v1";
-  var CLIP_MS = 4000;
+  var AUDIO_CLIP_MS = 4000;
+  var VIDEO_CLIP_MS = 3000;
   var watchId = null;
   var lastPos = null;
   var pingTimer = null;
@@ -12,8 +13,10 @@
   var mediaStream = null;
   var mediaRecorder = null;
   var audioOn = false;
-  var audioLoopTimer = null;
+  var videoOn = false;
+  var mediaLoopTimer = null;
   var preferredMime = "";
+  var mode = null; // "audio" | "video"
 
   var elJoin = document.getElementById("cv-join");
   var elLive = document.getElementById("cv-live");
@@ -24,7 +27,10 @@
   var elBtnPanico = document.getElementById("cv-btn-panico");
   var elBtnOk = document.getElementById("cv-btn-ok");
   var elBtnAudio = document.getElementById("cv-btn-audio");
+  var elBtnVideo = document.getElementById("cv-btn-video");
   var elAudioInfo = document.getElementById("cv-audio-info");
+  var elPreviewWrap = document.getElementById("cv-preview-wrap");
+  var elPreview = document.getElementById("cv-preview");
 
   function deviceId() {
     var k = "sioc_cv_device";
@@ -75,7 +81,7 @@
     elJoin.hidden = false;
     elLive.hidden = true;
     setStatus("Desconectado");
-    setAudioUi(false);
+    updateMediaButtons();
   }
 
   function batteryPromise() {
@@ -102,42 +108,62 @@
     });
   }
 
-  function pickMime() {
+  function pickMime(forVideo) {
     if (!window.MediaRecorder) return "";
-    var candidates = [
-      "audio/webm;codecs=opus",
-      "audio/webm",
-      "audio/ogg;codecs=opus",
-      "audio/mp4",
-    ];
+    var candidates = forVideo
+      ? [
+          "video/webm;codecs=vp8,opus",
+          "video/webm;codecs=vp9,opus",
+          "video/webm",
+          "video/mp4",
+        ]
+      : [
+          "audio/webm;codecs=opus",
+          "audio/webm",
+          "audio/ogg;codecs=opus",
+          "audio/mp4",
+        ];
     for (var i = 0; i < candidates.length; i++) {
       if (MediaRecorder.isTypeSupported(candidates[i])) return candidates[i];
     }
     return "";
   }
 
-  function setAudioUi(on) {
-    audioOn = on;
-    if (!elBtnAudio) return;
-    if (on) {
-      elBtnAudio.classList.add("on");
-      elBtnAudio.textContent = "⏹ Detener audio";
-      elAudioInfo.textContent = "Transmitiendo… el comando te escucha en clips de ~4 s.";
-    } else {
-      elBtnAudio.classList.remove("on");
-      elBtnAudio.textContent = "🎤 Transmitir audio";
-      elAudioInfo.textContent = "El comando podrá escucharte casi en vivo.";
+  function updateMediaButtons() {
+    if (elBtnAudio) {
+      if (audioOn) {
+        elBtnAudio.classList.add("on");
+        elBtnAudio.textContent = "⏹ Detener audio";
+      } else {
+        elBtnAudio.classList.remove("on");
+        elBtnAudio.textContent = "🎤 Transmitir audio";
+      }
+    }
+    if (elBtnVideo) {
+      if (videoOn) {
+        elBtnVideo.classList.add("on");
+        elBtnVideo.textContent = "⏹ Detener video";
+      } else {
+        elBtnVideo.classList.remove("on");
+        elBtnVideo.textContent = "📹 Transmitir video";
+      }
+    }
+    if (elPreviewWrap) elPreviewWrap.hidden = !videoOn;
+    if (!audioOn && !videoOn && elAudioInfo) {
+      elAudioInfo.textContent = "Audio o video: el comando te ve/escucha en clips cortos.";
     }
   }
 
-  function uploadBlob(blob, mime, durationMs) {
+  function uploadMedia(blob, mime, durationMs, kind) {
     if (!session || !session.token || !blob || !blob.size) return Promise.resolve();
     var fd = new FormData();
     fd.append("token", session.token);
-    fd.append("mime", mime || blob.type || "audio/webm");
+    fd.append("mime", mime || blob.type || (kind === "video" ? "video/webm" : "audio/webm"));
     if (durationMs) fd.append("duration_ms", String(durationMs));
-    fd.append("audio", blob, "clip.webm");
-    return fetch(cfg.audioUrl, { method: "POST", body: fd })
+    var field = kind === "video" ? "video" : "audio";
+    var url = kind === "video" ? cfg.videoUrl : cfg.audioUrl;
+    fd.append(field, blob, kind === "video" ? "clip.webm" : "clip.webm");
+    return fetch(url, { method: "POST", body: fd })
       .then(function (r) {
         return r.json().then(function (j) {
           return { okHttp: r.ok, body: j };
@@ -146,22 +172,28 @@
       .then(function (res) {
         if (res.okHttp && res.body.ok) {
           elAudioInfo.textContent =
-            "Audio enviado " + new Date().toLocaleTimeString();
+            (kind === "video" ? "Video" : "Audio") +
+            " enviado " +
+            new Date().toLocaleTimeString();
         } else {
           elAudioInfo.textContent =
-            "Error audio: " + ((res.body && res.body.error) || "red");
+            "Error " + kind + ": " + ((res.body && res.body.error) || "red");
         }
       })
       .catch(function () {
-        elAudioInfo.textContent = "Error de red al enviar audio.";
+        elAudioInfo.textContent = "Error de red al enviar " + kind + ".";
       });
   }
 
-  function recordOneClip() {
-    if (!audioOn || !mediaStream) return Promise.resolve();
-    preferredMime = preferredMime || pickMime();
+  function recordOneClip(kind) {
+    if (!mediaStream) return Promise.resolve();
+    if (kind === "audio" && !audioOn) return Promise.resolve();
+    if (kind === "video" && !videoOn) return Promise.resolve();
+
+    preferredMime = pickMime(kind === "video");
     var chunks = [];
     var opts = preferredMime ? { mimeType: preferredMime } : undefined;
+    var clipMs = kind === "video" ? VIDEO_CLIP_MS : AUDIO_CLIP_MS;
     var rec;
     try {
       rec = new MediaRecorder(mediaStream, opts);
@@ -169,7 +201,7 @@
       try {
         rec = new MediaRecorder(mediaStream);
       } catch (e2) {
-        elAudioInfo.textContent = "No se pudo iniciar el micrófono.";
+        elAudioInfo.textContent = "No se pudo grabar " + kind + ".";
         return Promise.resolve();
       }
     }
@@ -179,9 +211,9 @@
         if (ev.data && ev.data.size) chunks.push(ev.data);
       };
       rec.onstop = function () {
-        var type = preferredMime || rec.mimeType || "audio/webm";
+        var type = preferredMime || rec.mimeType || (kind === "video" ? "video/webm" : "audio/webm");
         var blob = new Blob(chunks, { type: type.split(";")[0] });
-        uploadBlob(blob, type, CLIP_MS).finally(resolve);
+        uploadMedia(blob, type, clipMs, kind).finally(resolve);
       };
       try {
         rec.start();
@@ -197,47 +229,26 @@
             resolve();
           }
         }
-      }, CLIP_MS);
+      }, clipMs);
     });
   }
 
-  function audioLoop() {
-    if (!audioOn) return;
-    recordOneClip().finally(function () {
-      if (audioOn) {
-        audioLoopTimer = setTimeout(audioLoop, 200);
+  function mediaLoop(kind) {
+    if (kind === "audio" && !audioOn) return;
+    if (kind === "video" && !videoOn) return;
+    recordOneClip(kind).finally(function () {
+      if ((kind === "audio" && audioOn) || (kind === "video" && videoOn)) {
+        mediaLoopTimer = setTimeout(function () {
+          mediaLoop(kind);
+        }, 150);
       }
     });
   }
 
-  function startAudio() {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      alert("Este celular no permite micrófono desde el navegador.");
-      return;
-    }
-    if (!window.MediaRecorder) {
-      alert("MediaRecorder no disponible en este navegador. Probá Chrome.");
-      return;
-    }
-    preferredMime = pickMime();
-    navigator.mediaDevices
-      .getUserMedia({ audio: true, video: false })
-      .then(function (stream) {
-        mediaStream = stream;
-        setAudioUi(true);
-        setStatus("GPS + Audio", "on");
-        audioLoop();
-      })
-      .catch(function (err) {
-        alert("Permiso de micrófono denegado: " + (err.message || err.name));
-      });
-  }
-
-  function stopAudio() {
-    audioOn = false;
-    if (audioLoopTimer) {
-      clearTimeout(audioLoopTimer);
-      audioLoopTimer = null;
+  function stopMediaTracks() {
+    if (mediaLoopTimer) {
+      clearTimeout(mediaLoopTimer);
+      mediaLoopTimer = null;
     }
     if (mediaRecorder && mediaRecorder.state !== "inactive") {
       try {
@@ -251,7 +262,118 @@
       });
       mediaStream = null;
     }
-    setAudioUi(false);
+    if (elPreview) {
+      elPreview.srcObject = null;
+    }
+  }
+
+  function stopAudio() {
+    audioOn = false;
+    if (mode === "audio") {
+      stopMediaTracks();
+      mode = null;
+    }
+    updateMediaButtons();
+  }
+
+  function stopVideo() {
+    videoOn = false;
+    if (mode === "video") {
+      stopMediaTracks();
+      mode = null;
+    }
+    updateMediaButtons();
+  }
+
+  function stopAllMedia() {
+    audioOn = false;
+    videoOn = false;
+    stopMediaTracks();
+    mode = null;
+    updateMediaButtons();
+  }
+
+  function startAudio() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      alert("Este celular no permite micrófono desde el navegador.");
+      return;
+    }
+    if (!window.MediaRecorder) {
+      alert("MediaRecorder no disponible. Probá Chrome.");
+      return;
+    }
+    stopVideo();
+    navigator.mediaDevices
+      .getUserMedia({ audio: true, video: false })
+      .then(function (stream) {
+        mediaStream = stream;
+        audioOn = true;
+        mode = "audio";
+        updateMediaButtons();
+        setStatus("GPS + Audio", "on");
+        mediaLoop("audio");
+      })
+      .catch(function (err) {
+        alert("Permiso de micrófono denegado: " + (err.message || err.name));
+      });
+  }
+
+  function startVideo() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      alert("Este celular no permite cámara desde el navegador.");
+      return;
+    }
+    if (!window.MediaRecorder) {
+      alert("MediaRecorder no disponible. Probá Chrome.");
+      return;
+    }
+    stopAudio();
+    var constraints = {
+      audio: true,
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 640, max: 854 },
+        height: { ideal: 480, max: 480 },
+        frameRate: { ideal: 15, max: 24 },
+      },
+    };
+    navigator.mediaDevices
+      .getUserMedia(constraints)
+      .then(function (stream) {
+        mediaStream = stream;
+        videoOn = true;
+        mode = "video";
+        if (elPreview) {
+          elPreview.srcObject = stream;
+          elPreview.play().catch(function () {});
+        }
+        updateMediaButtons();
+        setStatus("GPS + Video", "on");
+        mediaLoop("video");
+      })
+      .catch(function () {
+        // Fallback cámara frontal
+        return navigator.mediaDevices
+          .getUserMedia({
+            audio: true,
+            video: { facingMode: "user", width: { ideal: 480 }, frameRate: { ideal: 15 } },
+          })
+          .then(function (stream) {
+            mediaStream = stream;
+            videoOn = true;
+            mode = "video";
+            if (elPreview) {
+              elPreview.srcObject = stream;
+              elPreview.play().catch(function () {});
+            }
+            updateMediaButtons();
+            setStatus("GPS + Video", "on");
+            mediaLoop("video");
+          });
+      })
+      .catch(function (err) {
+        alert("Permiso de cámara denegado: " + (err.message || err.name));
+      });
   }
 
   function sendPing(evento) {
@@ -270,7 +392,7 @@
         if (!res.okHttp) {
           elPingInfo.textContent = "Error envío: " + (res.body.error || res.status);
           if (res.status === 409) {
-            stopAudio();
+            stopAllMedia();
             stopTracking();
             clearSession();
             showJoin();
@@ -279,19 +401,25 @@
           return;
         }
         var now = new Date();
+        var extra = "";
+        if (videoOn) extra = " · 📹";
+        else if (audioOn) extra = " · 🎤";
         elPingInfo.textContent =
           "GPS " +
           now.toLocaleTimeString() +
           (evento === "panico" ? " · PÁNICO" : "") +
-          (audioOn ? " · 🎤" : "");
+          extra;
         if (res.body.estado === "panico") {
           setStatus("PÁNICO", "panic");
           elBtnOk.hidden = false;
-        } else if (!audioOn) {
-          setStatus("Enviando GPS", "on");
+        } else if (videoOn) {
+          setStatus("GPS + Video", "on");
+          elBtnOk.hidden = true;
+        } else if (audioOn) {
+          setStatus("GPS + Audio", "on");
           elBtnOk.hidden = true;
         } else {
-          setStatus("GPS + Audio", "on");
+          setStatus("Enviando GPS", "on");
           elBtnOk.hidden = true;
         }
       });
@@ -400,6 +528,12 @@
       else startAudio();
     });
   }
+  if (elBtnVideo) {
+    elBtnVideo.addEventListener("click", function () {
+      if (videoOn) stopVideo();
+      else startVideo();
+    });
+  }
 
   elBtnPanico.addEventListener("click", function () {
     if (!confirm("¿Enviar alerta de PÁNICO al centro de comando?")) return;
@@ -414,14 +548,14 @@
     if (!session) return;
     postJson(cfg.okUrl, { token: session.token }).then(function (res) {
       if (res.okHttp) {
-        setStatus(audioOn ? "GPS + Audio" : "Enviando GPS", "on");
+        setStatus(videoOn ? "GPS + Video" : audioOn ? "GPS + Audio" : "Enviando GPS", "on");
         elBtnOk.hidden = true;
       }
     });
   });
 
   document.getElementById("cv-btn-salir").addEventListener("click", function () {
-    stopAudio();
+    stopAllMedia();
     stopTracking();
     clearSession();
     showJoin();

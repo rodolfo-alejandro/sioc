@@ -30,16 +30,19 @@ from app.models.comando_vivo import (
     ComandoGpsPing,
     ComandoOperativo,
     ComandoParticipante,
+    ComandoVideoClip,
 )
 from app.services.rbac import require_permission
 
 # Sin señal si no hay ping en este intervalo
 OFFLINE_SECONDS = 90
-# Audio reciente = "transmitiendo"
+# Media reciente = "transmitiendo"
 AUDIO_LIVE_SECONDS = 12
+VIDEO_LIVE_SECONDS = 15
 # Retener pings recientes para traza corta en mapa
 TRACE_LIMIT = 80
 MAX_AUDIO_BYTES = 2 * 1024 * 1024  # 2 MB por clip
+MAX_VIDEO_BYTES = 6 * 1024 * 1024  # 6 MB por clip
 
 
 def _ensure_tables():
@@ -51,6 +54,7 @@ def _ensure_tables():
         "comando_participantes",
         "comando_gps_pings",
         "comando_audio_clips",
+        "comando_video_clips",
     }
     existing = set(insp.get_table_names())
     if not needed.issubset(existing):
@@ -59,21 +63,30 @@ def _ensure_tables():
 
     if "comando_participantes" in insp.get_table_names():
         cols = {c["name"] for c in insp.get_columns("comando_participantes")}
+        alters = []
         if "last_audio_at" not in cols:
-            db.session.execute(
-                text(
-                    "ALTER TABLE comando_participantes "
-                    "ADD COLUMN last_audio_at DATETIME NULL"
-                )
-            )
+            alters.append("ADD COLUMN last_audio_at DATETIME NULL")
+        if "last_video_at" not in cols:
+            alters.append("ADD COLUMN last_video_at DATETIME NULL")
+        for frag in alters:
+            db.session.execute(text(f"ALTER TABLE comando_participantes {frag}"))
+        if alters:
             db.session.commit()
 
 
-def _audio_dir(op_id: int, part_id: int) -> Path:
+def _media_dir(op_id: int, part_id: int, kind: str = "media") -> Path:
     base = Path(current_app.config.get("UPLOAD_FOLDER", "instance/uploads"))
-    d = base / "comando_vivo" / str(op_id) / str(part_id)
+    d = base / "comando_vivo" / str(op_id) / str(part_id) / kind
     d.mkdir(parents=True, exist_ok=True)
     return d
+
+
+def _audio_dir(op_id: int, part_id: int) -> Path:
+    return _media_dir(op_id, part_id, "audio")
+
+
+def _video_dir(op_id: int, part_id: int) -> Path:
+    return _media_dir(op_id, part_id, "video")
 
 
 def _gen_codigo(n: int = 6) -> str:
@@ -115,8 +128,11 @@ def _mark_offline(participantes: list[ComandoParticipante]) -> None:
 
 def _serialize_participante(p: ComandoParticipante) -> dict:
     audio_vivo = False
+    video_vivo = False
     if p.last_audio_at:
         audio_vivo = (datetime.utcnow() - p.last_audio_at).total_seconds() <= AUDIO_LIVE_SECONDS
+    if p.last_video_at:
+        video_vivo = (datetime.utcnow() - p.last_video_at).total_seconds() <= VIDEO_LIVE_SECONDS
     return {
         "id": p.id,
         "alias": p.alias,
@@ -127,7 +143,9 @@ def _serialize_participante(p: ComandoParticipante) -> dict:
         "battery": p.last_battery,
         "last_seen_at": p.last_seen_at.isoformat() + "Z" if p.last_seen_at else None,
         "last_audio_at": p.last_audio_at.isoformat() + "Z" if p.last_audio_at else None,
+        "last_video_at": p.last_video_at.isoformat() + "Z" if p.last_video_at else None,
         "audio_vivo": audio_vivo,
+        "video_vivo": video_vivo,
     }
 
 
@@ -212,6 +230,7 @@ def mapa(op_id: int):
         can_manage=current_user.has_permission("COMANDO_VIVO_MANAGE"),
         positions_url=url_for("comando_vivo.api_posiciones", op_id=op.id),
         audio_lista_url=url_for("comando_vivo.api_audio_lista", op_id=op.id),
+        video_lista_url=url_for("comando_vivo.api_video_lista", op_id=op.id),
         offline_seconds=OFFLINE_SECONDS,
     )
 
@@ -609,6 +628,143 @@ def api_audio_file(clip_id: int):
     return send_file(
         path,
         mimetype=clip.mime or "audio/webm",
+        as_attachment=False,
+        download_name=os.path.basename(path),
+        conditional=True,
+    )
+
+
+# ─── Video ───────────────────────────────────────────────────────────────────
+
+
+@bp.route("/api/video", methods=["POST"])
+@csrf.exempt
+def api_video_upload():
+    """Sube un clip corto de video (webm/mp4) desde la app de campo."""
+    _ensure_tables()
+    token = (request.form.get("token") or "").strip()
+    part = _participante_from_token(token)
+    if not part:
+        return jsonify({"ok": False, "error": "token_invalido"}), 401
+
+    op = part.operativo
+    if op.estado != "activo":
+        return jsonify({"ok": False, "error": "operativo_cerrado"}), 409
+
+    f = request.files.get("video")
+    if not f or not f.filename:
+        return jsonify({"ok": False, "error": "video_requerido"}), 400
+
+    raw = f.read()
+    if not raw:
+        return jsonify({"ok": False, "error": "video_vacio"}), 400
+    if len(raw) > MAX_VIDEO_BYTES:
+        return jsonify({"ok": False, "error": "video_muy_grande"}), 413
+
+    mime = (f.mimetype or request.form.get("mime") or "video/webm").split(";")[0].strip()
+    if not any(x in mime for x in ("webm", "mp4", "ogg", "quicktime")):
+        return jsonify({"ok": False, "error": "mime_no_soportado", "mime": mime}), 400
+
+    ext = "webm"
+    if "mp4" in mime or "quicktime" in mime:
+        ext = "mp4"
+    elif "ogg" in mime:
+        ext = "ogv"
+
+    duration_ms = None
+    try:
+        duration_ms = int(request.form.get("duration_ms") or 0) or None
+    except (TypeError, ValueError):
+        duration_ms = None
+
+    fname = f"{uuid.uuid4().hex}.{ext}"
+    dest = _video_dir(op.id, part.id) / fname
+    dest.write_bytes(raw)
+
+    upload_root = Path(current_app.config.get("UPLOAD_FOLDER", "instance/uploads")).resolve()
+    rel = str(dest.resolve().relative_to(upload_root)).replace("\\", "/")
+
+    clip = ComandoVideoClip(
+        operativo_id=op.id,
+        participante_id=part.id,
+        rel_path=rel,
+        mime="video/webm" if "webm" in mime else mime,
+        size_bytes=len(raw),
+        duration_ms=duration_ms,
+    )
+    db.session.add(clip)
+    now = datetime.utcnow()
+    part.last_video_at = now
+    part.last_audio_at = now  # el video suele traer audio
+    part.last_seen_at = now
+    if part.estado != "panico":
+        part.estado = "online"
+    db.session.commit()
+
+    return jsonify(
+        {
+            "ok": True,
+            "clip_id": clip.id,
+            "url": url_for("comando_vivo.api_video_file", clip_id=clip.id),
+        }
+    )
+
+
+@bp.route("/api/video/lista/<int:op_id>")
+@login_required
+@require_permission("COMANDO_VIVO_VIEW")
+def api_video_lista(op_id: int):
+    _ensure_tables()
+    op = ComandoOperativo.query.get_or_404(op_id)
+    if not _can_view_op(op):
+        return jsonify({"error": "forbidden"}), 403
+
+    after_id = request.args.get("after_id", type=int) or 0
+    part_id = request.args.get("participante_id", type=int)
+
+    q = ComandoVideoClip.query.filter(
+        ComandoVideoClip.operativo_id == op.id,
+        ComandoVideoClip.id > after_id,
+    )
+    if part_id:
+        q = q.filter(ComandoVideoClip.participante_id == part_id)
+
+    rows = q.order_by(ComandoVideoClip.id.asc()).limit(30).all()
+    return jsonify(
+        {
+            "clips": [
+                {
+                    "id": c.id,
+                    "participante_id": c.participante_id,
+                    "mime": c.mime,
+                    "duration_ms": c.duration_ms,
+                    "created_at": c.created_at.isoformat() + "Z",
+                    "url": url_for("comando_vivo.api_video_file", clip_id=c.id),
+                }
+                for c in rows
+            ]
+        }
+    )
+
+
+@bp.route("/api/video/<int:clip_id>")
+@login_required
+@require_permission("COMANDO_VIVO_VIEW")
+def api_video_file(clip_id: int):
+    _ensure_tables()
+    clip = ComandoVideoClip.query.get_or_404(clip_id)
+    op = clip.operativo
+    if not _can_view_op(op):
+        return jsonify({"error": "forbidden"}), 403
+
+    upload_root = Path(current_app.config.get("UPLOAD_FOLDER", "instance/uploads")).resolve()
+    path = (upload_root / clip.rel_path).resolve()
+    if not str(path).startswith(str(upload_root)) or not path.is_file():
+        return jsonify({"error": "archivo_no_encontrado"}), 404
+
+    return send_file(
+        path,
+        mimetype=clip.mime or "video/webm",
         as_attachment=False,
         download_name=os.path.basename(path),
         conditional=True,

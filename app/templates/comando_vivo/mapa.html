@@ -46,20 +46,29 @@
         <i class="bi bi-mic-fill"></i>
         <span id="cv-audio-label">Audio</span>
       </div>
-      <p class="small text-muted mb-1" id="cv-audio-hint">Tocá un efectivo para escuchar su transmisión.</p>
+      <p class="small text-muted mb-1" id="cv-audio-hint">Tocá un efectivo → escuchar / ver.</p>
       <audio id="cv-audio-player" controls preload="none"></audio>
-      <div class="d-flex gap-2 mt-2">
-        <button type="button" class="btn btn-sm btn-success" id="cv-btn-listen" disabled>
-          Escuchar en vivo
-        </button>
-        <button type="button" class="btn btn-sm btn-outline-secondary" id="cv-btn-listen-stop" disabled>
-          Detener
-        </button>
+      <div class="d-flex gap-2 mt-2 flex-wrap">
+        <button type="button" class="btn btn-sm btn-success" id="cv-btn-listen" disabled>Escuchar audio</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="cv-btn-listen-stop" disabled>Detener audio</button>
       </div>
       <p class="small text-muted mt-2 mb-0" id="cv-audio-status">Sin escucha activa</p>
     </div>
 
-    <p class="small text-muted p-2 mb-0">GPS cada 4 s · audio en clips ~4 s · sin señal &gt; {{ offline_seconds }} s = offline</p>
+    <div class="cv-audio-panel cv-video-panel" id="cv-video-panel">
+      <div class="cv-audio-title">
+        <i class="bi bi-camera-video-fill"></i>
+        <span id="cv-video-label">Video</span>
+      </div>
+      <video id="cv-video-player" controls playsinline preload="none"></video>
+      <div class="d-flex gap-2 mt-2 flex-wrap">
+        <button type="button" class="btn btn-sm btn-primary" id="cv-btn-watch" disabled>Ver video en vivo</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="cv-btn-watch-stop" disabled>Detener video</button>
+      </div>
+      <p class="small text-muted mt-2 mb-0" id="cv-video-status">Sin video activo</p>
+    </div>
+
+    <p class="small text-muted p-2 mb-0">GPS · audio ~4 s · video ~3 s · sin señal &gt; {{ offline_seconds }} s = offline</p>
   </aside>
 </div>
 
@@ -67,6 +76,7 @@
   window.CV_MAP = {
     positionsUrl: {{ positions_url|tojson }},
     audioListaUrl: {{ audio_lista_url|tojson }},
+    videoListaUrl: {{ video_lista_url|tojson }},
     trazaUrlTpl: {{ url_for('comando_vivo.api_traza', participante_id=0)|tojson }},
     operativoId: {{ op.id }},
     activo: {{ (op.estado == 'activo')|tojson }}

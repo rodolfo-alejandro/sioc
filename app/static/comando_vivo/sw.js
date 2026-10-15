@@ -1,5 +1,5 @@
 /* Service worker mínimo — cache de shell para abrir offline corto */
-var CACHE = "sioc-campo-v2";
+var CACHE = "sioc-campo-v3";
 var ASSETS = [
   "/comando-vivo/app",
   "/static/css/comando_vivo.css",

@@ -156,6 +156,24 @@
 .cv-btn-ghost { background: transparent; color: #9bb5a8; border: 1px solid #2a6b54; }
 .cv-btn-audio { background: #1d4ed8; color: #fff; }
 .cv-btn-audio.on { background: #b91c1c; animation: cv-blink 1.2s infinite; }
+.cv-btn-video { background: #7c3aed; color: #fff; }
+.cv-btn-video.on { background: #b91c1c; animation: cv-blink 1.2s infinite; }
+
+.cv-preview-wrap {
+  margin: 0.75rem 0;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid #2a6b54;
+  background: #000;
+  aspect-ratio: 3 / 4;
+  max-height: 280px;
+}
+.cv-preview-wrap video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+}
 
 .cv-audio-panel {
   margin: 0.5rem;
@@ -183,6 +201,21 @@
   padding: 0 4px;
   margin-left: 4px;
 }
+.cv-cam-badge {
+  font-size: 0.7rem;
+  background: #7c3aed;
+  color: #fff;
+  border-radius: 4px;
+  padding: 0 4px;
+  margin-left: 4px;
+}
+.cv-video-panel video {
+  width: 100%;
+  max-height: 220px;
+  background: #000;
+  border-radius: 6px;
+}
+
 .cv-coords {
   margin-top: 0.75rem;
   padding: 0.75rem;

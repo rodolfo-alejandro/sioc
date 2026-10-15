@@ -14,17 +14,31 @@
   var lastParticipantes = [];
   var trazaLayer = null;
 
+  // Audio
   var listenOn = false;
-  var lastClipId = 0;
-  var playQueue = [];
-  var playing = false;
+  var lastAudioId = 0;
+  var audioQueue = [];
+  var audioPlaying = false;
   var audioPollTimer = null;
-  var player = document.getElementById("cv-audio-player");
+  var audioPlayer = document.getElementById("cv-audio-player");
+
+  // Video
+  var watchOn = false;
+  var lastVideoId = 0;
+  var videoQueue = [];
+  var videoPlaying = false;
+  var videoPollTimer = null;
+  var videoPlayer = document.getElementById("cv-video-player");
+
   var elAudioLabel = document.getElementById("cv-audio-label");
   var elAudioHint = document.getElementById("cv-audio-hint");
   var elAudioStatus = document.getElementById("cv-audio-status");
   var btnListen = document.getElementById("cv-btn-listen");
   var btnListenStop = document.getElementById("cv-btn-listen-stop");
+  var elVideoLabel = document.getElementById("cv-video-label");
+  var elVideoStatus = document.getElementById("cv-video-status");
+  var btnWatch = document.getElementById("cv-btn-watch");
+  var btnWatchStop = document.getElementById("cv-btn-watch-stop");
 
   function estadoDot(estado) {
     if (estado === "panico") return "cv-dot-panico";
@@ -34,10 +48,12 @@
 
   function iconFor(p) {
     var cls = "cv-marker-label" + (p.estado === "panico" ? " cv-marker-panico" : "");
-    var mic = p.audio_vivo ? " 🎤" : "";
+    var badge = "";
+    if (p.video_vivo) badge = " 📹";
+    else if (p.audio_vivo) badge = " 🎤";
     return L.divIcon({
       className: "",
-      html: '<div class="' + cls + '">' + escapeHtml(p.alias) + mic + "</div>",
+      html: '<div class="' + cls + '">' + escapeHtml(p.alias) + badge + "</div>",
       iconSize: [0, 0],
       iconAnchor: [0, 0],
     });
@@ -92,11 +108,10 @@
       .map(function (p) {
         var bat =
           p.battery != null ? " · bat " + Math.round(p.battery) + "%" : "";
-        var mic = p.audio_vivo
-          ? '<span class="cv-mic-badge">MIC</span>'
-          : "";
-        var sel =
-          selectedId === p.id ? " list-group-item-primary" : "";
+        var badges = "";
+        if (p.audio_vivo) badges += '<span class="cv-mic-badge">MIC</span>';
+        if (p.video_vivo) badges += '<span class="cv-cam-badge">CAM</span>';
+        var sel = selectedId === p.id ? " list-group-item-primary" : "";
         return (
           '<li class="list-group-item list-group-item-action py-2' +
           sel +
@@ -109,7 +124,7 @@
           "<strong>" +
           escapeHtml(p.alias) +
           "</strong>" +
-          mic +
+          badges +
           '<div class="small text-muted">' +
           escapeHtml(p.estado) +
           " · hace " +
@@ -125,20 +140,22 @@
         var id = parseInt(el.getAttribute("data-id"), 10);
         focusParticipante(id, participantes);
         loadTraza(id);
-        selectForAudio(id);
+        selectPerson(id);
       });
     });
   }
 
-  function selectForAudio(id) {
+  function selectPerson(id) {
     selectedId = id;
     if (btnListen) btnListen.disabled = false;
+    if (btnWatch) btnWatch.disabled = false;
     if (elAudioLabel) elAudioLabel.textContent = "Audio — " + aliasOf(id);
+    if (elVideoLabel) elVideoLabel.textContent = "Video — " + aliasOf(id);
     if (elAudioHint) {
       elAudioHint.textContent =
         "Seleccionaste a " +
         aliasOf(id) +
-        ". Tocá «Escuchar en vivo» (el efectivo debe transmitir audio).";
+        ". Escuchar audio o ver video (el efectivo debe transmitir).";
     }
     renderLista(lastParticipantes);
   }
@@ -192,12 +209,15 @@
       if (p.lat == null || p.lon == null) return;
       seen[p.id] = true;
       bounds.push([p.lat, p.lon]);
+      var media = "";
+      if (p.video_vivo) media = " · 📹 video";
+      else if (p.audio_vivo) media = " · 🎤 audio";
       var html =
         "<strong>" +
         escapeHtml(p.alias) +
         "</strong><br>" +
         escapeHtml(p.estado) +
-        (p.audio_vivo ? " · 🎤 audio" : "") +
+        media +
         "<br>hace " +
         ago(p.last_seen_at);
       if (markers[p.id]) {
@@ -222,6 +242,8 @@
     }
   }
 
+  // ─── Audio listen ─────────────────────────────────────────────────────────
+
   function setListenUi(on) {
     listenOn = on;
     if (btnListen) btnListen.disabled = !selectedId || on;
@@ -229,39 +251,35 @@
     if (!on && elAudioStatus) elAudioStatus.textContent = "Sin escucha activa";
   }
 
-  function playNext() {
-    if (!listenOn || playing) return;
-    if (!playQueue.length) {
+  function playNextAudio() {
+    if (!listenOn || audioPlaying) return;
+    if (!audioQueue.length) {
       if (elAudioStatus) elAudioStatus.textContent = "Escuchando… esperando clips";
       return;
     }
-    var clip = playQueue.shift();
-    playing = true;
+    var clip = audioQueue.shift();
+    audioPlaying = true;
     if (elAudioStatus) {
-      elAudioStatus.textContent =
-        "Reproduciendo clip #" + clip.id + " · " + aliasOf(clip.participante_id);
+      elAudioStatus.textContent = "Audio clip #" + clip.id + " · " + aliasOf(clip.participante_id);
     }
-    player.src = clip.url;
-    var p = player.play();
+    audioPlayer.src = clip.url;
+    var p = audioPlayer.play();
     if (p && p.catch) {
       p.catch(function () {
-        playing = false;
-        if (elAudioStatus) {
-          elAudioStatus.textContent =
-            "Activá el sonido del navegador / tocá play una vez.";
-        }
+        audioPlaying = false;
+        if (elAudioStatus) elAudioStatus.textContent = "Activá el sonido / tocá play una vez.";
       });
     }
   }
 
-  if (player) {
-    player.addEventListener("ended", function () {
-      playing = false;
-      playNext();
+  if (audioPlayer) {
+    audioPlayer.addEventListener("ended", function () {
+      audioPlaying = false;
+      playNextAudio();
     });
-    player.addEventListener("error", function () {
-      playing = false;
-      playNext();
+    audioPlayer.addEventListener("error", function () {
+      audioPlaying = false;
+      playNextAudio();
     });
   }
 
@@ -272,18 +290,17 @@
       "?participante_id=" +
       selectedId +
       "&after_id=" +
-      lastClipId;
+      lastAudioId;
     fetch(url, { credentials: "same-origin" })
       .then(function (r) {
         return r.json();
       })
       .then(function (data) {
-        var clips = data.clips || [];
-        clips.forEach(function (c) {
-          if (c.id > lastClipId) lastClipId = c.id;
-          playQueue.push(c);
+        (data.clips || []).forEach(function (c) {
+          if (c.id > lastAudioId) lastAudioId = c.id;
+          audioQueue.push(c);
         });
-        playNext();
+        playNextAudio();
       })
       .catch(function () {});
   }
@@ -293,14 +310,12 @@
       alert("Primero tocá un efectivo en la lista.");
       return;
     }
-    lastClipId = 0;
-    playQueue = [];
-    playing = false;
+    stopWatch();
+    lastAudioId = 0;
+    audioQueue = [];
+    audioPlaying = false;
     setListenUi(true);
-    if (elAudioStatus) {
-      elAudioStatus.textContent =
-        "Escuchando a " + aliasOf(selectedId) + "…";
-    }
+    if (elAudioStatus) elAudioStatus.textContent = "Escuchando a " + aliasOf(selectedId) + "…";
     pollAudio();
     if (audioPollTimer) clearInterval(audioPollTimer);
     audioPollTimer = setInterval(pollAudio, 2500);
@@ -311,20 +326,128 @@
       clearInterval(audioPollTimer);
       audioPollTimer = null;
     }
-    playQueue = [];
-    playing = false;
-    if (player) {
+    audioQueue = [];
+    audioPlaying = false;
+    if (audioPlayer) {
       try {
-        player.pause();
-        player.removeAttribute("src");
-        player.load();
+        audioPlayer.pause();
+        audioPlayer.removeAttribute("src");
+        audioPlayer.load();
       } catch (e) {}
     }
     setListenUi(false);
   }
 
+  // ─── Video watch ──────────────────────────────────────────────────────────
+
+  function setWatchUi(on) {
+    watchOn = on;
+    if (btnWatch) btnWatch.disabled = !selectedId || on;
+    if (btnWatchStop) btnWatchStop.disabled = !on;
+    if (!on && elVideoStatus) elVideoStatus.textContent = "Sin video activo";
+  }
+
+  function playNextVideo() {
+    if (!watchOn || videoPlaying) return;
+    if (!videoQueue.length) {
+      if (elVideoStatus) elVideoStatus.textContent = "Viendo… esperando clips";
+      return;
+    }
+    // Si hay atraso, quedarse con los últimos 2 clips
+    if (videoQueue.length > 2) {
+      videoQueue = videoQueue.slice(-2);
+      lastVideoId = Math.max.apply(
+        null,
+        videoQueue.map(function (c) {
+          return c.id;
+        })
+      );
+    }
+    var clip = videoQueue.shift();
+    videoPlaying = true;
+    if (elVideoStatus) {
+      elVideoStatus.textContent = "Video clip #" + clip.id + " · " + aliasOf(clip.participante_id);
+    }
+    videoPlayer.src = clip.url;
+    var p = videoPlayer.play();
+    if (p && p.catch) {
+      p.catch(function () {
+        videoPlaying = false;
+        if (elVideoStatus) elVideoStatus.textContent = "Tocá play una vez para habilitar video.";
+      });
+    }
+  }
+
+  if (videoPlayer) {
+    videoPlayer.addEventListener("ended", function () {
+      videoPlaying = false;
+      playNextVideo();
+    });
+    videoPlayer.addEventListener("error", function () {
+      videoPlaying = false;
+      playNextVideo();
+    });
+  }
+
+  function pollVideo() {
+    if (!watchOn || !selectedId || !cfg.videoListaUrl) return;
+    var url =
+      cfg.videoListaUrl +
+      "?participante_id=" +
+      selectedId +
+      "&after_id=" +
+      lastVideoId;
+    fetch(url, { credentials: "same-origin" })
+      .then(function (r) {
+        return r.json();
+      })
+      .then(function (data) {
+        (data.clips || []).forEach(function (c) {
+          if (c.id > lastVideoId) lastVideoId = c.id;
+          videoQueue.push(c);
+        });
+        playNextVideo();
+      })
+      .catch(function () {});
+  }
+
+  function startWatch() {
+    if (!selectedId) {
+      alert("Primero tocá un efectivo en la lista.");
+      return;
+    }
+    stopListen();
+    lastVideoId = 0;
+    videoQueue = [];
+    videoPlaying = false;
+    setWatchUi(true);
+    if (elVideoStatus) elVideoStatus.textContent = "Viendo a " + aliasOf(selectedId) + "…";
+    pollVideo();
+    if (videoPollTimer) clearInterval(videoPollTimer);
+    videoPollTimer = setInterval(pollVideo, 2000);
+  }
+
+  function stopWatch() {
+    if (videoPollTimer) {
+      clearInterval(videoPollTimer);
+      videoPollTimer = null;
+    }
+    videoQueue = [];
+    videoPlaying = false;
+    if (videoPlayer) {
+      try {
+        videoPlayer.pause();
+        videoPlayer.removeAttribute("src");
+        videoPlayer.load();
+      } catch (e) {}
+    }
+    setWatchUi(false);
+  }
+
   if (btnListen) btnListen.addEventListener("click", startListen);
   if (btnListenStop) btnListenStop.addEventListener("click", stopListen);
+  if (btnWatch) btnWatch.addEventListener("click", startWatch);
+  if (btnWatchStop) btnWatchStop.addEventListener("click", stopWatch);
 
   function poll() {
     if (!cfg.positionsUrl) return;

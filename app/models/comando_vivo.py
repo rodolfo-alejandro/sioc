@@ -1,6 +1,5 @@
 """
-Centro de Comando / Operativos en vivo (piloto GPS + audio).
-Video queda para fase posterior.
+Centro de Comando / Operativos en vivo (piloto GPS + audio + video).
 """
 from datetime import datetime
 
@@ -42,6 +41,12 @@ class ComandoOperativo(db.Model):
         lazy="dynamic",
         cascade="all, delete-orphan",
     )
+    videos = db.relationship(
+        "ComandoVideoClip",
+        backref="operativo",
+        lazy="dynamic",
+        cascade="all, delete-orphan",
+    )
 
 
 class ComandoParticipante(db.Model):
@@ -66,6 +71,7 @@ class ComandoParticipante(db.Model):
     last_battery = db.Column(db.Float, nullable=True)
     last_seen_at = db.Column(db.DateTime, nullable=True, index=True)
     last_audio_at = db.Column(db.DateTime, nullable=True, index=True)
+    last_video_at = db.Column(db.DateTime, nullable=True, index=True)
     joined_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
     pings = db.relationship(
@@ -76,6 +82,12 @@ class ComandoParticipante(db.Model):
     )
     audios = db.relationship(
         "ComandoAudioClip",
+        backref="participante",
+        lazy="dynamic",
+        cascade="all, delete-orphan",
+    )
+    videos = db.relationship(
+        "ComandoVideoClip",
         backref="participante",
         lazy="dynamic",
         cascade="all, delete-orphan",
@@ -131,4 +143,29 @@ class ComandoAudioClip(db.Model):
     __table_args__ = (
         db.Index("ix_comando_audio_op_created", "operativo_id", "created_at"),
         db.Index("ix_comando_audio_part_created", "participante_id", "created_at"),
+    )
+
+
+class ComandoVideoClip(db.Model):
+    """Fragmentos de video subidos desde la app de campo (~3–4 s)."""
+
+    __tablename__ = "comando_video_clips"
+
+    id = db.Column(db.Integer, primary_key=True)
+    operativo_id = db.Column(
+        db.Integer, db.ForeignKey("comando_operativos.id"), nullable=False, index=True
+    )
+    participante_id = db.Column(
+        db.Integer, db.ForeignKey("comando_participantes.id"), nullable=False, index=True
+    )
+
+    rel_path = db.Column(db.String(500), nullable=False)
+    mime = db.Column(db.String(80), nullable=False, default="video/webm")
+    size_bytes = db.Column(db.Integer, nullable=False, default=0)
+    duration_ms = db.Column(db.Integer, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+    __table_args__ = (
+        db.Index("ix_comando_video_op_created", "operativo_id", "created_at"),
+        db.Index("ix_comando_video_part_created", "participante_id", "created_at"),
     )

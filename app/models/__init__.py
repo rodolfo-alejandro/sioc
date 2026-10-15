@@ -74,6 +74,7 @@ from app.models.comando_vivo import (
     ComandoParticipante,
     ComandoGpsPing,
     ComandoAudioClip,
+    ComandoVideoClip,
 )
 
 __all__ = [
@@ -103,5 +104,6 @@ __all__ = [
     'DunaccLote', 'DunaccRegistro', 'DunaccLoteCompartido', 'DunaccComisariaAlias',
     'AuditoriaObs',
     'ComandoOperativo', 'ComandoParticipante', 'ComandoGpsPing', 'ComandoAudioClip',
+    'ComandoVideoClip',
 ]
 
