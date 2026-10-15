@@ -276,15 +276,29 @@
   }
 
   function iconFor(p) {
-    var cls = "cv-marker-label" + (p.estado === "panico" ? " cv-marker-panico" : "");
+    var estado = p.estado === "panico" ? "panico" : p.estado === "offline" ? "offline" : "online";
     var badge = "";
-    if (p.video_vivo) badge = " 📹";
-    else if (p.audio_vivo) badge = " 🎤";
+    if (p.video_vivo) badge = " ·CAM";
+    else if (p.audio_vivo) badge = " ·MIC";
+    var selected = selectedId === p.id ? " cv-pin-selected" : "";
+    var html =
+      '<div class="cv-pin cv-pin-' +
+      estado +
+      selected +
+      '">' +
+      '<div class="cv-pin-pulse"></div>' +
+      '<div class="cv-pin-dot"></div>' +
+      '<div class="cv-pin-stem"></div>' +
+      '<div class="cv-pin-label">' +
+      escapeHtml(p.alias || "—") +
+      badge +
+      "</div></div>";
     return L.divIcon({
-      className: "",
-      html: '<div class="' + cls + '">' + escapeHtml(p.alias) + badge + "</div>",
-      iconSize: [0, 0],
-      iconAnchor: [0, 0],
+      className: "cv-pin-wrap",
+      html: html,
+      iconSize: [44, 56],
+      iconAnchor: [22, 26],
+      popupAnchor: [0, -28],
     });
   }
 
@@ -391,6 +405,7 @@
     });
     if (p) updateSelectedCard(p);
     renderLista(lastParticipantes);
+    updateMarkers(lastParticipantes);
   }
 
   function focusParticipante(id, participantes) {

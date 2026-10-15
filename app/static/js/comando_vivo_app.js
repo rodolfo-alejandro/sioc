@@ -47,9 +47,12 @@
   var elBtnOk = document.getElementById("cv-btn-ok");
   var elBtnAudio = document.getElementById("cv-btn-audio");
   var elBtnVideo = document.getElementById("cv-btn-video");
-  var elBtnFlip = document.getElementById("cv-btn-flip");
+  var elCamRow = document.getElementById("cv-cam-row");
+  var elBtnCamBack = document.getElementById("cv-btn-cam-back");
+  var elBtnCamFront = document.getElementById("cv-btn-cam-front");
   var elAudioInfo = document.getElementById("cv-audio-info");
   var cameraFacing = "environment"; // trasera por defecto; "user" = frontal
+  var videoDevicesCache = [];
 
   function deviceId() {
     var k = "sioc_cv_device";
@@ -167,12 +170,12 @@
         elBtnVideo.textContent = "📹 Transmitir video";
       }
     }
-    if (elBtnFlip) {
-      elBtnFlip.hidden = !videoOn;
-      elBtnFlip.textContent =
-        cameraFacing === "environment"
-          ? "🔄 Usar cámara frontal"
-          : "🔄 Usar cámara trasera";
+    if (elCamRow) elCamRow.hidden = !videoOn;
+    if (elBtnCamBack) {
+      elBtnCamBack.classList.toggle("active", cameraFacing === "environment");
+    }
+    if (elBtnCamFront) {
+      elBtnCamFront.classList.toggle("active", cameraFacing === "user");
     }
     if (!audioOn && !videoOn && elAudioInfo) {
       elAudioInfo.textContent =
@@ -341,26 +344,87 @@
       });
   }
 
+  function refreshVideoDevices() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+      return Promise.resolve([]);
+    }
+    return navigator.mediaDevices.enumerateDevices().then(function (list) {
+      videoDevicesCache = list.filter(function (d) {
+        return d.kind === "videoinput";
+      });
+      return videoDevicesCache;
+    });
+  }
+
+  function pickCameraDeviceId(facing) {
+    var list = videoDevicesCache || [];
+    if (!list.length) return null;
+    var wantFront = facing === "user";
+    var reFront = /front|frontal|user|selfie|face/i;
+    var reBack = /back|rear|trasera|environment|world/i;
+    for (var i = 0; i < list.length; i++) {
+      var label = list[i].label || "";
+      if (wantFront && reFront.test(label)) return list[i].deviceId;
+      if (!wantFront && reBack.test(label)) return list[i].deviceId;
+    }
+    // Sin labels claros: suele ser [0]=frontal [1]=trasera en muchos Android, o al revés.
+    if (list.length >= 2) {
+      return wantFront ? list[0].deviceId : list[list.length - 1].deviceId;
+    }
+    return list[0].deviceId;
+  }
+
   function openVideoStream(facing) {
-    var constraints = {
-      audio: true,
-      video: {
-        facingMode: { ideal: facing || "environment" },
-        width: { ideal: 640, max: 854 },
-        height: { ideal: 480, max: 480 },
-        frameRate: { ideal: 15, max: 24 },
-      },
+    var baseVideo = {
+      width: { ideal: 640, max: 854 },
+      height: { ideal: 480, max: 480 },
+      frameRate: { ideal: 15, max: 24 },
     };
-    return navigator.mediaDevices.getUserMedia(constraints).catch(function () {
+    var deviceId = pickCameraDeviceId(facing);
+
+    function tryConstraints(videoPart) {
       return navigator.mediaDevices.getUserMedia({
         audio: true,
-        video: {
-          facingMode: facing || "user",
-          width: { ideal: 480 },
-          frameRate: { ideal: 15 },
-        },
+        video: Object.assign({}, baseVideo, videoPart),
       });
-    });
+    }
+
+    var chain = Promise.resolve();
+    if (deviceId) {
+      chain = tryConstraints({ deviceId: { exact: deviceId } });
+    } else {
+      chain = Promise.reject(new Error("no_device_id"));
+    }
+
+    return chain
+      .catch(function () {
+        return tryConstraints({ facingMode: { exact: facing || "environment" } });
+      })
+      .catch(function () {
+        return tryConstraints({ facingMode: { ideal: facing || "environment" } });
+      })
+      .catch(function () {
+        return tryConstraints({ facingMode: facing === "user" ? "user" : "environment" });
+      });
+  }
+
+  function stopVideoTracksOnly() {
+    if (mediaLoopTimer) {
+      clearTimeout(mediaLoopTimer);
+      mediaLoopTimer = null;
+    }
+    if (mediaRecorder && mediaRecorder.state !== "inactive") {
+      try {
+        mediaRecorder.stop();
+      } catch (e) {}
+    }
+    mediaRecorder = null;
+    if (mediaStream) {
+      mediaStream.getTracks().forEach(function (t) {
+        t.stop();
+      });
+      mediaStream = null;
+    }
   }
 
   function startVideo(facing) {
@@ -374,24 +438,30 @@
     }
     if (facing) cameraFacing = facing;
     stopAudio();
-    // Si ya había video, cortar tracks previos sin apagar el modo
-    if (mediaStream && mode === "video") {
-      mediaStream.getTracks().forEach(function (t) {
-        t.stop();
-      });
-      mediaStream = null;
-      if (mediaLoopTimer) {
-        clearTimeout(mediaLoopTimer);
-        mediaLoopTimer = null;
-      }
-      if (mediaRecorder && mediaRecorder.state !== "inactive") {
-        try {
-          mediaRecorder.stop();
-        } catch (e) {}
-      }
-      mediaRecorder = null;
+    if (mode === "video") {
+      stopVideoTracksOnly();
     }
-    openVideoStream(cameraFacing)
+
+    // Primero pedir permiso (para tener labels de cámaras) y luego seleccionar dispositivo
+    var boot =
+      videoDevicesCache.length > 0
+        ? Promise.resolve(videoDevicesCache)
+        : navigator.mediaDevices
+            .getUserMedia({ audio: true, video: true })
+            .then(function (tmp) {
+              tmp.getTracks().forEach(function (t) {
+                t.stop();
+              });
+              return refreshVideoDevices();
+            })
+            .catch(function () {
+              return refreshVideoDevices();
+            });
+
+    boot
+      .then(function () {
+        return openVideoStream(cameraFacing);
+      })
       .then(function (stream) {
         mediaStream = stream;
         videoOn = true;
@@ -399,10 +469,11 @@
         updateMediaButtons();
         setStatus("GPS + Video", "on");
         elAudioInfo.textContent =
-          "Transmitiendo (" +
-          (cameraFacing === "environment" ? "trasera" : "frontal") +
-          "). Solo lo ve el comando.";
+          "Cámara " +
+          (cameraFacing === "environment" ? "TRASERA" : "FRONTAL") +
+          " activa. Solo lo ve el comando.";
         mediaLoop("video");
+        refreshVideoDevices();
       })
       .catch(function (err) {
         videoOn = false;
@@ -569,14 +640,17 @@
   if (elBtnVideo) {
     elBtnVideo.addEventListener("click", function () {
       if (videoOn) stopVideo();
-      else startVideo(cameraFacing);
+      else startVideo(cameraFacing || "environment");
     });
   }
-  if (elBtnFlip) {
-    elBtnFlip.addEventListener("click", function () {
-      if (!videoOn) return;
-      cameraFacing = cameraFacing === "environment" ? "user" : "environment";
-      startVideo(cameraFacing);
+  if (elBtnCamBack) {
+    elBtnCamBack.addEventListener("click", function () {
+      startVideo("environment");
+    });
+  }
+  if (elBtnCamFront) {
+    elBtnCamFront.addEventListener("click", function () {
+      startVideo("user");
     });
   }
 
