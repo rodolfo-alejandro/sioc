@@ -16,6 +16,7 @@
 <div class="d-flex gap-2 mb-2">
     {% if can_view %}
     <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_denuncias.listado', **request.args) }}"><i class="bi bi-table"></i> Volver al listado</a>
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_denuncias.tabla_estado', **request.args) }}"><i class="bi bi-layout-three-columns"></i> Tabla dinámica</a>
     {% endif %}
     {% if can_dashboard %}
     <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_denuncias.dashboard', **request.args) }}"><i class="bi bi-bar-chart-line"></i> Ir al dashboard</a>

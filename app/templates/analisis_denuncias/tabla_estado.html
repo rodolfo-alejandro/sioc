@@ -1,0 +1,137 @@
+{% extends "layouts/base.html" %}
+{% block title %}Tabla dinámica — Denuncias Web - SIOC{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/sabana_mapa.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/analisis_denuncias.css') }}">
+{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-layout-three-columns"></i> Tabla dinámica de estados</h1>
+    <p class="text-muted">Cuenta de causas por asignación y estado (estilo tabla dinámica / acordeón).</p>
+</div>
+
+{% include "analisis_denuncias/_filtros.html" %}
+
+<div class="card mb-3 ad-pivot-dims">
+    <div class="card-body py-2">
+        <form method="GET" id="ad-pivot-dims-form" class="row g-2 align-items-end">
+            {# Reenvía filtros activos al cambiar agrupación #}
+            {% for key, values in request.args.lists() %}
+                {% if key not in ('grupo1', 'grupo2') %}
+                    {% for v in values %}
+                    <input type="hidden" name="{{ key }}" value="{{ v }}">
+                    {% endfor %}
+                {% endif %}
+            {% endfor %}
+            <div class="col-md-4 col-lg-3">
+                <label class="form-label mb-1" for="ad-grupo1">Agrupar por (nivel 1)</label>
+                <select class="form-select form-select-sm" name="grupo1" id="ad-grupo1">
+                    {% for d in dims %}
+                    <option value="{{ d.key }}" {% if selected.grupo1 == d.key %}selected{% endif %}>{{ d.label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4 col-lg-3">
+                <label class="form-label mb-1" for="ad-grupo2">Desglose (nivel 2)</label>
+                <select class="form-select form-select-sm" name="grupo2" id="ad-grupo2">
+                    {% for d in dims %}
+                    <option value="{{ d.key }}" {% if selected.grupo2 == d.key %}selected{% endif %}>{{ d.label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4 col-lg-3">
+                <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-arrow-repeat"></i> Aplicar agrupación</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="d-flex flex-wrap gap-2 mb-2">
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_denuncias.listado', **request.args) }}"><i class="bi bi-table"></i> Listado</a>
+    {% if can_dashboard %}
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_denuncias.dashboard', **request.args) }}"><i class="bi bi-bar-chart-line"></i> Dashboard</a>
+    {% endif %}
+    {% if can_map %}
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_denuncias.mapa', **request.args) }}"><i class="bi bi-geo-alt"></i> Mapa</a>
+    {% endif %}
+    {% if can_export %}
+    <a class="btn btn-outline-success btn-sm" href="{{ url_for('analisis_denuncias.export_tabla_estado_xlsx', **request.args) }}"><i class="bi bi-file-earmark-excel"></i> Excel</a>
+    {% endif %}
+    <button type="button" class="btn btn-outline-secondary btn-sm" id="ad-pivot-expand-all"><i class="bi bi-arrows-expand"></i> Expandir todo</button>
+    <button type="button" class="btn btn-outline-secondary btn-sm" id="ad-pivot-collapse-all"><i class="bi bi-arrows-collapse"></i> Colapsar todo</button>
+</div>
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <h6 class="mb-0">
+            Cuenta de causas_id
+            <span class="text-muted fw-normal">· {{ pivot.dim1_label }} → {{ pivot.dim2_label }} × Estado</span>
+        </h6>
+        <span class="badge bg-light text-dark border">
+            {{ pivot.group_count|number_format }} grupos · Total {{ pivot.grand_total|number_format }}
+        </span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive ad-pivot-wrap">
+            <table class="table table-sm table-bordered align-middle mb-0 ad-pivot-table" id="ad-pivot-table">
+                <thead>
+                    <tr>
+                        <th class="ad-pivot-sticky">Etiquetas de fila</th>
+                        {% for e in pivot.estados %}
+                        <th class="text-center text-nowrap">{{ e }}</th>
+                        {% endfor %}
+                        <th class="text-center text-nowrap ad-pivot-total-col">Total general</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if not pivot.groups %}
+                    <tr>
+                        <td colspan="{{ pivot.estados|length + 2 }}" class="text-center text-muted py-4">
+                            Sin datos para los filtros seleccionados.
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% for g in pivot.groups %}
+                    <tr class="ad-pivot-parent" data-group="{{ loop.index0 }}">
+                        <td class="ad-pivot-sticky">
+                            <button type="button" class="btn btn-link btn-sm p-0 ad-pivot-toggle text-decoration-none" aria-expanded="false" data-group="{{ loop.index0 }}">
+                                <i class="bi bi-plus-square ad-pivot-ico"></i>
+                                <strong>{{ g.name }}</strong>
+                            </button>
+                        </td>
+                        {% for e in pivot.estados %}
+                        <td class="text-end">{{ g.counts[e] or '' }}</td>
+                        {% endfor %}
+                        <td class="text-end fw-semibold ad-pivot-total-col">{{ g.total }}</td>
+                    </tr>
+                    {% for c in g.children %}
+                    <tr class="ad-pivot-child d-none" data-parent="{{ loop.parent.index0 }}">
+                        <td class="ad-pivot-sticky ad-pivot-child-label">{{ c.name }}</td>
+                        {% for e in pivot.estados %}
+                        <td class="text-end">{{ c.counts[e] or '' }}</td>
+                        {% endfor %}
+                        <td class="text-end ad-pivot-total-col">{{ c.total }}</td>
+                    </tr>
+                    {% endfor %}
+                    {% endfor %}
+                </tbody>
+                {% if pivot.groups %}
+                <tfoot>
+                    <tr class="ad-pivot-grand">
+                        <td class="ad-pivot-sticky fw-semibold">Total general</td>
+                        {% for e in pivot.estados %}
+                        <td class="text-end fw-semibold">{{ pivot.grand[e] }}</td>
+                        {% endfor %}
+                        <td class="text-end fw-bold ad-pivot-total-col">{{ pivot.grand_total }}</td>
+                    </tr>
+                </tfoot>
+                {% endif %}
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/analisis_denuncias_filtros.js') }}"></script>
+<script src="{{ url_for('static', filename='js/analisis_denuncias_tabla_estado.js') }}"></script>
+{% endblock %}

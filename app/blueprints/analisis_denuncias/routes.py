@@ -754,6 +754,180 @@ def detalle(denuncia_id: int):
     return render_template("analisis_denuncias/detalle.html", row=row, can_map=_can_map())
 
 
+# Dimensiones para tabla dinámica (filas del acordeón)
+_PIVOT_DIMS = {
+    "barrio": ("Barrio", DenunciaWeb.barrio),
+    "localidad": ("Localidad", DenunciaWeb.localidad),
+    "departamento": ("Departamento", DenunciaWeb.desc_dep_padre),
+    "division": ("División / SINAR", DenunciaWeb.desc_dep_registro),
+    "dep_actuario": ("Dependencia actuario", DenunciaWeb.desc_dep_actuario),
+}
+
+
+def _pivot_label(key: str) -> str:
+    return (_PIVOT_DIMS.get(key) or ("", None))[0] or key
+
+
+def _pivot_col(key: str):
+    return (_PIVOT_DIMS.get(key) or (None, None))[1]
+
+
+def _blank_label(v: object) -> str:
+    s = _clean(v)
+    return s or "(Sin dato)"
+
+
+def _build_estado_pivot(q, dim1: str, dim2: str) -> dict:
+    """
+    Pivot tipo Excel: filas jerárquicas dim1 → dim2, columnas = causa_estado,
+    valor = cuenta de causas_id.
+    """
+    col1 = _pivot_col(dim1)
+    col2 = _pivot_col(dim2)
+    if col1 is None or col2 is None or dim1 == dim2:
+        dim1, dim2 = "barrio", "division"
+        col1, col2 = _pivot_col(dim1), _pivot_col(dim2)
+
+    rows = (
+        q.with_entities(
+            col1.label("g1"),
+            col2.label("g2"),
+            DenunciaWeb.causa_estado.label("estado"),
+            func.count(func.distinct(DenunciaWeb.causas_id)).label("n"),
+        )
+        .group_by(col1, col2, DenunciaWeb.causa_estado)
+        .all()
+    )
+
+    estados_set: set[str] = set()
+    tree: dict[str, dict] = {}
+    for g1, g2, estado, n in rows:
+        e = _blank_label(estado)
+        a = _blank_label(g1)
+        b = _blank_label(g2)
+        estados_set.add(e)
+        node = tree.setdefault(a, {"counts": {}, "children": {}, "total": 0})
+        child = node["children"].setdefault(b, {"counts": {}, "total": 0})
+        cnt = int(n or 0)
+        node["counts"][e] = node["counts"].get(e, 0) + cnt
+        child["counts"][e] = child["counts"].get(e, 0) + cnt
+        node["total"] += cnt
+        child["total"] += cnt
+
+    estados = sorted(estados_set, key=lambda x: (x == "(Sin dato)", x.lower()))
+    grand = {e: 0 for e in estados}
+    grand_total = 0
+    groups = []
+    for name in sorted(tree.keys(), key=lambda x: (-tree[x]["total"], x.lower())):
+        node = tree[name]
+        children = []
+        for cname in sorted(
+            node["children"].keys(),
+            key=lambda x: (-node["children"][x]["total"], x.lower()),
+        ):
+            ch = node["children"][cname]
+            children.append(
+                {
+                    "name": cname,
+                    "counts": {e: int(ch["counts"].get(e, 0)) for e in estados},
+                    "total": int(ch["total"]),
+                }
+            )
+        for e in estados:
+            grand[e] += int(node["counts"].get(e, 0))
+        grand_total += int(node["total"])
+        groups.append(
+            {
+                "name": name,
+                "counts": {e: int(node["counts"].get(e, 0)) for e in estados},
+                "total": int(node["total"]),
+                "children": children,
+            }
+        )
+
+    return {
+        "dim1": dim1,
+        "dim2": dim2,
+        "dim1_label": _pivot_label(dim1),
+        "dim2_label": _pivot_label(dim2),
+        "estados": estados,
+        "groups": groups,
+        "grand": grand,
+        "grand_total": grand_total,
+        "group_count": len(groups),
+    }
+
+
+@bp.route("/tabla-estado")
+def tabla_estado():
+    """Tabla dinámica: estado de causa × asignación (acordeón)."""
+    if not _can_view():
+        abort(403)
+    dim1 = (_clean(request.args.get("grupo1")) or "barrio").lower()
+    dim2 = (_clean(request.args.get("grupo2")) or "division").lower()
+    if dim1 not in _PIVOT_DIMS:
+        dim1 = "barrio"
+    if dim2 not in _PIVOT_DIMS or dim2 == dim1:
+        dim2 = "division" if dim1 != "division" else "dep_actuario"
+
+    q = _apply_filters(_base_q())
+    pivot = _build_estado_pivot(q, dim1, dim2)
+    selected = _selected_filters()
+    selected["grupo1"] = dim1
+    selected["grupo2"] = dim2
+    return render_template(
+        "analisis_denuncias/tabla_estado.html",
+        pivot=pivot,
+        dims=[{"key": k, "label": v[0]} for k, v in _PIVOT_DIMS.items()],
+        filtros=_filter_options(),
+        selected=selected,
+        can_import=_can_import(),
+        can_export=_can_export(),
+        can_dashboard=_can_dashboard(),
+        can_map=_can_map(),
+        can_view=True,
+    )
+
+
+@bp.route("/tabla-estado.xlsx")
+def export_tabla_estado_xlsx():
+    if not _can_export():
+        abort(403)
+    dim1 = (_clean(request.args.get("grupo1")) or "barrio").lower()
+    dim2 = (_clean(request.args.get("grupo2")) or "division").lower()
+    if dim1 not in _PIVOT_DIMS:
+        dim1 = "barrio"
+    if dim2 not in _PIVOT_DIMS or dim2 == dim1:
+        dim2 = "division" if dim1 != "division" else "dep_actuario"
+    pivot = _build_estado_pivot(_apply_filters(_base_q()), dim1, dim2)
+    data = []
+    for g in pivot["groups"]:
+        row = {pivot["dim1_label"]: g["name"], pivot["dim2_label"]: ""}
+        for e in pivot["estados"]:
+            row[e] = g["counts"].get(e, 0)
+        row["Total"] = g["total"]
+        data.append(row)
+        for c in g["children"]:
+            crow = {pivot["dim1_label"]: g["name"], pivot["dim2_label"]: c["name"]}
+            for e in pivot["estados"]:
+                crow[e] = c["counts"].get(e, 0)
+            crow["Total"] = c["total"]
+            data.append(crow)
+    total_row = {pivot["dim1_label"]: "TOTAL GENERAL", pivot["dim2_label"]: ""}
+    for e in pivot["estados"]:
+        total_row[e] = pivot["grand"].get(e, 0)
+    total_row["Total"] = pivot["grand_total"]
+    data.append(total_row)
+    bio = BytesIO()
+    pd.DataFrame(data).to_excel(bio, index=False)
+    bio.seek(0)
+    return Response(
+        bio.read(),
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=denuncias_tabla_estado.xlsx"},
+    )
+
+
 @bp.route("/observacion/<int:denuncia_id>", methods=["POST"])
 def guardar_observacion(denuncia_id: int):
     if not _can_view():

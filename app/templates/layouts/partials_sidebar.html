@@ -122,6 +122,7 @@
                     <ul class="nav flex-column collapse" id="submenuDenunciasWeb">
                         {% if current_user.has_permission('DENUNCIAS_WEB_VIEW') %}
                         <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('analisis_denuncias.listado') }}"><i class="bi bi-table"></i> Listado</a></li>
+                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('analisis_denuncias.tabla_estado') }}"><i class="bi bi-layout-three-columns"></i> Tabla dinámica</a></li>
                         {% endif %}
                         {% if current_user.has_permission('DENUNCIAS_WEB_DASHBOARD') %}
                         <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('analisis_denuncias.dashboard') }}"><i class="bi bi-bar-chart-line"></i> Dashboard</a></li>

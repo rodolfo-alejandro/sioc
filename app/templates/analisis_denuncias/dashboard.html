@@ -15,6 +15,7 @@
 <div class="d-flex gap-2 mb-3">
     {% if can_view %}
     <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_denuncias.listado', **request.args) }}"><i class="bi bi-table"></i> Listado</a>
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_denuncias.tabla_estado', **request.args) }}"><i class="bi bi-layout-three-columns"></i> Tabla dinámica</a>
     {% endif %}
     {% if can_map %}
     <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_denuncias.mapa', **request.args) }}"><i class="bi bi-geo-alt"></i> Mapa</a>

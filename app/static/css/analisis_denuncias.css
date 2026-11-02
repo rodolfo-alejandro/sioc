@@ -46,3 +46,85 @@
     margin-right: 0.25rem;
     border: 1px solid rgba(0, 0, 0, 0.2);
 }
+
+/* Tabla dinámica (pivot / acordeón) */
+.ad-pivot-wrap {
+    max-height: 72vh;
+    overflow: auto;
+}
+
+.ad-pivot-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: #e7f1ff;
+    font-size: 0.78rem;
+    white-space: nowrap;
+    vertical-align: bottom;
+}
+
+.ad-pivot-table .ad-pivot-sticky {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: #fff;
+    min-width: 14rem;
+    max-width: 22rem;
+}
+
+.ad-pivot-table thead .ad-pivot-sticky {
+    z-index: 4;
+    background: #e7f1ff;
+}
+
+.ad-pivot-table tbody tr.ad-pivot-parent {
+    background: #f0f7ff;
+}
+
+.ad-pivot-table tbody tr.ad-pivot-parent.is-open {
+    background: #dcecff;
+}
+
+.ad-pivot-table tbody tr.ad-pivot-parent .ad-pivot-sticky {
+    background: inherit;
+}
+
+.ad-pivot-table tbody tr.ad-pivot-child {
+    background: #fff;
+}
+
+.ad-pivot-table tbody tr.ad-pivot-child:nth-child(even) {
+    background: #f8fafc;
+}
+
+.ad-pivot-table tbody tr.ad-pivot-child .ad-pivot-sticky {
+    background: inherit;
+}
+
+.ad-pivot-child-label {
+    padding-left: 1.75rem !important;
+    color: #495057;
+    font-size: 0.875rem;
+}
+
+.ad-pivot-toggle .ad-pivot-ico {
+    margin-right: 0.35rem;
+    vertical-align: -0.1em;
+}
+
+.ad-pivot-total-col {
+    background: #f8f9fa;
+}
+
+.ad-pivot-table thead .ad-pivot-total-col {
+    background: #d6e6ff;
+}
+
+.ad-pivot-grand td {
+    background: #e9ecef !important;
+    border-top: 2px solid #adb5bd;
+}
+
+.ad-pivot-dims .form-label {
+    font-size: 0.85rem;
+}
