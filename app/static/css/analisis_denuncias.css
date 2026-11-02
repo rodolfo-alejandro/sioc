@@ -67,6 +67,8 @@
     width: max-content;
     min-width: 100%;
     table-layout: fixed;
+    border-collapse: separate;
+    border-spacing: 0;
 }
 
 .ad-pivot-table > :not(caption) > * > * {
@@ -83,16 +85,8 @@
     line-height: 1.1;
     vertical-align: bottom;
     white-space: normal;
-    max-width: 3.6rem;
-    min-width: 2.6rem;
-    width: 3.2rem;
     hyphens: auto;
-}
-
-.ad-pivot-estado-th {
-    max-width: 3.6rem !important;
-    min-width: 2.6rem !important;
-    width: 3.2rem !important;
+    overflow: hidden;
 }
 
 .ad-pivot-estado-label {
@@ -101,12 +95,7 @@
     -webkit-box-orient: vertical;
     overflow: hidden;
     word-break: break-word;
-}
-
-.ad-pivot-table tbody td,
-.ad-pivot-table tfoot td {
-    max-width: 3.6rem;
-    width: 3.2rem;
+    pointer-events: none;
 }
 
 .ad-pivot-table .ad-pivot-sticky {
@@ -114,12 +103,8 @@
     left: 0;
     z-index: 2;
     background: #fff;
-    min-width: 14rem !important;
-    max-width: 20rem !important;
-    width: 16rem !important;
     white-space: normal;
-    overflow: visible;
-    text-overflow: unset;
+    overflow: hidden;
     word-break: break-word;
     line-height: 1.2;
 }
@@ -127,9 +112,6 @@
 .ad-pivot-table thead .ad-pivot-sticky {
     z-index: 4;
     background: #e7f1ff;
-    min-width: 14rem !important;
-    max-width: 20rem !important;
-    width: 16rem !important;
 }
 
 .ad-pivot-name {
@@ -191,9 +173,6 @@
 
 .ad-pivot-total-col {
     background: #f8f9fa;
-    min-width: 2.6rem !important;
-    max-width: 3rem !important;
-    width: 2.8rem !important;
 }
 
 .ad-pivot-table thead .ad-pivot-total-col {
@@ -209,6 +188,11 @@
     font-size: 0.8rem;
 }
 
+.ad-pivot-nav .btn {
+    font-size: 0.78rem;
+    padding: 0.2rem 0.45rem;
+}
+
 .ad-pivot-table thead th {
     position: sticky;
 }
@@ -216,20 +200,40 @@
 .ad-pivot-table thead th .ad-col-resizer {
     position: absolute;
     top: 0;
-    right: -3px;
-    width: 8px;
+    right: 0;
+    width: 10px;
     height: 100%;
     cursor: col-resize;
     user-select: none;
-    z-index: 5;
+    touch-action: none;
+    z-index: 6;
+    background: transparent;
+}
+
+.ad-pivot-table thead th .ad-col-resizer::after {
+    content: '';
+    position: absolute;
+    top: 15%;
+    bottom: 15%;
+    right: 3px;
+    width: 2px;
+    border-radius: 1px;
+    background: rgba(13, 110, 253, 0.45);
 }
 
 .ad-pivot-table thead th .ad-col-resizer:hover,
-body.ad-col-resizing .ad-pivot-table thead th .ad-col-resizer {
-    background: rgba(13, 110, 253, 0.35);
+.ad-pivot-table thead th .ad-col-resizer.is-active {
+    background: rgba(13, 110, 253, 0.12);
 }
 
-body.ad-col-resizing {
+.ad-pivot-table thead th .ad-col-resizer:hover::after,
+.ad-pivot-table thead th .ad-col-resizer.is-active::after {
+    background: #0d6efd;
+    width: 3px;
+}
+
+body.ad-col-resizing,
+body.ad-col-resizing * {
     cursor: col-resize !important;
     user-select: none !important;
 }

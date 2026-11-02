@@ -1,6 +1,8 @@
 (function () {
     'use strict';
 
+    var STORAGE_KEY = 'ad-pivot-col-widths-v2';
+
     function setGroup(gid, open) {
         var parent = document.querySelector('.ad-pivot-parent[data-group="' + gid + '"]');
         var btn = document.querySelector('.ad-pivot-toggle[data-group="' + gid + '"]');
@@ -43,7 +45,7 @@
 
         document.querySelectorAll('.ad-pivot-parent[data-group]:not(.ad-pivot-leaf)').forEach(function (row) {
             row.addEventListener('click', function (ev) {
-                if (ev.target.closest('a, input, select, textarea, button')) return;
+                if (ev.target.closest('a, input, select, textarea, button, .ad-col-resizer')) return;
                 toggleGroup(this.getAttribute('data-group'));
             });
             row.addEventListener('keydown', function (ev) {
@@ -89,21 +91,37 @@
         });
     }
 
-    function colKey(th, idx) {
-        if (th.classList.contains('ad-pivot-sticky')) return 'sticky';
-        if (th.classList.contains('ad-pivot-total-col')) return 'total';
-        return 'c' + idx;
+    function loadSaved() {
+        try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') || {}; }
+        catch (e) { return {}; }
     }
 
-    function applyColWidth(table, colIdx, px) {
-        var width = Math.max(40, Math.round(px)) + 'px';
-        table.querySelectorAll('tr').forEach(function (tr) {
-            var cell = tr.children[colIdx];
-            if (!cell) return;
-            cell.style.width = width;
-            cell.style.minWidth = width;
-            cell.style.maxWidth = width;
-        });
+    function saveWidths(map) {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(map)); }
+        catch (e) { /* ignore */ }
+    }
+
+    function defaultWidth(th, idx) {
+        if (th.classList.contains('ad-pivot-sticky')) return 260;
+        if (th.classList.contains('ad-pivot-total-col')) return 56;
+        return 58;
+    }
+
+    function ensureColgroup(table, count) {
+        var cg = table.querySelector('colgroup');
+        if (cg) cg.remove();
+        cg = document.createElement('colgroup');
+        for (var i = 0; i < count; i++) {
+            cg.appendChild(document.createElement('col'));
+        }
+        table.insertBefore(cg, table.firstChild);
+        return cg;
+    }
+
+    function setColWidth(col, px) {
+        var w = Math.max(48, Math.round(px)) + 'px';
+        col.style.width = w;
+        col.style.minWidth = w;
     }
 
     function wireColumnResize() {
@@ -112,45 +130,69 @@
         var theadRow = table.querySelector('thead tr');
         if (!theadRow) return;
 
-        var storageKey = 'ad-pivot-col-widths';
-        var saved = {};
-        try { saved = JSON.parse(localStorage.getItem(storageKey) || '{}') || {}; } catch (e) { saved = {}; }
+        var headers = Array.prototype.slice.call(theadRow.children);
+        if (!headers.length) return;
 
-        Array.prototype.forEach.call(theadRow.children, function (th, idx) {
-            th.style.position = th.style.position || '';
-            var key = colKey(th, idx);
-            if (saved[key]) applyColWidth(table, idx, saved[key]);
+        var colgroup = ensureColgroup(table, headers.length);
+        var cols = Array.prototype.slice.call(colgroup.children);
+        var saved = loadSaved();
 
-            if (th.querySelector('.ad-col-resizer')) return;
+        headers.forEach(function (th, idx) {
+            var key = String(idx);
+            var px = saved[key] || defaultWidth(th, idx);
+            setColWidth(cols[idx], px);
+
+            th.querySelectorAll('.ad-col-resizer').forEach(function (el) { el.remove(); });
             var handle = document.createElement('span');
             handle.className = 'ad-col-resizer';
-            handle.title = 'Arrastrar para cambiar ancho';
+            handle.title = 'Arrastrá para agrandar / achicar';
             th.appendChild(handle);
 
-            handle.addEventListener('mousedown', function (ev) {
-                ev.preventDefault();
-                ev.stopPropagation();
-                var startX = ev.clientX;
-                var startW = th.getBoundingClientRect().width;
+            function startDrag(clientX, ev) {
+                if (ev) {
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                }
+                var startX = clientX;
+                var startW = cols[idx].getBoundingClientRect().width || defaultWidth(th, idx);
+                handle.classList.add('is-active');
+                document.body.classList.add('ad-col-resizing');
 
                 function onMove(e2) {
-                    applyColWidth(table, idx, startW + (e2.clientX - startX));
+                    var x = e2.touches ? e2.touches[0].clientX : e2.clientX;
+                    if (e2.cancelable) e2.preventDefault();
+                    setColWidth(cols[idx], startW + (x - startX));
                 }
                 function onUp(e2) {
+                    var x = (e2.changedTouches && e2.changedTouches[0])
+                        ? e2.changedTouches[0].clientX
+                        : e2.clientX;
                     document.removeEventListener('mousemove', onMove);
                     document.removeEventListener('mouseup', onUp);
+                    document.removeEventListener('touchmove', onMove);
+                    document.removeEventListener('touchend', onUp);
+                    handle.classList.remove('is-active');
                     document.body.classList.remove('ad-col-resizing');
-                    var finalW = Math.max(40, Math.round(startW + (e2.clientX - startX)));
-                    try {
-                        var cur = JSON.parse(localStorage.getItem(storageKey) || '{}') || {};
-                        cur[key] = finalW;
-                        localStorage.setItem(storageKey, JSON.stringify(cur));
-                    } catch (err) { /* ignore */ }
+                    var finalW = Math.max(48, Math.round(startW + (x - startX)));
+                    setColWidth(cols[idx], finalW);
+                    var map = loadSaved();
+                    map[key] = finalW;
+                    saveWidths(map);
                 }
-                document.body.classList.add('ad-col-resizing');
+
                 document.addEventListener('mousemove', onMove);
                 document.addEventListener('mouseup', onUp);
+                document.addEventListener('touchmove', onMove, { passive: false });
+                document.addEventListener('touchend', onUp);
+            }
+
+            handle.addEventListener('mousedown', function (ev) {
+                startDrag(ev.clientX, ev);
             });
+            handle.addEventListener('touchstart', function (ev) {
+                if (!ev.touches || !ev.touches[0]) return;
+                startDrag(ev.touches[0].clientX, ev);
+            }, { passive: false });
         });
     }
 
