@@ -2,19 +2,19 @@
 {% block title %}Tabla dinámica — Denuncias Web - SIOC{% endblock %}
 {% block extra_head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sabana_mapa.css') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/analisis_denuncias.css') }}?v=4">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/analisis_denuncias.css') }}?v=5">
 {% endblock %}
 {% block content %}
 <div class="page-header ad-pivot-page-header">
     <h1><i class="bi bi-layout-three-columns"></i> Tabla dinámica de estados</h1>
     <p class="text-muted mb-0">
         {% if selected.modo == 'resumen' %}
-        Sin recibir = estado vacío · Sin movimiento = Recibida sin apertura ·
-        Otros = Devuelta, Derivada, pedido de allanamiento, Vinculada, Recibida ya aperturada, etc.
+        Sin recibir = estado vacío · Sin movimiento = Recibida sin apertura.
+        El Total incluye también otros estados (Devuelta, Derivada, etc.): miralos en modo Detalle.
         {% else %}
         Detalle: columnas = causa_estado tal cual en el Excel.
         {% endif %}
-        Tocá [+] para ver SINAR / actuario.
+        Arrastrá el borde de cada columna para agrandar/achicar · Tocá [+] para desglose.
     </p>
 </div>
 
@@ -87,7 +87,7 @@
                     <tr>
                         <th class="ad-pivot-sticky">Fila</th>
                         {% for e in pivot.estados %}
-                        <th class="text-center ad-pivot-estado-th" title="{% if e == 'Otros' %}Devuelta, Derivada, Con pedido de allanamiento, Vinculada, Recibida ya aperturada y demás estados que no entran en las otras columnas{% else %}{{ e }}{% endif %}">
+                        <th class="text-center ad-pivot-estado-th" title="{{ e }}">
                             <span class="ad-pivot-estado-label">{{ e }}</span>
                         </th>
                         {% endfor %}
@@ -150,5 +150,5 @@
 {% endblock %}
 {% block extra_scripts %}
 <script src="{{ url_for('static', filename='js/analisis_denuncias_filtros.js') }}?v=2"></script>
-<script src="{{ url_for('static', filename='js/analisis_denuncias_tabla_estado.js') }}?v=3"></script>
+<script src="{{ url_for('static', filename='js/analisis_denuncias_tabla_estado.js') }}?v=4"></script>
 {% endblock %}

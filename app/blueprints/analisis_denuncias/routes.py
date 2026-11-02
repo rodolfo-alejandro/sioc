@@ -788,8 +788,9 @@ _RESUMEN_COLS = [
     "Desestimadas",
     "Sin movimiento (Recibidas)",
     "Sin recibir",
-    "Otros",  # Devuelta, Derivada, pedido allanamiento, Vinculada, Recibida aperturada, etc.
 ]
+# "Otros" (Devuelta, Derivada, pedido allanamiento, Vinculada, etc.) no se muestra
+# en resumen: siguen contando en Total; el detalle está en modo causa_estado.
 
 
 def _classify_estado_resumen(estado: object, fecha_apertura: object) -> str:
@@ -845,6 +846,7 @@ def _build_estado_pivot(q, dim1: str, dim2: str, modo: str = "resumen") -> dict:
         classified = []
         for g1, g2, estado, ap, n in rows:
             cat = _classify_estado_resumen(estado, object() if int(ap or 0) else None)
+            # Solo columnas del resumen; "Otros" aporta al total vía conteo aparte abajo
             classified.append((g1, g2, cat, int(n or 0)))
         estados = list(_RESUMEN_COLS)
     else:
@@ -893,6 +895,7 @@ def _build_estado_pivot(q, dim1: str, dim2: str, modo: str = "resumen") -> dict:
             )
         for e in estados:
             grand[e] += int(node["counts"].get(e, 0))
+        # En resumen, "Otros" no tiene columna pero sí cuenta en Total
         grand_total += int(node["total"])
         groups.append(
             {

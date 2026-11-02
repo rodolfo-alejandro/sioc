@@ -209,6 +209,31 @@
     font-size: 0.8rem;
 }
 
+.ad-pivot-table thead th {
+    position: sticky;
+}
+
+.ad-pivot-table thead th .ad-col-resizer {
+    position: absolute;
+    top: 0;
+    right: -3px;
+    width: 8px;
+    height: 100%;
+    cursor: col-resize;
+    user-select: none;
+    z-index: 5;
+}
+
+.ad-pivot-table thead th .ad-col-resizer:hover,
+body.ad-col-resizing .ad-pivot-table thead th .ad-col-resizer {
+    background: rgba(13, 110, 253, 0.35);
+}
+
+body.ad-col-resizing {
+    cursor: col-resize !important;
+    user-select: none !important;
+}
+
 .ad-pivot-nav .btn {
     font-size: 0.78rem;
     padding: 0.2rem 0.45rem;

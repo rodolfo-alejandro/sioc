@@ -89,9 +89,75 @@
         });
     }
 
+    function colKey(th, idx) {
+        if (th.classList.contains('ad-pivot-sticky')) return 'sticky';
+        if (th.classList.contains('ad-pivot-total-col')) return 'total';
+        return 'c' + idx;
+    }
+
+    function applyColWidth(table, colIdx, px) {
+        var width = Math.max(40, Math.round(px)) + 'px';
+        table.querySelectorAll('tr').forEach(function (tr) {
+            var cell = tr.children[colIdx];
+            if (!cell) return;
+            cell.style.width = width;
+            cell.style.minWidth = width;
+            cell.style.maxWidth = width;
+        });
+    }
+
+    function wireColumnResize() {
+        var table = document.getElementById('ad-pivot-table');
+        if (!table) return;
+        var theadRow = table.querySelector('thead tr');
+        if (!theadRow) return;
+
+        var storageKey = 'ad-pivot-col-widths';
+        var saved = {};
+        try { saved = JSON.parse(localStorage.getItem(storageKey) || '{}') || {}; } catch (e) { saved = {}; }
+
+        Array.prototype.forEach.call(theadRow.children, function (th, idx) {
+            th.style.position = th.style.position || '';
+            var key = colKey(th, idx);
+            if (saved[key]) applyColWidth(table, idx, saved[key]);
+
+            if (th.querySelector('.ad-col-resizer')) return;
+            var handle = document.createElement('span');
+            handle.className = 'ad-col-resizer';
+            handle.title = 'Arrastrar para cambiar ancho';
+            th.appendChild(handle);
+
+            handle.addEventListener('mousedown', function (ev) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                var startX = ev.clientX;
+                var startW = th.getBoundingClientRect().width;
+
+                function onMove(e2) {
+                    applyColWidth(table, idx, startW + (e2.clientX - startX));
+                }
+                function onUp(e2) {
+                    document.removeEventListener('mousemove', onMove);
+                    document.removeEventListener('mouseup', onUp);
+                    document.body.classList.remove('ad-col-resizing');
+                    var finalW = Math.max(40, Math.round(startW + (e2.clientX - startX)));
+                    try {
+                        var cur = JSON.parse(localStorage.getItem(storageKey) || '{}') || {};
+                        cur[key] = finalW;
+                        localStorage.setItem(storageKey, JSON.stringify(cur));
+                    } catch (err) { /* ignore */ }
+                }
+                document.body.classList.add('ad-col-resizing');
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup', onUp);
+            });
+        });
+    }
+
     function init() {
         wireToggles();
         injectGruposIntoFiltros();
+        wireColumnResize();
     }
 
     if (document.readyState === 'loading') {
