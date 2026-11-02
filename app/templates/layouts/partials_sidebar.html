@@ -133,19 +133,7 @@
                         {% if current_user.has_permission('DENUNCIAS_WEB_IMPORT') %}
                         <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('analisis_denuncias.importar') }}"><i class="bi bi-cloud-upload"></i> Importar CSV</a></li>
                         {% endif %}
-                        {% if current_user.has_permission('AUDITORIA_VIEW') %}
-                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('auditoria.listado') }}"><i class="bi bi-clipboard-check"></i> Auditoría</a></li>
-                        {% endif %}
                     </ul>
-                </li>
-                {% endif %}
-
-                <!-- Auditoría (acceso directo) -->
-                {% if current_user.has_permission('AUDITORIA_VIEW') and not (current_user.has_permission('DENUNCIAS_WEB_VIEW') or current_user.has_permission('DENUNCIAS_WEB_IMPORT')) %}
-                <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('auditoria.listado') }}">
-                        <i class="bi bi-clipboard-check"></i> Auditoría
-                    </a>
                 </li>
                 {% endif %}
 
@@ -184,9 +172,6 @@
                         {% if current_user.has_permission('ANALISIS_INTERVENCIONES_VIEW') %}
                         <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('analisis_intervenciones.listado') }}"><i class="bi bi-table"></i> Listado</a></li>
                         {% endif %}
-                        {% if current_user.has_permission('AUDITORIA_VIEW') %}
-                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('auditoria.listado_intervenciones') }}"><i class="bi bi-clipboard-check"></i> Auditoría</a></li>
-                        {% endif %}
                         {% if current_user.has_permission('ANALISIS_INTERVENCIONES_DASHBOARD') %}
                         <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('analisis_intervenciones.dashboard') }}"><i class="bi bi-bar-chart-line"></i> Dashboard</a></li>
                         <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('analisis_intervenciones.cuadros') }}"><i class="bi bi-grid-3x3-gap"></i> Cuadros</a></li>
@@ -219,16 +204,13 @@
                 {% endif %}
 
                 <!-- Base Operativa (Excel manual Capital / Interior) -->
-                {% if current_user.has_permission('BASE_OPERATIVA_VIEW') or current_user.has_permission('BASE_OPERATIVA_IMPORT') or current_user.has_permission('AUDITORIA_VIEW') %}
+                {% if current_user.has_permission('BASE_OPERATIVA_VIEW') or current_user.has_permission('BASE_OPERATIVA_IMPORT') %}
                 <li class="nav-item">
                     <a class="nav-link" href="#" data-bs-toggle="collapse" data-bs-target="#submenuBaseOperativa">
                         <i class="bi bi-journal-bookmark"></i> Base Operativa
                         <i class="bi bi-chevron-down ms-auto"></i>
                     </a>
                     <ul class="nav flex-column collapse" id="submenuBaseOperativa">
-                        {% if current_user.has_permission('AUDITORIA_VIEW') %}
-                        <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('auditoria.listado_base_operativa') }}"><i class="bi bi-clipboard-check"></i> Auditoría</a></li>
-                        {% endif %}
                         {% if current_user.has_permission('BASE_OPERATIVA_IMPORT') or current_user.has_permission('BASE_OPERATIVA_VIEW') %}
                         <li class="nav-item"><a class="nav-link submenu-item" href="{{ url_for('base_operativa.importar') }}"><i class="bi bi-cloud-upload"></i> Importar Excel</a></li>
                         {% endif %}

@@ -300,8 +300,12 @@ def _apply_filters(q):
 
 
 def _filter_options():
-    # Opciones en cascada: se calculan sobre el subconjunto ya filtrado.
-    bq = _apply_filters(_base_q())
+    """Opciones de combos desde la base de la unidad (sin reaplicar filtros).
+
+    Antes se recalculaban sobre el query filtrado (cascada): eso multiplicaba
+    DISTINCT pesados en cada página de Denuncias Web / Auditoría y volvía todo lento.
+    """
+    bq = _base_q()
     barrio_rows = (
         bq.with_entities(DenunciaWeb.localidad, DenunciaWeb.barrio)
         .filter(DenunciaWeb.localidad.isnot(None), DenunciaWeb.localidad != "", DenunciaWeb.barrio.isnot(None), DenunciaWeb.barrio != "")
