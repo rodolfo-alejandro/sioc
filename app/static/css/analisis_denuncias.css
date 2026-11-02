@@ -237,8 +237,3 @@ body.ad-col-resizing * {
     cursor: col-resize !important;
     user-select: none !important;
 }
-
-.ad-pivot-nav .btn {
-    font-size: 0.78rem;
-    padding: 0.2rem 0.45rem;
-}
