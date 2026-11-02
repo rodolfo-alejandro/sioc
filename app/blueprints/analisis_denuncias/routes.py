@@ -782,15 +782,16 @@ def _blank_label(v: object) -> str:
 
 
 # Columnas del modo resumen (como el cuadro DINAR que usan operativamente)
+# Última columna = resto de causa_estado (Devuelta, Derivada, pedido allanamiento, Vinculada, Recibida aperturada…)
+_RESUMEN_RESTO = "Resto (Devuelta/Derivada/etc.)"
 _RESUMEN_COLS = [
     "Etapa investigativa",
     "Allanadas",
     "Desestimadas",
     "Sin movimiento (Recibidas)",
     "Sin recibir",
+    _RESUMEN_RESTO,
 ]
-# "Otros" (Devuelta, Derivada, pedido allanamiento, Vinculada, etc.) no se muestra
-# en resumen: siguen contando en Total; el detalle está en modo causa_estado.
 
 
 def _classify_estado_resumen(estado: object, fecha_apertura: object) -> str:
@@ -812,8 +813,8 @@ def _classify_estado_resumen(estado: object, fecha_apertura: object) -> str:
     if "recibida" in el:
         if fecha_apertura is None:
             return "Sin movimiento (Recibidas)"
-        return "Otros"
-    return "Otros"
+        return _RESUMEN_RESTO
+    return _RESUMEN_RESTO
 
 
 def _build_estado_pivot(q, dim1: str, dim2: str, modo: str = "resumen") -> dict:
@@ -846,7 +847,6 @@ def _build_estado_pivot(q, dim1: str, dim2: str, modo: str = "resumen") -> dict:
         classified = []
         for g1, g2, estado, ap, n in rows:
             cat = _classify_estado_resumen(estado, object() if int(ap or 0) else None)
-            # Solo columnas del resumen; "Otros" aporta al total vía conteo aparte abajo
             classified.append((g1, g2, cat, int(n or 0)))
         estados = list(_RESUMEN_COLS)
     else:
@@ -895,7 +895,6 @@ def _build_estado_pivot(q, dim1: str, dim2: str, modo: str = "resumen") -> dict:
             )
         for e in estados:
             grand[e] += int(node["counts"].get(e, 0))
-        # En resumen, "Otros" no tiene columna pero sí cuenta en Total
         grand_total += int(node["total"])
         groups.append(
             {
