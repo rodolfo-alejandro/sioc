@@ -72,10 +72,13 @@
         var form = document.getElementById('ad-form-filtros');
         var g1 = document.getElementById('ad-grupo1');
         var g2 = document.getElementById('ad-grupo2');
+        var modo = document.getElementById('ad-modo');
         if (!form || !g1 || !g2) return;
         form.addEventListener('submit', function () {
             form.querySelectorAll('input[data-ad-grupo="1"]').forEach(function (el) { el.remove(); });
-            [['grupo1', g1.value], ['grupo2', g2.value]].forEach(function (pair) {
+            var pairs = [['grupo1', g1.value], ['grupo2', g2.value]];
+            if (modo) pairs.push(['modo', modo.value]);
+            pairs.forEach(function (pair) {
                 var i = document.createElement('input');
                 i.type = 'hidden';
                 i.name = pair[0];

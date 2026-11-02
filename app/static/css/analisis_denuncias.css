@@ -100,17 +100,25 @@
     left: 0;
     z-index: 2;
     background: #fff;
-    min-width: 10.5rem;
-    max-width: 16rem;
-    white-space: normal;
-    word-break: break-word;
+    min-width: 6.5rem;
+    max-width: 8.5rem;
+    width: 8rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .ad-pivot-table thead .ad-pivot-sticky {
     z-index: 4;
     background: #e7f1ff;
-    max-width: 16rem;
-    min-width: 10.5rem;
+    min-width: 6.5rem;
+    max-width: 8.5rem;
+    width: 8rem;
+}
+
+.ad-pivot-name {
+    display: inline;
+    max-width: 5.5rem;
 }
 
 .ad-pivot-table tbody tr.ad-pivot-parent {

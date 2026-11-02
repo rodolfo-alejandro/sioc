@@ -11,7 +11,7 @@ from urllib.parse import urlencode
 import pandas as pd
 from flask import Response, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
-from sqlalchemy import func, inspect, or_, text
+from sqlalchemy import case, func, inspect, or_, text
 
 from app.blueprints.analisis_denuncias import bp
 from app.extensions import db
@@ -781,44 +781,98 @@ def _blank_label(v: object) -> str:
     return s or "(Sin dato)"
 
 
-def _build_estado_pivot(q, dim1: str, dim2: str) -> dict:
+# Columnas del modo resumen (como el cuadro DINAR que usan operativamente)
+_RESUMEN_COLS = [
+    "Etapa investigativa",
+    "Allanadas",
+    "Desestimadas",
+    "Sin movimiento (Recibidas)",
+    "Sin recibir",
+    "Otros",
+]
+
+
+def _classify_estado_resumen(estado: object, fecha_apertura: object) -> str:
     """
-    Pivot tipo Excel: filas jerárquicas dim1 → dim2, columnas = causa_estado,
+    Sin recibir = causa_estado en blanco.
+    Sin movimiento (Recibidas) = estado Recibida / Vinculada - Recibida y sin fecha_apertura.
+    (No usamos acusados/domicilio: eso es calidad de carga, no avance de la causa.)
+    """
+    e = (_clean(estado) or "").strip()
+    if not e:
+        return "Sin recibir"
+    el = e.lower()
+    if "allanad" in el:
+        return "Allanadas"
+    if "desestimad" in el:
+        return "Desestimadas"
+    if "etapa investigativa" in el:
+        return "Etapa investigativa"
+    if "recibida" in el:
+        if fecha_apertura is None:
+            return "Sin movimiento (Recibidas)"
+        return "Otros"
+    return "Otros"
+
+
+def _build_estado_pivot(q, dim1: str, dim2: str, modo: str = "resumen") -> dict:
+    """
+    Pivot tipo Excel: filas jerárquicas dim1 → dim2, columnas = estados,
     valor = cuenta de causas_id.
+    modo=resumen → categorías operativas; modo=detalle → causa_estado crudo.
     """
+    modo = "detalle" if (modo or "").lower() == "detalle" else "resumen"
     col1 = _pivot_col(dim1)
     col2 = _pivot_col(dim2)
     if col1 is None or col2 is None or dim1 == dim2:
         dim1, dim2 = "barrio", "division"
         col1, col2 = _pivot_col(dim1), _pivot_col(dim2)
 
-    rows = (
-        q.with_entities(
-            col1.label("g1"),
-            col2.label("g2"),
-            DenunciaWeb.causa_estado.label("estado"),
-            func.count(func.distinct(DenunciaWeb.causas_id)).label("n"),
+    if modo == "resumen":
+        # Separar aperturadas / no aperturadas para clasificar "Sin movimiento"
+        aperturada = case((DenunciaWeb.fecha_apertura.isnot(None), 1), else_=0)
+        rows = (
+            q.with_entities(
+                col1.label("g1"),
+                col2.label("g2"),
+                DenunciaWeb.causa_estado.label("estado"),
+                aperturada.label("aperturada"),
+                func.count(func.distinct(DenunciaWeb.causas_id)).label("n"),
+            )
+            .group_by(col1, col2, DenunciaWeb.causa_estado, aperturada)
+            .all()
         )
-        .group_by(col1, col2, DenunciaWeb.causa_estado)
-        .all()
-    )
+        classified = []
+        for g1, g2, estado, ap, n in rows:
+            cat = _classify_estado_resumen(estado, object() if int(ap or 0) else None)
+            classified.append((g1, g2, cat, int(n or 0)))
+        estados = list(_RESUMEN_COLS)
+    else:
+        rows = (
+            q.with_entities(
+                col1.label("g1"),
+                col2.label("g2"),
+                DenunciaWeb.causa_estado.label("estado"),
+                func.count(func.distinct(DenunciaWeb.causas_id)).label("n"),
+            )
+            .group_by(col1, col2, DenunciaWeb.causa_estado)
+            .all()
+        )
+        classified = [(g1, g2, _blank_label(estado), int(n or 0)) for g1, g2, estado, n in rows]
+        estados_set = {e for _, _, e, _ in classified}
+        estados = sorted(estados_set, key=lambda x: (x == "(Sin dato)", x.lower()))
 
-    estados_set: set[str] = set()
     tree: dict[str, dict] = {}
-    for g1, g2, estado, n in rows:
-        e = _blank_label(estado)
+    for g1, g2, e, cnt in classified:
         a = _blank_label(g1)
         b = _blank_label(g2)
-        estados_set.add(e)
         node = tree.setdefault(a, {"counts": {}, "children": {}, "total": 0})
         child = node["children"].setdefault(b, {"counts": {}, "total": 0})
-        cnt = int(n or 0)
         node["counts"][e] = node["counts"].get(e, 0) + cnt
         child["counts"][e] = child["counts"].get(e, 0) + cnt
         node["total"] += cnt
         child["total"] += cnt
 
-    estados = sorted(estados_set, key=lambda x: (x == "(Sin dato)", x.lower()))
     grand = {e: 0 for e in estados}
     grand_total = 0
     groups = []
@@ -852,6 +906,7 @@ def _build_estado_pivot(q, dim1: str, dim2: str) -> dict:
     return {
         "dim1": dim1,
         "dim2": dim2,
+        "modo": modo,
         "dim1_label": _pivot_label(dim1),
         "dim2_label": _pivot_label(dim2),
         "estados": estados,
@@ -869,16 +924,20 @@ def tabla_estado():
         abort(403)
     dim1 = (_clean(request.args.get("grupo1")) or "barrio").lower()
     dim2 = (_clean(request.args.get("grupo2")) or "division").lower()
+    modo = (_clean(request.args.get("modo")) or "resumen").lower()
+    if modo not in ("resumen", "detalle"):
+        modo = "resumen"
     if dim1 not in _PIVOT_DIMS:
         dim1 = "barrio"
     if dim2 not in _PIVOT_DIMS or dim2 == dim1:
         dim2 = "division" if dim1 != "division" else "dep_actuario"
 
     q = _apply_filters(_base_q())
-    pivot = _build_estado_pivot(q, dim1, dim2)
+    pivot = _build_estado_pivot(q, dim1, dim2, modo=modo)
     selected = _selected_filters()
     selected["grupo1"] = dim1
     selected["grupo2"] = dim2
+    selected["modo"] = modo
     return render_template(
         "analisis_denuncias/tabla_estado.html",
         pivot=pivot,
@@ -899,11 +958,14 @@ def export_tabla_estado_xlsx():
         abort(403)
     dim1 = (_clean(request.args.get("grupo1")) or "barrio").lower()
     dim2 = (_clean(request.args.get("grupo2")) or "division").lower()
+    modo = (_clean(request.args.get("modo")) or "resumen").lower()
+    if modo not in ("resumen", "detalle"):
+        modo = "resumen"
     if dim1 not in _PIVOT_DIMS:
         dim1 = "barrio"
     if dim2 not in _PIVOT_DIMS or dim2 == dim1:
         dim2 = "division" if dim1 != "division" else "dep_actuario"
-    pivot = _build_estado_pivot(_apply_filters(_base_q()), dim1, dim2)
+    pivot = _build_estado_pivot(_apply_filters(_base_q()), dim1, dim2, modo=modo)
     data = []
     for g in pivot["groups"]:
         row = {pivot["dim1_label"]: g["name"], pivot["dim2_label"]: ""}
