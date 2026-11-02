@@ -3,6 +3,14 @@
 
     function getContainer(id) { return document.getElementById(id); }
 
+    function normText(s) {
+        return String(s || '')
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .trim();
+    }
+
     function getCheckedValues(containerId) {
         var c = getContainer(containerId);
         if (!c) return [];
@@ -24,10 +32,16 @@
     function filterList(containerId, query) {
         var c = getContainer(containerId);
         if (!c) return;
-        var q = String(query || '').toLowerCase().trim();
+        var q = normText(query);
+        var tokens = q ? q.split(/\s+/).filter(Boolean) : [];
         c.querySelectorAll('.form-check').forEach(function (row) {
-            var txt = (row.textContent || '').toLowerCase();
-            row.style.display = (!q || txt.indexOf(q) !== -1) ? '' : 'none';
+            if (!tokens.length) {
+                row.style.display = '';
+                return;
+            }
+            var txt = normText(row.textContent || '');
+            var ok = tokens.every(function (t) { return txt.indexOf(t) !== -1; });
+            row.style.display = ok ? '' : 'none';
         });
     }
 
@@ -44,7 +58,14 @@
 
     function attachSearch() {
         document.querySelectorAll('.sabana-dd-search').forEach(function (inp) {
+            // Evita que el dropdown se cierre / pierda foco al tipear
+            inp.addEventListener('click', function (ev) { ev.stopPropagation(); });
+            inp.addEventListener('keydown', function (ev) { ev.stopPropagation(); });
             inp.addEventListener('input', function () {
+                var target = this.getAttribute('data-target');
+                if (target) filterList(target, this.value);
+            });
+            inp.addEventListener('keyup', function () {
                 var target = this.getAttribute('data-target');
                 if (target) filterList(target, this.value);
             });

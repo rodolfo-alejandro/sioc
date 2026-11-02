@@ -48,9 +48,28 @@
 }
 
 /* Tabla dinámica (pivot / acordeón) */
+.ad-pivot-page-header h1 {
+    font-size: 1.35rem;
+    margin-bottom: 0.15rem;
+}
+
+.ad-pivot-page-header p {
+    font-size: 0.85rem;
+}
+
 .ad-pivot-wrap {
-    max-height: 72vh;
+    max-height: calc(100vh - 220px);
     overflow: auto;
+}
+
+.ad-pivot-table {
+    font-size: 0.72rem;
+    width: max-content;
+    min-width: 100%;
+}
+
+.ad-pivot-table > :not(caption) > * > * {
+    padding: 0.22rem 0.35rem;
 }
 
 .ad-pivot-table thead th {
@@ -58,9 +77,22 @@
     top: 0;
     z-index: 3;
     background: #e7f1ff;
-    font-size: 0.78rem;
-    white-space: nowrap;
+    font-size: 0.68rem;
+    font-weight: 600;
+    line-height: 1.15;
     vertical-align: bottom;
+    white-space: normal;
+    max-width: 5.2rem;
+    min-width: 3.4rem;
+    hyphens: auto;
+}
+
+.ad-pivot-estado-label {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
 }
 
 .ad-pivot-table .ad-pivot-sticky {
@@ -68,17 +100,26 @@
     left: 0;
     z-index: 2;
     background: #fff;
-    min-width: 14rem;
-    max-width: 22rem;
+    min-width: 10.5rem;
+    max-width: 16rem;
+    white-space: normal;
+    word-break: break-word;
 }
 
 .ad-pivot-table thead .ad-pivot-sticky {
     z-index: 4;
     background: #e7f1ff;
+    max-width: 16rem;
+    min-width: 10.5rem;
 }
 
 .ad-pivot-table tbody tr.ad-pivot-parent {
     background: #f0f7ff;
+    cursor: pointer;
+}
+
+.ad-pivot-table tbody tr.ad-pivot-parent.ad-pivot-leaf {
+    cursor: default;
 }
 
 .ad-pivot-table tbody tr.ad-pivot-parent.is-open {
@@ -102,18 +143,31 @@
 }
 
 .ad-pivot-child-label {
-    padding-left: 1.75rem !important;
+    padding-left: 1.35rem !important;
     color: #495057;
-    font-size: 0.875rem;
+    font-size: 0.7rem;
+}
+
+.ad-pivot-child-count {
+    font-size: 0.65rem;
+}
+
+.ad-pivot-toggle {
+    font-size: inherit;
+    color: inherit;
+    text-align: left;
+    white-space: normal;
 }
 
 .ad-pivot-toggle .ad-pivot-ico {
-    margin-right: 0.35rem;
+    margin-right: 0.3rem;
     vertical-align: -0.1em;
 }
 
 .ad-pivot-total-col {
     background: #f8f9fa;
+    min-width: 3rem !important;
+    max-width: 3.5rem !important;
 }
 
 .ad-pivot-table thead .ad-pivot-total-col {
@@ -126,5 +180,10 @@
 }
 
 .ad-pivot-dims .form-label {
-    font-size: 0.85rem;
+    font-size: 0.8rem;
+}
+
+.ad-pivot-nav .btn {
+    font-size: 0.78rem;
+    padding: 0.2rem 0.45rem;
 }

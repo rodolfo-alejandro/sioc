@@ -5,17 +5,16 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/analisis_denuncias.css') }}">
 {% endblock %}
 {% block content %}
-<div class="page-header">
+<div class="page-header ad-pivot-page-header">
     <h1><i class="bi bi-layout-three-columns"></i> Tabla dinámica de estados</h1>
-    <p class="text-muted">Cuenta de causas por asignación y estado (estilo tabla dinámica / acordeón).</p>
+    <p class="text-muted mb-0">Barrio → asignación (SINAR / actuario) × estado. Tocá el [+] o la fila para desplegar.</p>
 </div>
 
 {% include "analisis_denuncias/_filtros.html" %}
 
-<div class="card mb-3 ad-pivot-dims">
+<div class="card mb-2 ad-pivot-dims">
     <div class="card-body py-2">
         <form method="GET" id="ad-pivot-dims-form" class="row g-2 align-items-end">
-            {# Reenvía filtros activos al cambiar agrupación #}
             {% for key, values in request.args.lists() %}
                 {% if key not in ('grupo1', 'grupo2') %}
                     {% for v in values %}
@@ -39,14 +38,16 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-4 col-lg-3">
-                <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-arrow-repeat"></i> Aplicar agrupación</button>
+            <div class="col-md-4 col-lg-3 d-flex flex-wrap gap-1">
+                <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-arrow-repeat"></i> Aplicar</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="ad-pivot-expand-all" title="Expandir todo"><i class="bi bi-arrows-expand"></i></button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="ad-pivot-collapse-all" title="Colapsar todo"><i class="bi bi-arrows-collapse"></i></button>
             </div>
         </form>
     </div>
 </div>
 
-<div class="d-flex flex-wrap gap-2 mb-2">
+<div class="d-flex flex-wrap gap-1 mb-2 ad-pivot-nav">
     <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_denuncias.listado', **request.args) }}"><i class="bi bi-table"></i> Listado</a>
     {% if can_dashboard %}
     <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('analisis_denuncias.dashboard', **request.args) }}"><i class="bi bi-bar-chart-line"></i> Dashboard</a>
@@ -57,30 +58,25 @@
     {% if can_export %}
     <a class="btn btn-outline-success btn-sm" href="{{ url_for('analisis_denuncias.export_tabla_estado_xlsx', **request.args) }}"><i class="bi bi-file-earmark-excel"></i> Excel</a>
     {% endif %}
-    <button type="button" class="btn btn-outline-secondary btn-sm" id="ad-pivot-expand-all"><i class="bi bi-arrows-expand"></i> Expandir todo</button>
-    <button type="button" class="btn btn-outline-secondary btn-sm" id="ad-pivot-collapse-all"><i class="bi bi-arrows-collapse"></i> Colapsar todo</button>
+    <span class="badge bg-light text-dark border align-self-center ms-auto">
+        {{ pivot.group_count|number_format }} · Total {{ pivot.grand_total|number_format }}
+        <span class="text-muted fw-normal">· {{ pivot.dim1_label }} → {{ pivot.dim2_label }}</span>
+    </span>
 </div>
 
-<div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <h6 class="mb-0">
-            Cuenta de causas_id
-            <span class="text-muted fw-normal">· {{ pivot.dim1_label }} → {{ pivot.dim2_label }} × Estado</span>
-        </h6>
-        <span class="badge bg-light text-dark border">
-            {{ pivot.group_count|number_format }} grupos · Total {{ pivot.grand_total|number_format }}
-        </span>
-    </div>
+<div class="card ad-pivot-card">
     <div class="card-body p-0">
         <div class="table-responsive ad-pivot-wrap">
             <table class="table table-sm table-bordered align-middle mb-0 ad-pivot-table" id="ad-pivot-table">
                 <thead>
                     <tr>
-                        <th class="ad-pivot-sticky">Etiquetas de fila</th>
+                        <th class="ad-pivot-sticky">{{ pivot.dim1_label }} / {{ pivot.dim2_label }}</th>
                         {% for e in pivot.estados %}
-                        <th class="text-center text-nowrap">{{ e }}</th>
+                        <th class="text-center ad-pivot-estado-th" title="{{ e }}">
+                            <span class="ad-pivot-estado-label">{{ e }}</span>
+                        </th>
                         {% endfor %}
-                        <th class="text-center text-nowrap ad-pivot-total-col">Total general</th>
+                        <th class="text-center ad-pivot-total-col">Total</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -93,12 +89,17 @@
                     {% endif %}
                     {% for g in pivot.groups %}
                     {% set g_idx = loop.index0 %}
-                    <tr class="ad-pivot-parent" data-group="{{ g_idx }}">
+                    <tr class="ad-pivot-parent{% if not g.children %} ad-pivot-leaf{% endif %}" data-group="{{ g_idx }}" {% if g.children %}role="button" tabindex="0"{% endif %}>
                         <td class="ad-pivot-sticky">
+                            {% if g.children %}
                             <button type="button" class="btn btn-link btn-sm p-0 ad-pivot-toggle text-decoration-none" aria-expanded="false" data-group="{{ g_idx }}">
                                 <i class="bi bi-plus-square ad-pivot-ico"></i>
                                 <strong>{{ g.name }}</strong>
+                                <span class="text-muted fw-normal ad-pivot-child-count">({{ g.children|length }})</span>
                             </button>
+                            {% else %}
+                            <strong>{{ g.name }}</strong>
+                            {% endif %}
                         </td>
                         {% for e in pivot.estados %}
                         <td class="text-end">{{ g.counts[e] or '' }}</td>
@@ -132,7 +133,7 @@
     </div>
 </div>
 {% endblock %}
-{% block scripts %}
-<script src="{{ url_for('static', filename='js/analisis_denuncias_filtros.js') }}"></script>
-<script src="{{ url_for('static', filename='js/analisis_denuncias_tabla_estado.js') }}"></script>
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/analisis_denuncias_filtros.js') }}?v=2"></script>
+<script src="{{ url_for('static', filename='js/analisis_denuncias_tabla_estado.js') }}?v=2"></script>
 {% endblock %}

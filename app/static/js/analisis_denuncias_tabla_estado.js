@@ -16,9 +16,17 @@
         if (parent) parent.classList.toggle('is-open', open);
     }
 
+    function toggleGroup(gid) {
+        var btn = document.querySelector('.ad-pivot-toggle[data-group="' + gid + '"]');
+        if (!btn) return;
+        var open = btn.getAttribute('aria-expanded') !== 'true';
+        setGroup(gid, open);
+    }
+
     function allGroupIds() {
         var ids = [];
         document.querySelectorAll('.ad-pivot-parent[data-group]').forEach(function (el) {
+            if (el.classList.contains('ad-pivot-leaf')) return;
             ids.push(el.getAttribute('data-group'));
         });
         return ids;
@@ -26,12 +34,26 @@
 
     function wireToggles() {
         document.querySelectorAll('.ad-pivot-toggle').forEach(function (btn) {
-            btn.addEventListener('click', function () {
-                var gid = this.getAttribute('data-group');
-                var open = this.getAttribute('aria-expanded') !== 'true';
-                setGroup(gid, open);
+            btn.addEventListener('click', function (ev) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                toggleGroup(this.getAttribute('data-group'));
             });
         });
+
+        document.querySelectorAll('.ad-pivot-parent[data-group]:not(.ad-pivot-leaf)').forEach(function (row) {
+            row.addEventListener('click', function (ev) {
+                if (ev.target.closest('a, input, select, textarea, button')) return;
+                toggleGroup(this.getAttribute('data-group'));
+            });
+            row.addEventListener('keydown', function (ev) {
+                if (ev.key === 'Enter' || ev.key === ' ') {
+                    ev.preventDefault();
+                    toggleGroup(this.getAttribute('data-group'));
+                }
+            });
+        });
+
         var expand = document.getElementById('ad-pivot-expand-all');
         var collapse = document.getElementById('ad-pivot-collapse-all');
         if (expand) {
@@ -46,7 +68,6 @@
         }
     }
 
-    /** Conserva grupo1/grupo2 al aplicar filtros avanzados. */
     function injectGruposIntoFiltros() {
         var form = document.getElementById('ad-form-filtros');
         var g1 = document.getElementById('ad-grupo1');
