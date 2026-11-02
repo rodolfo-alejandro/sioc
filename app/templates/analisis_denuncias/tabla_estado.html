@@ -2,14 +2,15 @@
 {% block title %}Tabla dinámica — Denuncias Web - SIOC{% endblock %}
 {% block extra_head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sabana_mapa.css') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/analisis_denuncias.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/analisis_denuncias.css') }}?v=4">
 {% endblock %}
 {% block content %}
 <div class="page-header ad-pivot-page-header">
     <h1><i class="bi bi-layout-three-columns"></i> Tabla dinámica de estados</h1>
     <p class="text-muted mb-0">
         {% if selected.modo == 'resumen' %}
-        Resumen operativo: Sin recibir = estado vacío · Sin movimiento = Recibida sin apertura.
+        Sin recibir = estado vacío · Sin movimiento = Recibida sin apertura ·
+        Otros = Devuelta, Derivada, pedido de allanamiento, Vinculada, Recibida ya aperturada, etc.
         {% else %}
         Detalle: columnas = causa_estado tal cual en el Excel.
         {% endif %}
@@ -86,7 +87,7 @@
                     <tr>
                         <th class="ad-pivot-sticky">Fila</th>
                         {% for e in pivot.estados %}
-                        <th class="text-center ad-pivot-estado-th" title="{{ e }}">
+                        <th class="text-center ad-pivot-estado-th" title="{% if e == 'Otros' %}Devuelta, Derivada, Con pedido de allanamiento, Vinculada, Recibida ya aperturada y demás estados que no entran en las otras columnas{% else %}{{ e }}{% endif %}">
                             <span class="ad-pivot-estado-label">{{ e }}</span>
                         </th>
                         {% endfor %}

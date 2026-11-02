@@ -788,7 +788,7 @@ _RESUMEN_COLS = [
     "Desestimadas",
     "Sin movimiento (Recibidas)",
     "Sin recibir",
-    "Otros",
+    "Otros",  # Devuelta, Derivada, pedido allanamiento, Vinculada, Recibida aperturada, etc.
 ]
 
 

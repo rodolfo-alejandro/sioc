@@ -63,13 +63,14 @@
 }
 
 .ad-pivot-table {
-    font-size: 0.72rem;
+    font-size: 0.68rem;
     width: max-content;
     min-width: 100%;
+    table-layout: fixed;
 }
 
 .ad-pivot-table > :not(caption) > * > * {
-    padding: 0.22rem 0.35rem;
+    padding: 0.18rem 0.22rem;
 }
 
 .ad-pivot-table thead th {
@@ -77,22 +78,35 @@
     top: 0;
     z-index: 3;
     background: #e7f1ff;
-    font-size: 0.68rem;
+    font-size: 0.62rem;
     font-weight: 600;
-    line-height: 1.15;
+    line-height: 1.1;
     vertical-align: bottom;
     white-space: normal;
-    max-width: 5.2rem;
-    min-width: 3.4rem;
+    max-width: 3.6rem;
+    min-width: 2.6rem;
+    width: 3.2rem;
     hyphens: auto;
+}
+
+.ad-pivot-estado-th {
+    max-width: 3.6rem !important;
+    min-width: 2.6rem !important;
+    width: 3.2rem !important;
 }
 
 .ad-pivot-estado-label {
     display: -webkit-box;
-    -webkit-line-clamp: 3;
+    -webkit-line-clamp: 4;
     -webkit-box-orient: vertical;
     overflow: hidden;
     word-break: break-word;
+}
+
+.ad-pivot-table tbody td,
+.ad-pivot-table tfoot td {
+    max-width: 3.6rem;
+    width: 3.2rem;
 }
 
 .ad-pivot-table .ad-pivot-sticky {
@@ -100,25 +114,28 @@
     left: 0;
     z-index: 2;
     background: #fff;
-    min-width: 6.5rem;
-    max-width: 8.5rem;
-    width: 8rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    min-width: 14rem !important;
+    max-width: 20rem !important;
+    width: 16rem !important;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+    word-break: break-word;
+    line-height: 1.2;
 }
 
 .ad-pivot-table thead .ad-pivot-sticky {
     z-index: 4;
     background: #e7f1ff;
-    min-width: 6.5rem;
-    max-width: 8.5rem;
-    width: 8rem;
+    min-width: 14rem !important;
+    max-width: 20rem !important;
+    width: 16rem !important;
 }
 
 .ad-pivot-name {
     display: inline;
-    max-width: 5.5rem;
+    word-break: break-word;
+    white-space: normal;
 }
 
 .ad-pivot-table tbody tr.ad-pivot-parent {
@@ -174,8 +191,9 @@
 
 .ad-pivot-total-col {
     background: #f8f9fa;
-    min-width: 3rem !important;
-    max-width: 3.5rem !important;
+    min-width: 2.6rem !important;
+    max-width: 3rem !important;
+    width: 2.8rem !important;
 }
 
 .ad-pivot-table thead .ad-pivot-total-col {
