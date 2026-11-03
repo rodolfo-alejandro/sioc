@@ -117,7 +117,7 @@
                             {% endif %}
                         </td>
                         {% for e in pivot.estados %}
-                        <td class="text-end">{{ g.counts[e] or '' }}</td>
+                        <td class="text-end">{{ g.counts[e]|default(0) }}</td>
                         {% endfor %}
                         <td class="text-end fw-semibold ad-pivot-total-col">{{ g.total }}</td>
                     </tr>
@@ -125,7 +125,7 @@
                     <tr class="ad-pivot-child d-none" data-parent="{{ g_idx }}">
                         <td class="ad-pivot-sticky ad-pivot-child-label" title="{{ c.name }}"><span class="ad-pivot-name">{{ c.name }}</span></td>
                         {% for e in pivot.estados %}
-                        <td class="text-end">{{ c.counts[e] or '' }}</td>
+                        <td class="text-end">{{ c.counts[e]|default(0) }}</td>
                         {% endfor %}
                         <td class="text-end ad-pivot-total-col">{{ c.total }}</td>
                     </tr>
