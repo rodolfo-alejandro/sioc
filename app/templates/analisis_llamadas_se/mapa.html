@@ -38,7 +38,7 @@
 {% block extra_scripts %}
 <script src="{{ url_for('static', filename='js/analisis_llamadas_se_filtros.js') }}"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
+<script src="{{ url_for('static', filename='vendor/leaflet-heat.js') }}"></script>
 <script src="{{ url_for('static', filename='js/analisis_llamadas_se_mapa.js') }}"></script>
 {% endblock %}
 
