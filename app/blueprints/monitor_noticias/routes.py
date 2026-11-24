@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from io import BytesIO
+from types import SimpleNamespace
 
 from flask import (
     Response,
@@ -260,11 +261,24 @@ def bandeja():
 def _guardar_candidatos(uid: int, tema_id, candidatos: list[dict]) -> tuple[int, int]:
     nuevas = 0
     dup = 0
+    if not candidatos:
+        return 0, 0
+    # Un solo SELECT para detectar duplicados (antes era una query por noticia).
+    hashes = list({item["link_hash"] for item in candidatos})
+    existentes: set[str] = set()
+    for i in range(0, len(hashes), 500):
+        filas = (
+            db.session.query(Noticia.link_hash)
+            .filter(Noticia.unidad_id == uid, Noticia.link_hash.in_(hashes[i : i + 500]))
+            .all()
+        )
+        existentes.update(f[0] for f in filas)
+    vistos_run: set[str] = set()
     for item in candidatos:
-        existe = _base_noticias().filter(Noticia.link_hash == item["link_hash"]).first()
-        if existe:
+        if item["link_hash"] in existentes or item["link_hash"] in vistos_run:
             dup += 1
             continue
+        vistos_run.add(item["link_hash"])
         db.session.add(
             Noticia(
                 unidad_id=uid,
@@ -440,13 +454,32 @@ def buscar_oficiales():
         flash("No hay fuentes oficiales activas. Abrí la pestaña Fuentes o dejá marcadas Policía/Ministerio.", "warning")
         return redirect(url_for("monitor_noticias.bandeja"))
 
+    # El scraping puede tardar minutos: no mantener la conexión MySQL abierta mientras
+    # se descargan páginas (el servidor la cierra y aparece 2013 al guardar).
+    # Copiamos lo necesario a objetos simples y liberamos la sesión.
+    temas_snap = [
+        SimpleNamespace(
+            id=t.id,
+            nombre=t.nombre,
+            lista_claves=t.lista_claves,
+            lista_excluir=t.lista_excluir,
+            region=t.region,
+        )
+        for t in temas
+    ]
+    fuentes_snap = [
+        SimpleNamespace(id=f.id, nombre=f.nombre, tipo=f.tipo, url=f.url, activo=f.activo)
+        for f in fuentes
+    ]
+    db.session.remove()
+
     total_nuevas = 0
     total_dup = 0
-    for tema in temas:
+    for tema in temas_snap:
         try:
             candidatos = services.recolectar_para_tema(
                 tema,
-                fuentes,
+                fuentes_snap,
                 dias=None,
                 fecha_desde=d1,
                 fecha_hasta=d2,
@@ -455,7 +488,7 @@ def buscar_oficiales():
         except Exception as e:
             flash(f"Error al buscar oficiales («{tema.nombre}»): {e}", "danger")
             continue
-        tid = getattr(tema, "id", None)
+        tid = tema.id
         n, d = _guardar_candidatos(uid, tid, candidatos)
         total_nuevas += n
         total_dup += d
