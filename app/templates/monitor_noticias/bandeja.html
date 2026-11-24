@@ -64,8 +64,6 @@
           <option value="7">Últimos 7 días</option>
           <option value="15">Últimos 15 días</option>
           <option value="30" selected>Últimos 30 días</option>
-          <option value="90">Últimos 90 días</option>
-          <option value="180">Últimos 180 días</option>
         </select>
       </div>
       <div class="col-md-4">
@@ -75,7 +73,7 @@
           <span class="input-group-text">→</span>
           <input type="date" name="fecha_hasta" id="fecha_hasta_oficial" class="form-control" onchange="oficialPeriodoFechas()">
         </div>
-        <div class="form-text mb-0">Si cargás fechas, se ignoran los “últimos N días”.</div>
+        <div class="form-text mb-0">Si cargás fechas, se ignoran los “últimos N días”. Máximo 30 días por búsqueda.</div>
       </div>
       <div class="col-md-2 d-grid">
         <button type="submit" class="btn btn-primary btn-lg" onclick="return oficialAntesDeEnviar(this.form)"><i class="bi bi-cloud-download"></i> Traer</button>
@@ -89,10 +87,31 @@
         document.getElementById('fecha_hasta_oficial').value = '';
       }
     }
+    var OFICIAL_MAX_DIAS = 30;
+    function oficialSumarDias(iso, n) {
+      var p = iso.split('-');
+      var d = new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10) + n);
+      var m = String(d.getMonth() + 1), dd = String(d.getDate());
+      return d.getFullYear() + '-' + (m.length < 2 ? '0' + m : m) + '-' + (dd.length < 2 ? '0' + dd : dd);
+    }
     function oficialPeriodoFechas() {
-      var a = document.getElementById('fecha_desde_oficial').value;
-      var b = document.getElementById('fecha_hasta_oficial').value;
+      var desde = document.getElementById('fecha_desde_oficial');
+      var hasta = document.getElementById('fecha_hasta_oficial');
+      var a = desde.value;
+      var b = hasta.value;
       if (a || b) document.getElementById('dias_oficial').value = '';
+      if (a) {
+        var tope = oficialSumarDias(a, OFICIAL_MAX_DIAS - 1);
+        hasta.min = a;
+        hasta.max = tope;
+        if (b && b < a) {
+          alert('La fecha hasta no puede ser anterior a la fecha desde.');
+          hasta.value = a;
+        } else if (b && b > tope) {
+          alert('El rango máximo es de ' + OFICIAL_MAX_DIAS + ' días. Ajusté la fecha hasta a ' + tope.split('-').reverse().join('/') + '.');
+          hasta.value = tope;
+        }
+      }
     }
     function oficialAntesDeEnviar(form) {
       var a = form.fecha_desde.value;

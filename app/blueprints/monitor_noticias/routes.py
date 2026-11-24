@@ -66,6 +66,10 @@ def _clean(v) -> str:
     return (v or "").strip() if isinstance(v, str) else ""
 
 
+# Máximo de días por búsqueda de fuentes oficiales (Policía + Ministerio).
+OFICIAL_MAX_DIAS = 30
+
+
 def _parse_date(s: str):
     s = _clean(s)
     if not s:
@@ -403,11 +407,20 @@ def buscar_oficiales():
     dias_int = int(dias_raw) if dias_raw.isdigit() and int(dias_raw) > 0 else None
 
     # Fechas absolutas siempre ganan (el select de 7 días no debe pisarlas)
+    limitado = False
     if d1 or d2:
         dias_int = None
         d1, d2 = services._resolver_periodo(d1, d2, None)
+        if d2 and not d1:
+            d1 = d2 - timedelta(days=OFICIAL_MAX_DIAS - 1)
+        # Máximo OFICIAL_MAX_DIAS por búsqueda (el scraping del Ministerio es pesado).
+        if d1 and d2 and (d2 - d1).days + 1 > OFICIAL_MAX_DIAS:
+            d2 = d1 + timedelta(days=OFICIAL_MAX_DIAS - 1)
+            limitado = True
     elif dias_int:
-        d1, d2 = services._resolver_periodo(None, None, dias_int)
+        dias_int = min(dias_int, OFICIAL_MAX_DIAS)
+        d2 = datetime.now().date()
+        d1 = d2 - timedelta(days=dias_int - 1)
     else:
         flash("Indicá un período (fechas o últimos N días) para las fuentes oficiales.", "warning")
         return redirect(url_for("monitor_noticias.bandeja"))
@@ -415,6 +428,13 @@ def buscar_oficiales():
     if not d1 and not d2:
         flash("Indicá un período válido.", "warning")
         return redirect(url_for("monitor_noticias.bandeja"))
+
+    if limitado:
+        flash(
+            f"El rango se limitó a {OFICIAL_MAX_DIAS} días: del {d1.strftime('%d/%m/%Y')} al {d2.strftime('%d/%m/%Y')}. "
+            "Para el resto del período, elegí otras fechas y volvé a traer.",
+            "warning",
+        )
 
     tema_id = _clean(request.form.get("tema_id"))
     # Un solo pasada: si no eligen tema, usamos claves simples de droga
