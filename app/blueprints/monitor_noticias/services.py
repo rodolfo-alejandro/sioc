@@ -8,6 +8,7 @@ import hashlib
 import logging
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
 from html import unescape
 from urllib.parse import quote_plus, urljoin, urlparse
@@ -407,15 +408,24 @@ def scrape_salta_organismo(
         pages_sin_nuevos = 0
 
         oldest_en_pagina: date | None = None
-        for i, link in enumerate(nuevos_links):
+
+        def _bajar(link_art: str):
+            art_html_ = _fetch_text(link_art)
+            if not art_html_:
+                return None
+            return _parse_articulo_html(art_html_, link_art, medio)
+
+        # Descarga en paralelo de los artículos de la página (antes eran uno por uno).
+        try:
+            with ThreadPoolExecutor(max_workers=5) as ex:
+                parseados = list(ex.map(_bajar, nuevos_links))
+        except Exception:
+            _log.exception("Error descargando artículos del Ministerio")
+            parseados = []
+
+        for item in parseados:
             if len(salida) >= max_articulos:
                 return salida
-            if i or page > 1:
-                time.sleep(0.15)
-            art_html = _fetch_text(link)
-            if not art_html:
-                continue
-            item = _parse_articulo_html(art_html, link, medio)
             if not item:
                 continue
             pub = item.get("publicado_en")
