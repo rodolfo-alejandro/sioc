@@ -387,8 +387,54 @@ def scrape_salta_organismo(
     vistos: set[str] = set()
     pages_sin_nuevos = 0
 
-    for page in range(1, max(1, max_pages) + 1):
-        page_url = base if page == 1 else f"{base}/pagina-{page}"
+    def _url_pagina(n: int) -> str:
+        return base if n == 1 else f"{base}/pagina-{n}"
+
+    def _bajar(link_art: str):
+        art_html_ = _fetch_text(link_art)
+        if not art_html_:
+            return None
+        return _parse_articulo_html(art_html_, link_art, medio)
+
+    def _fecha_nota_mas_vieja(n: int) -> date | None:
+        """Fecha de la última nota (la más vieja) de la página n; None si no se pudo leer."""
+        html_p = _fetch_text(_url_pagina(n))
+        if not html_p:
+            return None
+        links_p = _links_lista_noticias(BeautifulSoup(html_p, "html.parser"), _url_pagina(n))
+        if not links_p:
+            return None
+        it = _bajar(links_p[-1])
+        pub_p = it.get("publicado_en") if it else None
+        if not pub_p:
+            return None
+        return pub_p.date() if isinstance(pub_p, datetime) else pub_p
+
+    # Si el período está lejos de hoy, saltar directo a las páginas que lo contienen
+    # (búsqueda exponencial + binaria por fecha) en vez de bajar todo desde la página 1.
+    pagina_inicio = 1
+    tope_busqueda = 200
+    if fecha_hasta and (date.today() - fecha_hasta).days > 3:
+        lo, hi = 1, 2
+        while hi < tope_busqueda:
+            f = _fecha_nota_mas_vieja(hi)
+            if f is None or f <= fecha_hasta:
+                break
+            lo, hi = hi, hi * 2
+        hi = min(hi, tope_busqueda)
+        while lo + 1 < hi:
+            mid = (lo + hi) // 2
+            f = _fecha_nota_mas_vieja(mid)
+            if f is None or f <= fecha_hasta:
+                hi = mid
+            else:
+                lo = mid
+        # una página de margen por si el corte cae en el borde
+        pagina_inicio = max(1, hi - 1)
+        _log.info("Ministerio: período lejano, arranco en página %s", pagina_inicio)
+
+    for page in range(pagina_inicio, pagina_inicio + max(1, max_pages)):
+        page_url = _url_pagina(page)
         html = _fetch_text(page_url)
         if not html:
             break
@@ -408,12 +454,6 @@ def scrape_salta_organismo(
         pages_sin_nuevos = 0
 
         oldest_en_pagina: date | None = None
-
-        def _bajar(link_art: str):
-            art_html_ = _fetch_text(link_art)
-            if not art_html_:
-                return None
-            return _parse_articulo_html(art_html_, link_art, medio)
 
         # Descarga en paralelo de los artículos de la página (antes eran uno por uno).
         try:
@@ -547,7 +587,11 @@ def recolectar_para_tema(
 
     # Más páginas si el rango es amplio
     span_days = dias_eff or 7
-    max_rss_pages = min(20, max(3, span_days // 5 + 2))
+    # Las fuentes listan de lo más nuevo a lo más viejo: las páginas necesarias dependen
+    # de cuántos días atrás está "desde", no del largo del rango.
+    dias_atras = ((date.today() - d1).days + 1) if d1 else span_days
+    dias_atras = max(dias_atras, span_days)
+    max_rss_pages = min(60, max(3, dias_atras // 4 + 3))
     max_html = min(300, max(40, span_days * 2))
 
     for fuente in fuentes:
