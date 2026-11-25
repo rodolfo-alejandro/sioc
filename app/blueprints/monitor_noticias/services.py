@@ -107,30 +107,43 @@ def _parse_fecha_texto(texto: str) -> datetime | None:
         return None
 
 
-def _fetch_raw(url: str, timeout: int = 25) -> bytes | None:
-    """Descarga bytes. Si el cert SSL del sitio oficial falla, reintenta sin verify."""
+def _fetch_raw(url: str, timeout: int = 25, intentos: int = 4) -> bytes | None:
+    """
+    Descarga bytes con reintentos (DNS/cortes de red transitorios).
+    Si el cert SSL del sitio oficial falla, reintenta sin verify.
+    No reintenta ante errores 4xx (p. ej. página inexistente al final del paginado).
+    """
     if requests is None:
         return None
     headers = {"User-Agent": _USER_AGENT}
-    try:
-        resp = requests.get(url, headers=headers, timeout=timeout)
-        resp.raise_for_status()
-        return resp.content
-    except requests.exceptions.SSLError:
+    verify = True
+    ultimo: Exception | None = None
+    for n in range(max(1, intentos)):
         try:
-            import urllib3
-
-            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-            resp = requests.get(url, headers=headers, timeout=timeout, verify=False)
+            resp = requests.get(url, headers=headers, timeout=timeout, verify=verify)
             resp.raise_for_status()
-            _log.info("Fetch OK sin verify SSL: %s", url)
+            if not verify:
+                _log.info("Fetch OK sin verify SSL: %s", url)
             return resp.content
-        except Exception as e2:
-            _log.warning("Fetch falló (SSL retry) %s: %s", url, e2)
-            return None
-    except Exception as e:
-        _log.warning("Fetch falló %s: %s", url, e)
-        return None
+        except requests.exceptions.SSLError as e:
+            ultimo = e
+            if verify:
+                verify = False
+                import urllib3
+
+                urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+                continue
+        except requests.exceptions.HTTPError as e:
+            code = e.response.status_code if e.response is not None else 0
+            if 400 <= code < 500:
+                _log.warning("Fetch %s devolvió %s", url, code)
+                return None
+            ultimo = e
+        except Exception as e:
+            ultimo = e
+        time.sleep(0.6 * (n + 1))
+    _log.warning("Fetch falló %s: %s", url, ultimo)
+    return None
 
 
 def _fetch_text(url: str) -> str | None:
